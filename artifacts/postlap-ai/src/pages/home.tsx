@@ -55,25 +55,28 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
-  const authGoogle = (useGenerateAdText as any); // placeholder, we'll call fetch directly
+  const googleBtnModalRef = useRef<HTMLDivElement>(null);
 
-  // Init Google Sign-In button
   useEffect(() => {
     const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!googleClientId || !googleBtnRef.current) return;
+    if (!googleClientId) return;
     const w = window as any;
     if (!w.google?.accounts?.id) return;
     w.google.accounts.id.initialize({
       client_id: googleClientId,
       callback: handleGoogleCredential,
     });
-    w.google.accounts.id.renderButton(googleBtnRef.current, {
-      theme: "outline",
-      size: "large",
-      text: "signin_with",
-      locale: "ar",
-    });
-  }, [googleBtnRef.current]);
+    if (googleBtnRef.current) {
+      w.google.accounts.id.renderButton(googleBtnRef.current, {
+        theme: "outline", size: "large", text: "signin_with", locale: "ar",
+      });
+    }
+    if (googleBtnModalRef.current) {
+      w.google.accounts.id.renderButton(googleBtnModalRef.current, {
+        theme: "outline", size: "large", text: "signin_with", locale: "ar",
+      });
+    }
+  }, [googleBtnRef.current, googleBtnModalRef.current]);
 
   async function handleGoogleCredential(response: any) {
     setAuthLoading(true);
@@ -113,19 +116,15 @@ export default function Home() {
       toast({ title: "الملف كبير", description: "الحد الأقصى 50 ميجابايت", variant: "destructive" });
       return;
     }
-
-    // Check trial limits
     if (!user) {
       const trials = getTrials();
       if (trials <= 0) { setTrialBlockModal(true); return; }
     } else if (user.plan !== "professional" && user.trials_remaining <= 0) {
       setTrialBlockModal(true); return;
     }
-
     setCheckResult(null);
     const formData = new FormData();
     formData.append("file", file);
-
     const token = getToken();
     try {
       const res = await fetch("/api/check", {
@@ -196,10 +195,36 @@ export default function Home() {
     { q: "هل يدعم فيديوهات تيك توك؟", a: "نعم، نقبل ملفات MP4. يُرفع الفيديو ويُحلل فريم بفريم وفق سياسات Meta وTikTok." },
   ];
 
-  const agents = config?.agents ?? { libya: "", jordan: "قريباً", saudi: "قريباً" };
   const accuracyText = config?.accuracy_text ?? "النتيجة 90% صحيحة بسبب تحديث سياسات Meta & TikTok باستمرار";
   const whatsapp = config?.whatsapp ?? "218915811115";
   const proPrice = config?.pro_price ?? "200 د.ل";
+
+  const agentsList = [
+    {
+      country: "ليبيا",
+      flag: "🇱🇾",
+      company: "شركة PostLapAI للخدمات الرقمية",
+      address: "مصراته — وسط البلد، مقابل المسرح",
+      wa: whatsapp,
+      live: true,
+    },
+    {
+      country: "الأردن",
+      flag: "🇯🇴",
+      company: "شركة TAGS",
+      address: "عمان، شارع الوكالات، مبنى الدعاس، ط4",
+      wa: "962799011104",
+      live: true,
+    },
+    {
+      country: "السعودية",
+      flag: "🇸🇦",
+      company: "شركة الحرمين",
+      address: "الرياض، شارع الملك سليمان، برج الحرمين 103",
+      wa: null,
+      live: false,
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
@@ -226,7 +251,9 @@ export default function Home() {
                 <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">خروج</button>
               </div>
             ) : (
-              <span className="text-xs text-muted-foreground">{getTrials()} محاولات متبقية</span>
+              <a href="#plans" className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors">
+                سجّل الدخول
+              </a>
             )}
           </div>
         </div>
@@ -234,8 +261,9 @@ export default function Home() {
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-16">
 
-        {/* Upload Section — FULL WIDTH, FIRST */}
+        {/* 1. Upload / Check */}
         <section id="upload" className="w-full">
+          {/* Trials hint — subtle, below the upload box */}
           <div
             className={`relative w-full border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all duration-200 ${
               dragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border hover:border-primary/50 hover:bg-card"
@@ -266,7 +294,14 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Check loading */}
+          {/* Trials remaining — shown below upload, not in header */}
+          {!user && (
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              متبقي لك <span className="text-primary font-bold">{getTrials()}</span> محاولات مجانية —{" "}
+              <a href="#plans" className="text-primary hover:underline">سجّل للحصول على المزيد</a>
+            </p>
+          )}
+
           {checkAd.isPending && (
             <div className="mt-6 flex flex-col items-center gap-3 text-muted-foreground" data-testid="status-loading">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -274,7 +309,6 @@ export default function Home() {
             </div>
           )}
 
-          {/* Check result */}
           {checkResult && !checkAd.isPending && (
             <div className={`mt-6 rounded-2xl border p-6 flex flex-col sm:flex-row items-start gap-4 ${statusColor[checkResult.status]}`} data-testid="status-result">
               {statusIcon[checkResult.status]}
@@ -298,76 +332,7 @@ export default function Home() {
           )}
         </section>
 
-        {/* Subscription Plans */}
-        <section id="plans" className="w-full">
-          <h2 className="text-2xl font-black text-center text-foreground mb-8">اختر خطتك</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Visitor */}
-            <div className="border border-border rounded-2xl p-6 bg-card flex flex-col gap-4" data-testid="card-plan-visitor">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">زائر</h3>
-                <p className="text-3xl font-black text-foreground mt-1">مجاني</p>
-                <p className="text-muted-foreground text-sm mt-1">3 فحوصات مجانية</p>
-              </div>
-              <ul className="space-y-2 text-sm text-muted-foreground flex-1">
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فحص الصور</li>
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فيديو حتى 11 ثانية</li>
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> توليد النصوص</li>
-              </ul>
-              <div className="text-xs text-muted-foreground border border-border rounded-lg p-2 text-center">
-                متبقي: {user ? (user.plan !== "professional" ? user.trials_remaining : "غير محدود") : getTrials()} محاولة
-              </div>
-            </div>
-
-            {/* Registered */}
-            <div className="border border-primary/30 rounded-2xl p-6 bg-primary/5 flex flex-col gap-4" data-testid="card-plan-registered">
-              <div>
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-foreground">مسجل بجوجل</h3>
-                  <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">الأفضل</span>
-                </div>
-                <p className="text-3xl font-black text-primary mt-1">مجاني</p>
-                <p className="text-muted-foreground text-sm mt-1">6 فحوصات يومياً</p>
-              </div>
-              <ul className="space-y-2 text-sm text-muted-foreground flex-1">
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> كل مميزات الزائر</li>
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> 6 فحوصات/يوم</li>
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> حفظ السجل</li>
-              </ul>
-              {user ? (
-                <div className="text-center text-sm text-primary font-semibold">مسجل الدخول</div>
-              ) : (
-                <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin" />
-              )}
-            </div>
-
-            {/* Professional */}
-            <div className="border border-border rounded-2xl p-6 bg-card flex flex-col gap-4" data-testid="card-plan-professional">
-              <div>
-                <h3 className="text-lg font-bold text-foreground">احترافي</h3>
-                <p className="text-3xl font-black text-foreground mt-1">{proPrice}</p>
-                <p className="text-muted-foreground text-sm mt-1">شهرياً — غير محدود</p>
-              </div>
-              <ul className="space-y-2 text-sm text-muted-foreground flex-1">
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فحوصات غير محدودة</li>
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فيديو حتى 60 ثانية</li>
-                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> دعم أولوية</li>
-              </ul>
-              <a
-                href={`https://wa.me/${whatsapp}?text=اشتراك احترافي PostLapAI`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full bg-primary text-primary-foreground text-center py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity block"
-                data-testid="button-subscribe-pro"
-              >
-                الاشتراك الاحترافي — {proPrice}
-              </a>
-              <p className="text-xs text-center text-muted-foreground">نقبل الدفع بالتحويل المصرفي</p>
-            </div>
-          </div>
-        </section>
-
-        {/* Ad Text Generator */}
+        {/* 2. Ad Text Generator */}
         <section id="generate" className="w-full">
           <h2 className="text-2xl font-black text-center text-foreground mb-2">ولّد نص إعلانك</h2>
           <p className="text-center text-muted-foreground text-sm mb-8">نصوص بالليبي الأصيل، متوافقة مع سياسات Meta</p>
@@ -418,7 +383,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* How it works */}
+        {/* 3. How it works */}
         <section id="how" className="w-full">
           <h2 className="text-2xl font-black text-center text-foreground mb-8">كيف يعمل؟</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -436,12 +401,12 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Why PostLapAI */}
+        {/* 4. Why PostLapAI — no AI model names */}
         <section id="why" className="w-full">
           <h2 className="text-2xl font-black text-center text-foreground mb-8">لماذا PostLapAI؟</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
-              { icon: <Shield className="w-6 h-6 text-primary" />, title: "دقة عالية", desc: "نموذج GPT-4o مع موجه متخصص في سياسات الإعلانات" },
+              { icon: <Shield className="w-6 h-6 text-primary" />, title: "دقة عالية", desc: "ذكاء اصطناعي متخصص في سياسات الإعلانات يعطيك حكماً دقيقاً قبل النشر" },
               { icon: <Eye className="w-6 h-6 text-primary" />, title: "فحص الفيديو فريم بفريم", desc: "نقطع الفيديو ونفحص كل ثانية على حدة — لا شيء يفوتنا" },
               { icon: <Lock className="w-6 h-6 text-primary" />, title: "خصوصية تامة", desc: "ملفاتك تُحذف فور التحليل. لا تخزين، لا مشاركة مع طرف ثالث" },
               { icon: <CheckCircle className="w-6 h-6 text-primary" />, title: "توليد نصوص ليبية", desc: "اكتب بالليبي الأصيل — شرقي، غربي، أو جنوبي — ومتوافق مع سياسات المنصات" },
@@ -457,7 +422,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Trust badges */}
+        {/* 5. Trust badges */}
         <section className="flex flex-wrap justify-center gap-4">
           {["آمن 100%", "لا نخزن إعلاناتك", "متوافق مع Meta & TikTok"].map((b) => (
             <div key={b} className="flex items-center gap-2 border border-border rounded-full px-4 py-2 bg-card text-sm text-muted-foreground">
@@ -467,7 +432,7 @@ export default function Home() {
           ))}
         </section>
 
-        {/* Stats */}
+        {/* 6. Stats */}
         {stats && (
           <section className="grid grid-cols-3 gap-4">
             {[
@@ -483,31 +448,41 @@ export default function Home() {
           </section>
         )}
 
-        {/* Agents */}
+        {/* 7. Agents — updated data, company name + address */}
         <section id="agents" className="w-full">
           <h2 className="text-2xl font-black text-center text-foreground mb-8">الوكلاء المعتمدون</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { country: "ليبيا", flag: "LY", addr: agents.libya, wa: whatsapp, live: true },
-              { country: "الأردن", flag: "JO", addr: agents.jordan, wa: null, live: false },
-              { country: "السعودية", flag: "SA", addr: agents.saudi, wa: null, live: false },
-            ].map((a) => (
-              <div key={a.country} className={`border rounded-2xl p-6 bg-card flex flex-col gap-3 ${a.live ? "border-primary/30" : "border-border opacity-70"}`} data-testid={`card-agent-${a.country}`}>
+            {agentsList.map((a) => (
+              <div
+                key={a.country}
+                className={`border rounded-2xl p-6 bg-card flex flex-col gap-3 ${a.live ? "border-primary/30" : "border-border opacity-60"}`}
+                data-testid={`card-agent-${a.country}`}
+              >
                 <div className="flex items-center gap-3">
-                  <span className="text-2xl">{a.flag === "LY" ? "🇱🇾" : a.flag === "JO" ? "🇯🇴" : "🇸🇦"}</span>
-                  <h3 className="font-bold text-foreground">{a.country}</h3>
-                  {a.live && <span className="text-xs bg-green-400/10 text-green-400 border border-green-400/20 rounded-full px-2 py-0.5">نشط</span>}
+                  <span className="text-2xl">{a.flag}</span>
+                  <div>
+                    <h3 className="font-bold text-foreground leading-tight">{a.country}</h3>
+                    {a.live && (
+                      <span className="text-xs bg-green-400/10 text-green-400 border border-green-400/20 rounded-full px-2 py-0.5">
+                        نشط
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{a.addr}</p>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{a.company}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{a.address}</p>
+                </div>
                 {a.wa ? (
                   <a
                     href={`https://wa.me/${a.wa}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline"
+                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
                     data-testid={`link-agent-wa-${a.country}`}
                   >
-                    واتساب: {a.wa}
+                    <span>واتساب:</span>
+                    <span dir="ltr">+{a.wa}</span>
                   </a>
                 ) : (
                   <span className="text-sm text-muted-foreground">تواصل معنا للشراكة</span>
@@ -517,7 +492,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* FAQ */}
+        {/* 8. FAQ */}
         <section id="faq" className="w-full max-w-2xl mx-auto">
           <h2 className="text-2xl font-black text-center text-foreground mb-8">الأسئلة الشائعة</h2>
           <div className="space-y-2">
@@ -540,6 +515,77 @@ export default function Home() {
             ))}
           </div>
         </section>
+
+        {/* 9. Subscription Plans — LAST */}
+        <section id="plans" className="w-full">
+          <h2 className="text-2xl font-black text-center text-foreground mb-2">اختر خطتك</h2>
+          <p className="text-center text-muted-foreground text-sm mb-8">ابدأ مجاناً — طوّر خطتك متى شئت</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Visitor */}
+            <div className="border border-border rounded-2xl p-6 bg-card flex flex-col gap-4" data-testid="card-plan-visitor">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">زائر</h3>
+                <p className="text-3xl font-black text-foreground mt-1">مجاني</p>
+                <p className="text-muted-foreground text-sm mt-1">3 فحوصات مجانية</p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground flex-1">
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فحص الصور</li>
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فيديو حتى 11 ثانية</li>
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> توليد النصوص</li>
+              </ul>
+              <div className="text-xs text-muted-foreground border border-border rounded-lg p-2 text-center">
+                متبقي: {user ? (user.plan !== "professional" ? user.trials_remaining : "غير محدود") : getTrials()} محاولة
+              </div>
+            </div>
+
+            {/* Registered */}
+            <div className="border border-primary/30 rounded-2xl p-6 bg-primary/5 flex flex-col gap-4" data-testid="card-plan-registered">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-foreground">مسجل بجوجل</h3>
+                  <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">الأفضل</span>
+                </div>
+                <p className="text-3xl font-black text-primary mt-1">مجاني</p>
+                <p className="text-muted-foreground text-sm mt-1">6 فحوصات يومياً</p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground flex-1">
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> كل مميزات الزائر</li>
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> 6 فحوصات/يوم</li>
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> حفظ السجل</li>
+              </ul>
+              {user ? (
+                <div className="text-center text-sm text-primary font-semibold">✓ مسجل الدخول</div>
+              ) : (
+                <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin" />
+              )}
+            </div>
+
+            {/* Professional */}
+            <div className="border border-border rounded-2xl p-6 bg-card flex flex-col gap-4" data-testid="card-plan-professional">
+              <div>
+                <h3 className="text-lg font-bold text-foreground">احترافي</h3>
+                <p className="text-3xl font-black text-foreground mt-1">{proPrice}</p>
+                <p className="text-muted-foreground text-sm mt-1">شهرياً — غير محدود</p>
+              </div>
+              <ul className="space-y-2 text-sm text-muted-foreground flex-1">
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فحوصات غير محدودة</li>
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> فيديو حتى 60 ثانية</li>
+                <li className="flex gap-2"><CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" /> دعم أولوية</li>
+              </ul>
+              <a
+                href={`https://wa.me/${whatsapp}?text=اشتراك احترافي PostLapAI`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-primary text-primary-foreground text-center py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity block"
+                data-testid="button-subscribe-pro"
+              >
+                الاشتراك الاحترافي — {proPrice}
+              </a>
+              <p className="text-xs text-center text-muted-foreground">نقبل الدفع بالتحويل المصرفي</p>
+            </div>
+          </div>
+        </section>
+
       </main>
 
       {/* Footer */}
@@ -572,7 +618,7 @@ export default function Home() {
               سادك هكي يا غالي! جربت النظام وشفت الفلاحة.. لو تبي تكمل وتفحص كميات أكبر، سجل الدخول بس.
             </p>
             <div className="space-y-3">
-              <div ref={googleBtnRef} className="flex justify-center" />
+              <div ref={googleBtnModalRef} className="flex justify-center" />
               <a
                 href={`https://wa.me/${whatsapp}?text=اشتراك احترافي PostLapAI`}
                 target="_blank"
