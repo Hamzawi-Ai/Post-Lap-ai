@@ -296,7 +296,7 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   }
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       max_tokens: 300,
       messages: [
