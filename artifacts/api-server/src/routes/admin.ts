@@ -1,0 +1,124 @@
+import { Router, type IRouter } from "express";
+import jwt from "jsonwebtoken";
+import { db, usersTable, checksTable } from "@workspace/db";
+import { count, eq, gte, sql } from "drizzle-orm";
+import { logger } from "../lib/logger";
+
+const router: IRouter = Router();
+
+const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123";
+
+// Admin auth middleware
+function requireAdmin(req: any, res: any, next: any) {
+  const authHeader = req.headers.authorization as string | undefined;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Admin authentication required" });
+    return;
+  }
+  try {
+    const token = authHeader.slice(7);
+    const decoded = jwt.verify(token, SESSION_SECRET) as { role?: string };
+    if (decoded.role !== "admin") {
+      res.status(401).json({ error: "Not authorized" });
+      return;
+    }
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+}
+
+// Admin login
+router.post("/admin/login", async (req, res): Promise<void> => {
+  const { password } = req.body as { password?: string };
+  if (password !== ADMIN_PASSWORD) {
+    res.status(401).json({ error: "كلمة السر غلط" });
+    return;
+  }
+  const token = jwt.sign({ role: "admin" }, SESSION_SECRET, { expiresIn: "1d" });
+  res.json({ token });
+});
+
+// List all users
+router.get("/admin/users", requireAdmin, async (_req, res): Promise<void> => {
+  const users = await db.select().from(usersTable).orderBy(usersTable.created_at);
+  res.json(
+    users.map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      plan: u.plan,
+      trials_remaining: u.trials_remaining,
+      total_checks: u.total_checks,
+      last_check_at: u.last_check_at?.toISOString() ?? null,
+      created_at: u.created_at.toISOString(),
+    }))
+  );
+});
+
+// Upgrade user plan
+router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  const { plan } = req.body as { plan?: string };
+
+  if (!plan || !["visitor", "registered", "professional"].includes(plan)) {
+    res.status(400).json({ error: "Invalid plan" });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ plan: plan as "visitor" | "registered" | "professional" })
+    .where(eq(usersTable.id, id))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  logger.info({ userId: id, plan }, "User plan upgraded by admin");
+  res.json({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    plan: user.plan,
+    trials_remaining: user.trials_remaining,
+    total_checks: user.total_checks,
+    last_check_at: user.last_check_at?.toISOString() ?? null,
+    created_at: user.created_at.toISOString(),
+  });
+});
+
+// Usage stats
+router.get("/stats", async (_req, res): Promise<void> => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const [totalChecks] = await db.select({ count: count() }).from(checksTable);
+  const [totalUsers] = await db.select({ count: count() }).from(usersTable);
+  const [checksToday] = await db
+    .select({ count: count() })
+    .from(checksTable)
+    .where(gte(checksTable.created_at, today));
+  const [approvedCount] = await db
+    .select({ count: count() })
+    .from(checksTable)
+    .where(eq(checksTable.status, "ممتاز"));
+  const [rejectedCount] = await db
+    .select({ count: count() })
+    .from(checksTable)
+    .where(eq(checksTable.status, "مرفوض"));
+
+  res.json({
+    total_checks: totalChecks?.count ?? 0,
+    total_users: totalUsers?.count ?? 0,
+    checks_today: checksToday?.count ?? 0,
+    approved_count: approvedCount?.count ?? 0,
+    rejected_count: rejectedCount?.count ?? 0,
+  });
+});
+
+export default router;

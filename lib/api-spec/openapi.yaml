@@ -3,20 +3,28 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PostLapAI API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: ads
+    description: Ad inspection and generation
+  - name: auth
+    description: Authentication
+  - name: admin
+    description: Admin panel
+  - name: config
+    description: Configuration
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +32,414 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /config:
+    get:
+      operationId: getConfig
+      tags: [config]
+      summary: Get public configuration
+      responses:
+        "200":
+          description: Config data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppConfig"
+
+  /check:
+    post:
+      operationId: checkAd
+      tags: [ads]
+      summary: Check an ad image or video
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/AdCheckInput"
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCheckResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /generate-text:
+    post:
+      operationId: generateAdText
+      tags: [ads]
+      summary: Generate Libyan dialect ad text
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextGenInput"
+      responses:
+        "200":
+          description: Generated text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TextGenResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /image-gen:
+    post:
+      operationId: generateImage
+      tags: [ads]
+      summary: Generate image (TODO NanoBanana)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageGenInput"
+      responses:
+        "200":
+          description: Generated image URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageGenResult"
+
+  /auth/google:
+    post:
+      operationId: authGoogle
+      tags: [auth]
+      summary: Authenticate with Google OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleAuthInput"
+      responses:
+        "200":
+          description: Auth success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Auth failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users/me:
+    get:
+      operationId: getCurrentUser
+      tags: [auth]
+      summary: Get current user info
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLoginResult"
+        "401":
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /admin/users/{id}/upgrade:
+    patch:
+      operationId: upgradeUser
+      tags: [admin]
+      summary: Upgrade user to professional plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpgradeInput"
+      responses:
+        "200":
+          description: User upgraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [ads]
+      summary: Get usage statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageStats"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    AppConfig:
+      type: object
+      required: [pro_price, whatsapp, agents, accuracy_text]
+      properties:
+        pro_price:
+          type: string
+        whatsapp:
+          type: string
+        agents:
+          type: object
+          properties:
+            libya:
+              type: string
+            jordan:
+              type: string
+            saudi:
+              type: string
+          required: [libya, jordan, saudi]
+        accuracy_text:
+          type: string
+
+    AdCheckInput:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        user_email:
+          type: ["string", "null"]
+        plan:
+          type: string
+
+    AdCheckResult:
+      type: object
+      required: [status, reason, score, message]
+      properties:
+        status:
+          type: string
+          enum: ["ممتاز", "جيد", "مرفوض"]
+        reason:
+          type: string
+        score:
+          type: number
+        message:
+          type: string
+        frames_checked:
+          type: ["integer", "null"]
+
+    TextGenInput:
+      type: object
+      required: [product, dialect]
+      properties:
+        product:
+          type: string
+        dialect:
+          type: string
+          enum: ["شرقية", "غربية", "جنوبية"]
+
+    TextGenResult:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+
+    ImageGenInput:
+      type: object
+      required: [prompt]
+      properties:
+        prompt:
+          type: string
+
+    ImageGenResult:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+
+    GoogleAuthInput:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+
+    AuthResult:
+      type: object
+      required: [user, token]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+
+    User:
+      type: object
+      required: [id, email, name, plan, trials_remaining, total_checks]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        plan:
+          type: string
+          enum: [visitor, registered, professional]
+        trials_remaining:
+          type: integer
+        total_checks:
+          type: integer
+        last_check_at:
+          type: ["string", "null"]
+
+    AdminLoginInput:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    AdminLoginResult:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+
+    AdminUser:
+      type: object
+      required: [id, email, name, plan, trials_remaining, total_checks, created_at]
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        name:
+          type: string
+        plan:
+          type: string
+        trials_remaining:
+          type: integer
+        total_checks:
+          type: integer
+        last_check_at:
+          type: ["string", "null"]
+        created_at:
+          type: string
+
+    UserUpgradeInput:
+      type: object
+      required: [plan]
+      properties:
+        plan:
+          type: string
+          enum: [visitor, registered, professional]
+
+    UsageStats:
+      type: object
+      required: [total_checks, total_users, checks_today]
+      properties:
+        total_checks:
+          type: integer
+        total_users:
+          type: integer
+        checks_today:
+          type: integer
+        approved_count:
+          type: integer
+        rejected_count:
+          type: integer
