@@ -374,21 +374,29 @@ export default function Home() {
 
         {/* 1. Upload / Check */}
         <section id="upload" className="w-full">
-          {/* Prominent headline */}
-          <div className="text-center mb-6">
-            <h1 className="text-3xl sm:text-4xl font-black text-foreground leading-tight">
-              بوست لاب:{" "}
-              <span className="text-primary">احترافي في معرفة المخالفات</span>
+          {/* Hero headline */}
+          <div className="text-center mb-8 space-y-4">
+            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+              مدعوم بالذكاء الاصطناعي
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-black text-foreground leading-tight tracking-tight">
+              اكتشف المخالفات{" "}
+              <span className="text-primary">قبل النشر</span>
             </h1>
-            <p className="text-muted-foreground mt-2 text-sm sm:text-base">
-              افحص إعلانك قبل النشر وتجنّب الرفض من Meta وTikTok
+            <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
+              ارفع إعلانك واحصل على تحليل فوري — تقييم المخاطر، نقاط الامتثال،
+              ونصائح التحسين بالذكاء الاصطناعي
+            </p>
+            <p className="text-xs text-muted-foreground/60">
+              مبني للمسوّقين والوكالات والشركات التي تريد إعلانات أذكى وأأمن
             </p>
           </div>
 
           {/* Upload dropzone */}
           <div
-            className={`relative w-full border-2 border-dashed rounded-2xl p-8 sm:p-10 text-center cursor-pointer transition-all duration-200 ${
-              dragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border hover:border-primary/50 hover:bg-card"
+            className={`relative w-full border-2 border-dashed rounded-2xl p-10 sm:p-14 text-center cursor-pointer transition-all duration-200 ${
+              dragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border hover:border-primary/40 hover:bg-card/60"
             }`}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
@@ -404,15 +412,18 @@ export default function Home() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
               data-testid="input-file"
             />
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <Upload className="w-8 h-8 text-primary" />
+            <div className="flex flex-col items-center gap-5">
+              <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <Upload className="w-10 h-10 text-primary" />
               </div>
-              <div>
-                <p className="text-lg sm:text-xl font-bold text-foreground">اسحب وأفلت الصورة أو الريلز هنا للفحص</p>
-                <p className="text-muted-foreground mt-1 text-sm">أو انقر للاختيار — PNG، JPG، MP4 — حتى 50 ميجابايت</p>
+              <div className="space-y-1">
+                <p className="text-xl sm:text-2xl font-black text-foreground">اسحب إعلانك هنا</p>
+                <p className="text-muted-foreground text-sm">صورة PNG / JPG أو فيديو MP4 — حتى 50 ميجابايت</p>
               </div>
-              <p className="text-xs text-muted-foreground/70 max-w-md">{accuracyText}</p>
+              <div className="bg-primary text-primary-foreground font-bold text-sm px-8 py-3 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-primary/20">
+                حلّل إعلاني الآن
+              </div>
+              <p className="text-xs text-muted-foreground/50">{accuracyText}</p>
             </div>
           </div>
 
@@ -487,15 +498,20 @@ export default function Home() {
                       )}
                     </div>
                   </div>
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">النقاط:</span>
-                    <div className="flex-1 h-2 rounded-full bg-black/20 overflow-hidden">
+                  <div className="mt-4 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">مستوى المخاطرة الإعلانية</span>
+                      <span className={`font-black text-base ${statusTextColor[checkResult.status]}`}>{checkResult.score}<span className="text-xs font-normal opacity-60">/100</span></span>
+                    </div>
+                    <div className="h-3 rounded-full bg-black/20 overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-700 ${statusBarColor[checkResult.status]}`}
+                        className={`h-full rounded-full transition-all duration-1000 ease-out ${statusBarColor[checkResult.status]}`}
                         style={{ width: `${checkResult.score}%` }}
                       />
                     </div>
-                    <span className={`text-sm font-black ${statusTextColor[checkResult.status]}`}>{checkResult.score}/100</span>
+                    <p className="text-xs text-muted-foreground/60">
+                      {checkResult.status === "ممتاز" ? "✅ إعلانك آمن — جاهز للنشر" : checkResult.status === "جيد" ? "⚠️ يحتاج مراجعة — الوصول قد يكون محدوداً" : "🚫 خطر مرتفع — سيُرفض من المنصة"}
+                    </p>
                   </div>
 
                   {/* CTA after result */}
@@ -538,69 +554,110 @@ export default function Home() {
           )}
         </section>
 
-        {/* 2. Ad Text Generator */}
+        {/* 2. Ad Text Generator — paid only */}
         <section id="generate" className="w-full">
-          <h2 className="text-2xl font-black text-center text-foreground mb-2">ولّد نص إعلانك</h2>
-          <p className="text-center text-muted-foreground text-sm mb-8">نصوص بالليبي الأصيل، متوافقة مع سياسات Meta</p>
-          <div className="max-w-2xl mx-auto space-y-4">
-            <textarea
-              className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
-              placeholder="(اسم المنتج، السعر، العرض...)"
-              value={product}
-              onChange={(e) => setProduct(e.target.value)}
-              data-testid="input-product"
-            />
-            <div className="flex gap-3">
-              <select
-                className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                value={dialect}
-                onChange={(e) => setDialect(e.target.value as any)}
-                data-testid="select-dialect"
-              >
-                <option value="غربية">اللهجة الغربية</option>
-                <option value="شرقية">اللهجة الشرقية</option>
-                <option value="جنوبية">اللهجة الجنوبية</option>
-              </select>
-              <button
-                onClick={handleGenerateText}
-                disabled={textLoading}
-                className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
-                data-testid="button-generate-text"
-              >
-                {textLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                ولّد النص
-              </button>
-            </div>
-            {generatedText && (
-              <div className="relative bg-card border border-border rounded-xl p-4 pb-12" data-testid="text-generated-result">
-                <p className="text-foreground leading-relaxed whitespace-pre-wrap">{generatedText}</p>
-                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between border-t border-border pt-2 mt-2">
-                  <p className="text-xs text-muted-foreground">متوافق مع سياسات Meta</p>
-                  <button
-                    onClick={() => copyToClipboard(generatedText, setCopiedText)}
-                    className="flex items-center gap-1.5 text-xs bg-muted text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
-                    data-testid="button-copy-text"
-                  >
-                    {copiedText ? <><Check className="w-3 h-3 text-green-400" /> تم النسخ</> : <><Copy className="w-3 h-3" /> نسخ النص</>}
-                  </button>
-                </div>
-              </div>
-            )}
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-black text-foreground mb-2">ولّد نص إعلانك</h2>
+            <p className="text-muted-foreground text-sm">نصوص بالليبي الأصيل، متوافقة مع سياسات Meta</p>
           </div>
+
+          {user?.plan === "professional" ? (
+            /* Paid users — full text generator */
+            <div className="max-w-2xl mx-auto space-y-4">
+              <textarea
+                className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
+                placeholder="(اسم المنتج، السعر، العرض...)"
+                value={product}
+                onChange={(e) => setProduct(e.target.value)}
+                data-testid="input-product"
+              />
+              <div className="flex gap-3">
+                <select
+                  className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  value={dialect}
+                  onChange={(e) => setDialect(e.target.value as any)}
+                  data-testid="select-dialect"
+                >
+                  <option value="غربية">اللهجة الغربية</option>
+                  <option value="شرقية">اللهجة الشرقية</option>
+                  <option value="جنوبية">اللهجة الجنوبية</option>
+                </select>
+                <button
+                  onClick={handleGenerateText}
+                  disabled={textLoading}
+                  className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
+                  data-testid="button-generate-text"
+                >
+                  {textLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  ولّد النص
+                </button>
+              </div>
+              {generatedText && (
+                <div className="relative bg-card border border-border rounded-xl p-4 pb-12" data-testid="text-generated-result">
+                  <p className="text-foreground leading-relaxed whitespace-pre-wrap">{generatedText}</p>
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between border-t border-border pt-2 mt-2">
+                    <p className="text-xs text-muted-foreground">متوافق مع سياسات Meta</p>
+                    <button
+                      onClick={() => copyToClipboard(generatedText, setCopiedText)}
+                      className="flex items-center gap-1.5 text-xs bg-muted text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
+                      data-testid="button-copy-text"
+                    >
+                      {copiedText ? <><Check className="w-3 h-3 text-green-400" /> تم النسخ</> : <><Copy className="w-3 h-3" /> نسخ النص</>}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Non-paid users — upgrade prompt */
+            <div className="max-w-xl mx-auto bg-card border border-primary/20 rounded-2xl p-8 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+                <Lock className="w-7 h-7 text-primary" />
+              </div>
+              <div>
+                <p className="text-lg font-black text-foreground">ميزة للمشتركين المدفوعين</p>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.
+                  {!user && " سجّل دخولك أولاً ثم اشترك."}
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                {!user ? (
+                  <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
+                ) : null}
+                <a
+                  href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                >
+                  اشترك وابدأ التوليد
+                </a>
+                <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
+                  عرض الخطط
+                </a>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* 3. How it works */}
         <section id="how" className="w-full">
-          <h2 className="text-2xl font-black text-center text-foreground mb-8">كيف يعمل؟</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <h2 className="text-2xl font-black text-center text-foreground mb-2">كيف يعمل؟</h2>
+          <p className="text-center text-muted-foreground text-sm mb-10">ثلاث خطوات بسيطة — نتيجة في ثوانٍ</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+            {/* Connector line (desktop) */}
+            <div className="hidden md:block absolute top-10 right-[16.66%] left-[16.66%] h-px bg-gradient-to-l from-border via-primary/30 to-border" />
             {[
-              { step: "01", title: "ارفع الإعلان", desc: "اسحب وأفلت صورة PNG/JPG أو فيديو MP4 في مربع الرفع" },
-              { step: "02", title: "تحليل فوري خلال 8 ثوانٍ", desc: "الذكاء الاصطناعي يفحص كل فريم مقارنةً بسياسات Meta وTikTok" },
-              { step: "03", title: "نتيجة واضحة", desc: "تحصل على حكم نهائي مع نقاط تفصيلية وسبب واضح" },
+              { step: "01", emoji: "📤", title: "ارفع الإعلان", desc: "اسحب وأفلت صورتك أو فيديو MP4 مباشرةً في منطقة الرفع" },
+              { step: "02", emoji: "🤖", title: "الذكاء الاصطناعي يحلّل", desc: "يفحص النصوص والمرئيات فريم بفريم وفق سياسات Meta وTikTok" },
+              { step: "03", emoji: "📊", title: "نتائج فورية", desc: "تحصل على تقييم المخاطر، نقاط الامتثال، ونصائح التحسين" },
             ].map((s) => (
-              <div key={s.step} className="bg-card border border-border rounded-2xl p-6 flex flex-col gap-3">
-                <span className="text-4xl font-black text-primary/30">{s.step}</span>
-                <h3 className="text-lg font-bold text-foreground">{s.title}</h3>
+              <div key={s.step} className="bg-card border border-border rounded-2xl p-7 flex flex-col gap-4 relative">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">{s.emoji}</span>
+                  <span className="text-xs font-black text-primary/40 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-full">خطوة {s.step}</span>
+                </div>
+                <h3 className="text-lg font-black text-foreground">{s.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
               </div>
             ))}
@@ -609,19 +666,22 @@ export default function Home() {
 
         {/* 4. Why PostLapAI */}
         <section id="why" className="w-full">
-          <h2 className="text-2xl font-black text-center text-foreground mb-8">لماذا PostLapAI؟</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <h2 className="text-2xl font-black text-center text-foreground mb-2">لماذا PostLapAI؟</h2>
+          <p className="text-center text-muted-foreground text-sm mb-10">كل ما تحتاجه لإعلانات أذكى وأأمن</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { icon: <Shield className="w-6 h-6 text-primary" />, title: "دقة عالية", desc: "ذكاء اصطناعي متخصص في سياسات الإعلانات يعطيك حكماً دقيقاً قبل النشر" },
-              { icon: <Eye className="w-6 h-6 text-primary" />, title: "فحص الفيديو فريم بفريم", desc: "نقطع الفيديو ونفحص كل ثانية على حدة — لا شيء يفوتنا" },
-              { icon: <Lock className="w-6 h-6 text-primary" />, title: "خصوصية تامة", desc: "ملفاتك تُحذف فور التحليل. لا تخزين، لا مشاركة مع طرف ثالث" },
-              { icon: <CheckCircle className="w-6 h-6 text-primary" />, title: "توليد نصوص ليبية", desc: "اكتب بالليبي الأصيل — شرقي، غربي، أو جنوبي — ومتوافق مع سياسات المنصات" },
+              { icon: <Shield className="w-5 h-5 text-primary" />, title: "تحليل فوري", desc: "نتيجة خلال 8 ثوانٍ بدون انتظار" },
+              { icon: <Eye className="w-5 h-5 text-primary" />, title: "كشف بالذكاء الاصطناعي", desc: "يفحص النص والمرئيات معاً بدقة عالية" },
+              { icon: <CheckCircle className="w-5 h-5 text-primary" />, title: "نقاط الامتثال الإعلاني", desc: "تقرير واضح بنقاط القوة والضعف في إعلانك" },
+              { icon: <AlertCircle className="w-5 h-5 text-primary" />, title: "تقييم المخاطر", desc: "اعرف احتمالية رفض إعلانك قبل ما تصرف فلوساً" },
+              { icon: <Lock className="w-5 h-5 text-primary" />, title: "خصوصية تامة", desc: "ملفاتك تُحذف فور التحليل — لا تخزين أبداً" },
+              { icon: <CheckCircle className="w-5 h-5 text-primary" />, title: "دعم متعدد اللهجات", desc: "نصوص ليبية أصيلة — شرقية، غربية، وجنوبية" },
             ].map((f) => (
-              <div key={f.title} className="bg-card border border-border rounded-2xl p-5 flex gap-4">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">{f.icon}</div>
+              <div key={f.title} className="bg-card border border-border rounded-2xl p-5 flex gap-3 hover:border-primary/30 transition-colors">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">{f.icon}</div>
                 <div>
-                  <h3 className="font-bold text-foreground">{f.title}</h3>
-                  <p className="text-sm text-muted-foreground mt-1 leading-relaxed">{f.desc}</p>
+                  <h3 className="font-bold text-foreground text-sm">{f.title}</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{f.desc}</p>
                 </div>
               </div>
             ))}
@@ -630,10 +690,16 @@ export default function Home() {
 
         {/* 5. Trust badges */}
         <section className="flex flex-wrap justify-center gap-3">
-          {["آمن 100%", "لا نخزن إعلاناتك", "متوافق مع Meta & TikTok", "نتيجة خلال 8 ثوانٍ"].map((b) => (
-            <div key={b} className="flex items-center gap-2 border border-border rounded-full px-4 py-2 bg-card text-xs sm:text-sm text-muted-foreground">
-              <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-primary shrink-0" />
-              {b}
+          {[
+            { label: "آمن 100%", emoji: "🔒" },
+            { label: "لا نخزن إعلاناتك", emoji: "🗑️" },
+            { label: "متوافق مع Meta & TikTok", emoji: "✅" },
+            { label: "نتيجة خلال 8 ثوانٍ", emoji: "⚡" },
+            { label: "دعم متعدد اللهجات", emoji: "🗣️" },
+          ].map((b) => (
+            <div key={b.label} className="flex items-center gap-2 border border-border rounded-full px-4 py-2 bg-card text-xs sm:text-sm text-muted-foreground hover:border-primary/30 transition-colors">
+              <span>{b.emoji}</span>
+              {b.label}
             </div>
           ))}
         </section>
@@ -750,55 +816,76 @@ export default function Home() {
           </div>
 
           {/* Paid plans */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
             {plans.map((plan) => {
               const discountedPrice = discountActive ? plan.price * 0.5 : null;
+              const isContentMgmt = plan.id === "content_mgmt";
               return (
                 <div
                   key={plan.id}
-                  className={`border rounded-2xl p-6 flex flex-col gap-4 ${plan.highlight ? "border-primary/50 bg-primary/5" : "border-border bg-card"}`}
+                  className={`relative border rounded-2xl flex flex-col gap-4 overflow-hidden ${
+                    isContentMgmt
+                      ? "border-primary bg-gradient-to-b from-primary/10 to-primary/5 shadow-xl shadow-primary/10 scale-[1.02] p-7"
+                      : "border-border bg-card p-6"
+                  }`}
                   data-testid={`card-plan-${plan.id}`}
                 >
-                  {plan.badge && (
-                    <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full self-start">{plan.badge}</span>
+                  {/* Content Mgmt glow ring */}
+                  {isContentMgmt && (
+                    <div className="absolute inset-0 rounded-2xl ring-1 ring-primary/40 pointer-events-none" />
                   )}
+
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className={`font-black ${isContentMgmt ? "text-xl text-primary" : "text-lg text-foreground"}`}>{plan.name}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{plan.nameAr}</p>
+                    </div>
+                    {plan.badge && (
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full shrink-0 ${isContentMgmt ? "bg-primary text-white" : "bg-muted text-muted-foreground border border-border"}`}>
+                        {plan.badge}
+                      </span>
+                    )}
+                  </div>
+
                   <div>
-                    <h3 className="text-lg font-black text-foreground">{plan.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{plan.nameAr}</p>
-                    <div className="flex items-baseline gap-2 mt-2">
+                    <div className="flex items-baseline gap-2">
                       {discountActive ? (
                         <>
-                          <span className="text-3xl font-black text-primary">{discountedPrice} د.ل</span>
-                          <span className="text-lg text-muted-foreground line-through">{plan.price} د.ل</span>
+                          <span className={`font-black ${isContentMgmt ? "text-4xl text-primary" : "text-3xl text-foreground"}`}>{discountedPrice} <span className="text-lg">د.ل</span></span>
+                          <span className="text-base text-muted-foreground line-through">{plan.price}</span>
                         </>
                       ) : (
-                        <span className="text-3xl font-black text-foreground">{plan.price} د.ل</span>
+                        <span className={`font-black ${isContentMgmt ? "text-4xl text-primary" : "text-3xl text-foreground"}`}>{plan.price} <span className="text-lg">د.ل</span></span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">شهرياً — {plan.desc}</p>
+                    {discountActive && (
+                      <p className="text-xs text-yellow-400 font-semibold mt-1">🔥 خصم 50% — ادفع {discountedPrice} د.ل فقط</p>
+                    )}
                   </div>
-                  <ul className="space-y-2 text-sm text-muted-foreground flex-1">
+
+                  <ul className="space-y-2.5 flex-1">
                     {plan.features.map((f) => (
-                      <li key={f} className="flex gap-2">
-                        <CheckCircle className="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        {f}
+                      <li key={f} className="flex gap-2 text-sm">
+                        <CheckCircle className={`w-4 h-4 mt-0.5 shrink-0 ${isContentMgmt ? "text-primary" : "text-primary/70"}`} />
+                        <span className={isContentMgmt ? "text-foreground font-medium" : "text-muted-foreground"}>{f}</span>
                       </li>
                     ))}
                   </ul>
+
                   <a
                     href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(`أريد الاشتراك في ${plan.name} - PostLapAI`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`w-full text-center py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity block ${
-                      plan.highlight ? "bg-primary text-primary-foreground" : "bg-muted text-foreground border border-border"
+                    className={`w-full text-center py-3 rounded-xl font-black text-sm hover:opacity-90 transition-all block ${
+                      isContentMgmt
+                        ? "bg-primary text-white shadow-lg shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.01]"
+                        : "bg-muted text-foreground border border-border hover:border-primary/40"
                     }`}
                     data-testid={`button-plan-${plan.id}`}
                   >
                     {plan.cta}
                   </a>
-                  {discountActive && (
-                    <p className="text-xs text-center text-yellow-400">🔥 ادفع {discountedPrice} د.ل فقط هذا الشهر</p>
-                  )}
                 </div>
               );
             })}
