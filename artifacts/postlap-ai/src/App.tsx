@@ -13,7 +13,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/admin" component={Admin} />
+      <Route path="/khtfa-secure-portal" component={Admin} />
       <Route path="/dashboard-admin-access" component={SecretAdmin} />
       <Route component={NotFound} />
     </Switch>

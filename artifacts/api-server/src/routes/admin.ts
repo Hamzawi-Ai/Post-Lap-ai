@@ -28,6 +28,29 @@ function requireAdmin(req: any, res: any, next: any) {
   }
 }
 
+function formatUser(u: typeof usersTable.$inferSelect) {
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    plan: u.plan,
+    gender: u.gender,
+    is_active: u.is_active,
+    subscription_label: u.subscription_label ?? null,
+    subscription_expires_at: u.subscription_expires_at?.toISOString() ?? null,
+    trials_remaining: u.trials_remaining,
+    total_checks: u.total_checks,
+    last_check_at: u.last_check_at?.toISOString() ?? null,
+    created_at: u.created_at.toISOString(),
+  };
+}
+
+function expiryFromDays(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
 // Admin login
 router.post("/admin/login", async (req, res): Promise<void> => {
   const { password } = req.body as { password?: string };
@@ -42,36 +65,86 @@ router.post("/admin/login", async (req, res): Promise<void> => {
 // List all users
 router.get("/admin/users", requireAdmin, async (_req, res): Promise<void> => {
   const users = await db.select().from(usersTable).orderBy(usersTable.created_at);
-  res.json(
-    users.map((u) => ({
-      id: u.id,
-      email: u.email,
-      name: u.name,
-      plan: u.plan,
-      gender: u.gender,
-      is_active: u.is_active,
-      trials_remaining: u.trials_remaining,
-      total_checks: u.total_checks,
-      last_check_at: u.last_check_at?.toISOString() ?? null,
-      created_at: u.created_at.toISOString(),
-    }))
-  );
+  res.json(users.map(formatUser));
 });
 
-// Upgrade user plan
+// Create user by email (manual add)
+router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
+  const { email, name, plan, subscription_label, duration_days } = req.body as {
+    email?: string;
+    name?: string;
+    plan?: string;
+    subscription_label?: string;
+    duration_days?: number;
+  };
+
+  if (!email || !plan || !["visitor", "registered", "professional"].includes(plan ?? "")) {
+    res.status(400).json({ error: "email and valid plan required" });
+    return;
+  }
+
+  const expiresAt = duration_days ? expiryFromDays(duration_days) : undefined;
+
+  const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
+  if (existing) {
+    const [updated] = await db
+      .update(usersTable)
+      .set({
+        plan: plan as "visitor" | "registered" | "professional",
+        subscription_label: subscription_label ?? null,
+        subscription_expires_at: expiresAt ?? null,
+        is_active: true,
+      })
+      .where(eq(usersTable.email, email))
+      .returning();
+    logger.info({ email, plan }, "Existing user plan set by admin");
+    res.json(formatUser(updated!));
+    return;
+  }
+
+  const [user] = await db
+    .insert(usersTable)
+    .values({
+      email,
+      name: name ?? email.split("@")[0],
+      plan: plan as "visitor" | "registered" | "professional",
+      subscription_label: subscription_label ?? null,
+      subscription_expires_at: expiresAt ?? null,
+      is_active: true,
+      trials_remaining: plan === "professional" ? 9999 : 6,
+    })
+    .returning();
+
+  logger.info({ email, plan }, "User created by admin");
+  res.json(formatUser(user!));
+});
+
+// Upgrade user plan (with optional label + duration)
 router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
-  const { plan } = req.body as { plan?: string };
+  const { plan, subscription_label, duration_days } = req.body as {
+    plan?: string;
+    subscription_label?: string;
+    duration_days?: number;
+  };
 
   if (!plan || !["visitor", "registered", "professional"].includes(plan)) {
     res.status(400).json({ error: "Invalid plan" });
     return;
   }
 
+  const expiresAt = duration_days ? expiryFromDays(duration_days) : undefined;
+
+  const updateData: Partial<typeof usersTable.$inferInsert> = {
+    plan: plan as "visitor" | "registered" | "professional",
+    ...(subscription_label !== undefined && { subscription_label }),
+    ...(expiresAt !== undefined && { subscription_expires_at: expiresAt }),
+  };
+
   const [user] = await db
     .update(usersTable)
-    .set({ plan: plan as "visitor" | "registered" | "professional" })
+    .set(updateData)
     .where(eq(usersTable.id, id))
     .returning();
 
@@ -81,18 +154,22 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
   }
 
   logger.info({ userId: id, plan }, "User plan upgraded by admin");
-  res.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    plan: user.plan,
-    gender: user.gender,
-    is_active: user.is_active,
-    trials_remaining: user.trials_remaining,
-    total_checks: user.total_checks,
-    last_check_at: user.last_check_at?.toISOString() ?? null,
-    created_at: user.created_at.toISOString(),
-  });
+  res.json(formatUser(user));
+});
+
+// Delete user
+router.delete("/admin/users/:id", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const [deleted] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning();
+  if (!deleted) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  logger.info({ userId: id }, "User deleted by admin");
+  res.json({ success: true });
 });
 
 // Activate / deactivate user by email
@@ -116,21 +193,10 @@ router.patch("/admin/activate", requireAdmin, async (req, res): Promise<void> =>
   }
 
   logger.info({ email, active }, "User activation status changed by admin");
-  res.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    plan: user.plan,
-    gender: user.gender,
-    is_active: user.is_active,
-    trials_remaining: user.trials_remaining,
-    total_checks: user.total_checks,
-    last_check_at: user.last_check_at?.toISOString() ?? null,
-    created_at: user.created_at.toISOString(),
-  });
+  res.json(formatUser(user));
 });
 
-// Set plan by email (owner tool — no user-id needed)
+// Set plan by email (owner tool)
 router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise<void> => {
   const { email, plan } = req.body as { email?: string; plan?: string };
 
@@ -151,7 +217,7 @@ router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise
   }
 
   logger.info({ email, plan }, "User plan set by email via owner panel");
-  res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan });
+  res.json(formatUser(user));
 });
 
 // Usage stats

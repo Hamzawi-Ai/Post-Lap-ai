@@ -15,6 +15,8 @@ export const usersTable = pgTable("users", {
   total_checks: integer("total_checks").notNull().default(0),
   last_check_at: timestamp("last_check_at"),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  subscription_label: text("subscription_label"),
+  subscription_expires_at: timestamp("subscription_expires_at"),
 });
 
 export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, created_at: true });
