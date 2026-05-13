@@ -130,6 +130,30 @@ router.patch("/admin/activate", requireAdmin, async (req, res): Promise<void> =>
   });
 });
 
+// Set plan by email (owner tool — no user-id needed)
+router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise<void> => {
+  const { email, plan } = req.body as { email?: string; plan?: string };
+
+  if (!email || !plan || !["visitor", "registered", "professional"].includes(plan)) {
+    res.status(400).json({ error: "email and valid plan required" });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ plan: plan as "visitor" | "registered" | "professional" })
+    .where(eq(usersTable.email, email))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: "لم يُوجد مستخدم بهذا البريد" });
+    return;
+  }
+
+  logger.info({ email, plan }, "User plan set by email via owner panel");
+  res.json({ id: user.id, email: user.email, name: user.name, plan: user.plan });
+});
+
 // Usage stats
 router.get("/stats", async (_req, res): Promise<void> => {
   const today = new Date();

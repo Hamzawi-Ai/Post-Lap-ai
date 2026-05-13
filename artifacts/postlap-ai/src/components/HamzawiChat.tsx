@@ -37,7 +37,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp }: HamzawiCh
     if (open && !greeted) {
       setTimeout(() => {
         addHamzawi(
-          `السلام عليكم ${address}! 👋 أنا حمزاوي، مصمم ومسوّق ليبي محترف. كيف أقدر أساعدك اليوم؟`
+          `السلام عليكم ${address}! 👋 أنا حمزاوي، مصمم ومسوّق محترف. كيف أقدر أساعدك اليوم؟`
         );
         setGreeted(true);
       }, 400);
@@ -118,7 +118,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp }: HamzawiCh
               </div>
               <div>
                 <p className="text-sm font-bold text-white">حمزاوي</p>
-                <p className="text-xs text-white/70">مصمم ومسوّق محترف</p>
+                <p className="text-xs text-white/70">مساعدك الإعلاني الذكي</p>
               </div>
             </div>
             <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors">

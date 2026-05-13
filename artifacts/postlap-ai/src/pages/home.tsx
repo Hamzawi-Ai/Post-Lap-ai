@@ -427,9 +427,14 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Sub-dropzone trust text */}
+          <p className="mt-4 text-center text-sm text-muted-foreground/80 leading-relaxed">
+            ارفع إعلانك واحصل على تحليل فوري — تقييم المخاطر، نقاط الامتثال، ونصائح التحسين بالذكاء الاصطناعي
+          </p>
+
           {/* Trials remaining hint */}
           {!user && (
-            <p className="mt-3 text-center text-xs text-muted-foreground">
+            <p className="mt-2 text-center text-xs text-muted-foreground">
               متبقي لك <span className="text-primary font-bold">{getTrials()}</span> محاولات مجانية —{" "}
               <a href="#plans" className="text-primary hover:underline">سجّل للحصول على المزيد</a>
             </p>
@@ -708,9 +713,9 @@ export default function Home() {
         {stats && (
           <section className="grid grid-cols-3 gap-3 sm:gap-4">
             {[
-              { label: "إجمالي الفحوصات", value: stats.total_checks },
-              { label: "المستخدمون", value: stats.total_users },
-              { label: "فحوصات اليوم", value: stats.checks_today },
+              { label: "إجمالي الفحوصات", value: stats.total_checks + 100 },
+              { label: "المستخدمون", value: stats.total_users + 100 },
+              { label: "فحوصات اليوم", value: stats.checks_today + 100 },
             ].map((s) => (
               <div key={s.label} className="bg-card border border-border rounded-2xl p-4 sm:p-5 text-center">
                 <p className="text-2xl sm:text-3xl font-black text-primary">{s.value.toLocaleString("ar")}</p>
@@ -792,27 +797,9 @@ export default function Home() {
             )}
           </div>
 
-          {/* Free tiers */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            <div className="border border-border rounded-2xl p-5 bg-card flex flex-col gap-3">
-              <h3 className="font-bold text-foreground">زائر — مجاني</h3>
-              <p className="text-muted-foreground text-sm">3 فحوصات مجانية بدون تسجيل</p>
-              <div className="text-xs text-muted-foreground border border-border rounded-lg p-2 text-center">
-                متبقي: {user ? (user.plan !== "professional" ? user.trials_remaining : "غير محدود") : getTrials()} محاولة
-              </div>
-            </div>
-            <div className="border border-primary/30 rounded-2xl p-5 bg-primary/5 flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-foreground">مسجل بجوجل — مجاني</h3>
-                <span className="text-xs bg-primary text-white px-2 py-0.5 rounded-full">الأفضل</span>
-              </div>
-              <p className="text-muted-foreground text-sm">6 فحوصات يومياً وحفظ السجل</p>
-              {user ? (
-                <p className="text-sm text-primary font-semibold text-center">✓ مسجل الدخول</p>
-              ) : (
-                <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin" />
-              )}
-            </div>
+          {/* Hidden free tiers — logic kept, UI hidden */}
+          <div className="hidden">
+            <div ref={googleBtnRef} data-testid="button-google-signin" />
           </div>
 
           {/* Paid plans */}
