@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine } from "lucide-react";
 import { useGetConfig, useGetStats, getGetConfigQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
@@ -383,10 +383,6 @@ export default function Home() {
               اكتشف المخالفات{" "}
               <span className="text-primary">قبل النشر</span>
             </h1>
-            <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto leading-relaxed">
-              ارفع إعلانك واحصل على تحليل فوري — تقييم المخاطر، نقاط الامتثال،
-              ونصائح التحسين بالذكاء الاصطناعي
-            </p>
             <p className="text-xs text-muted-foreground/60">
               مبني للمسوّقين والوكالات والشركات التي تريد إعلانات أذكى وأأمن
             </p>
@@ -394,8 +390,10 @@ export default function Home() {
 
           {/* Upload dropzone */}
           <div
-            className={`relative w-full border-2 border-dashed rounded-2xl p-10 sm:p-14 text-center cursor-pointer transition-all duration-200 ${
-              dragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-border hover:border-primary/40 hover:bg-card/60"
+            className={`group relative w-full border-2 border-dashed rounded-2xl p-7 sm:p-10 text-center cursor-pointer transition-all duration-200 ${
+              dragging
+                ? "border-primary bg-primary/5 scale-[1.01] shadow-[0_0_28px_rgba(59,130,246,0.25)]"
+                : "border-border hover:border-primary/40 hover:bg-card/60 hover:shadow-[0_0_24px_rgba(59,130,246,0.18)]"
             }`}
             onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
             onDragLeave={() => setDragging(false)}
@@ -411,12 +409,12 @@ export default function Home() {
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
               data-testid="input-file"
             />
-            <div className="flex flex-col items-center gap-5">
-              <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <Upload className="w-10 h-10 text-primary" />
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <ScanLine className="w-8 h-8 text-primary group-hover:animate-pulse transition-all duration-300" />
               </div>
               <div className="space-y-1">
-                <p className="text-xl sm:text-2xl font-black text-foreground">اسحب إعلانك هنا</p>
+                <p className="text-lg sm:text-xl font-black text-foreground">ارفع هنا للفحص</p>
                 <p className="text-muted-foreground text-sm">صورة PNG / JPG أو فيديو MP4 — حتى 50 ميجابايت</p>
               </div>
               <div className="bg-primary text-primary-foreground font-bold text-sm px-8 py-3 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-primary/20">
@@ -425,11 +423,6 @@ export default function Home() {
               <p className="text-xs text-muted-foreground/50">{accuracyText}</p>
             </div>
           </div>
-
-          {/* Sub-dropzone text */}
-          <p className="mt-4 text-center text-sm text-muted-foreground/80 leading-relaxed">
-            ارفع إعلانك واحصل على تحليل فوري — تقييم المخاطر، نقاط الامتثال، ونصائح التحسين بالذكاء الاصطناعي
-          </p>
 
           {/* Trials remaining hint */}
           {!user && (
@@ -561,8 +554,14 @@ export default function Home() {
         {/* 2. Ad Text Generator — paid only */}
         <section id="generate" className="w-full">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-black text-foreground mb-2">ولّد نص إعلانك</h2>
-            <p className="text-muted-foreground text-sm">نصوص بالليبي الأصيل، متوافقة مع سياسات Meta</p>
+            <h2 className="text-2xl font-black text-foreground mb-2">
+              {user ? "ولّد نص إعلانك" : "تبي تعرف أكثر عن سبب الرفض؟ سجل الدخول مجاناً"}
+            </h2>
+            <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
+              {user
+                ? "نصوص بالليبي الأصيل، متوافقة مع سياسات Meta"
+                : "سجل دخولك وشوف تحليل الرفض التفصيلي + ولّد نصوص إعلانية متوافقة مع سياسات Meta و TikTok بالذكاء الاصطناعي"}
+            </p>
           </div>
 
           {user?.plan === "professional" ? (
@@ -613,32 +612,43 @@ export default function Home() {
               )}
             </div>
           ) : (
-            /* Non-paid users — upgrade prompt */
+            /* Non-paid / non-logged users — gated prompt */
             <div className="max-w-xl mx-auto bg-card border border-primary/20 rounded-2xl p-8 text-center space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
                 <Lock className="w-7 h-7 text-primary" />
               </div>
               <div>
-                <p className="text-lg font-black text-foreground">ميزة للمشتركين المدفوعين</p>
+                <p className="text-lg font-black text-foreground">
+                  {!user ? "سجّل الدخول مجاناً للوصول" : "ميزة للمشتركين المدفوعين"}
+                </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.
-                  {!user && " سجّل دخولك أولاً ثم اشترك."}
+                  {!user
+                    ? "سجل دخولك مجاناً وشوف تحليل الرفض التفصيلي — توليد النصوص الإعلانية يتطلب خطة مدفوعة."
+                    : <>توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.</>}
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 {!user ? (
-                  <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
-                ) : null}
-                <a
-                  href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
-                >
-                  اشترك وابدأ التوليد
-                </a>
-                <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
-                  عرض الخطط
-                </a>
+                  <>
+                    <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
+                    <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
+                      عرض الخطط
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <a
+                      href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                    >
+                      اشترك وابدأ التوليد
+                    </a>
+                    <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
+                      عرض الخطط
+                    </a>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -734,9 +744,9 @@ export default function Home() {
                 className="border border-primary/30 rounded-2xl p-6 bg-card flex flex-col gap-3"
                 data-testid={`card-agent-${a.country}`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">{a.flag}</span>
-                  <div>
+                <div className="flex items-center gap-2" dir="ltr">
+                  <span style={{ fontSize: "24px", lineHeight: 1 }}>{a.flag}</span>
+                  <div dir="rtl">
                     <h3 className="font-bold text-foreground leading-tight">{a.country}</h3>
                     <span className="text-xs bg-green-400/10 text-green-400 border border-green-400/20 rounded-full px-2 py-0.5">نشط</span>
                   </div>
@@ -895,7 +905,7 @@ export default function Home() {
               <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">تواصل معنا</a>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-6 text-center">© 2025 PostLapAI. جميع الحقوق محفوظة.</p>
+          <p className="text-sm mt-5 pt-5 border-t border-border/30 text-center" style={{ color: "#6B7280" }}>© 2026 PostLapAI. جميع الحقوق محفوظة</p>
         </div>
       </footer>
 
