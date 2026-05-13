@@ -426,6 +426,11 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Sub-dropzone text */}
+          <p className="mt-4 text-center text-sm text-muted-foreground/80 leading-relaxed">
+            ارفع إعلانك واحصل على تحليل فوري — تقييم المخاطر، نقاط الامتثال، ونصائح التحسين بالذكاء الاصطناعي
+          </p>
+
           {/* Trials remaining hint */}
           {!user && (
             <p className="mt-2 text-center text-xs text-muted-foreground">
