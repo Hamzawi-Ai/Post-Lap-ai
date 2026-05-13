@@ -350,7 +350,6 @@ export default function Home() {
             <a href="#upload" className="hover:text-foreground transition-colors">الفحص</a>
             <a href="#generate" className="hover:text-foreground transition-colors">توليد النص</a>
             <a href="#agents" className="hover:text-foreground transition-colors">الوكلاء</a>
-            <a href="/admin" className="hover:text-foreground transition-colors">لوحة التحكم</a>
           </nav>
           <div className="flex items-center gap-2">
             {user ? (
@@ -426,11 +425,6 @@ export default function Home() {
               <p className="text-xs text-muted-foreground/50">{accuracyText}</p>
             </div>
           </div>
-
-          {/* Sub-dropzone trust text */}
-          <p className="mt-4 text-center text-sm text-muted-foreground/80 leading-relaxed">
-            ارفع إعلانك واحصل على تحليل فوري — تقييم المخاطر، نقاط الامتثال، ونصائح التحسين بالذكاء الاصطناعي
-          </p>
 
           {/* Trials remaining hint */}
           {!user && (
