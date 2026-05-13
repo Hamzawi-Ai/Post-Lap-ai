@@ -30,7 +30,6 @@ router.post("/auth/google", async (req, res): Promise<void> => {
       return;
     }
 
-    // Upsert user
     const existing = await db
       .select()
       .from(usersTable)
@@ -47,6 +46,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
           email: payload.email,
           name: payload.name ?? "",
           plan: "registered",
+          is_active: true,
           trials_remaining: 6,
           total_checks: 0,
         })
@@ -78,6 +78,8 @@ router.post("/auth/google", async (req, res): Promise<void> => {
         email: user.email,
         name: user.name,
         plan: user.plan,
+        gender: user.gender ?? null,
+        is_active: user.is_active,
         trials_remaining: user.trials_remaining,
         total_checks: user.total_checks,
         last_check_at: user.last_check_at?.toISOString() ?? null,
@@ -117,10 +119,45 @@ router.get("/users/me", async (req, res): Promise<void> => {
       email: user.email,
       name: user.name,
       plan: user.plan,
+      gender: user.gender ?? null,
+      is_active: user.is_active,
       trials_remaining: user.trials_remaining,
       total_checks: user.total_checks,
       last_check_at: user.last_check_at?.toISOString() ?? null,
     });
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
+});
+
+// Update user gender
+router.patch("/users/me/gender", async (req, res): Promise<void> => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Not authenticated" });
+    return;
+  }
+  const { gender } = req.body as { gender?: string };
+  if (!gender || !["male", "female"].includes(gender)) {
+    res.status(400).json({ error: "gender must be male or female" });
+    return;
+  }
+
+  try {
+    const token = authHeader.slice(7);
+    const decoded = jwt.verify(token, SESSION_SECRET) as { userId: number };
+    const [user] = await db
+      .update(usersTable)
+      .set({ gender })
+      .where(eq(usersTable.id, decoded.userId))
+      .returning();
+
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    res.json({ gender: user.gender });
   } catch {
     res.status(401).json({ error: "Invalid token" });
   }

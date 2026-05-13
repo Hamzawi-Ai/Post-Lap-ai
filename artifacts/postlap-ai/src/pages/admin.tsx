@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, ShieldAlert, Users, CheckCircle } from "lucide-react";
+import { Loader2, ShieldAlert, Users, CheckCircle, UserCheck, UserX, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const ADMIN_TOKEN_KEY = "postlap_admin_token";
@@ -9,6 +9,8 @@ interface AdminUser {
   email: string;
   name: string;
   plan: string;
+  gender: string | null;
+  is_active: boolean;
   trials_remaining: number;
   total_checks: number;
   last_check_at: string | null;
@@ -23,6 +25,11 @@ export default function Admin() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [upgrading, setUpgrading] = useState<number | null>(null);
+  const [activating, setActivating] = useState<string | null>(null);
+  const [searchEmail, setSearchEmail] = useState("");
+  const [activateEmail, setActivateEmail] = useState("");
+  const [activateLoading, setActivateLoading] = useState(false);
+  const [searchFilter, setSearchFilter] = useState("");
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +87,51 @@ export default function Admin() {
     }
   }
 
+  async function toggleActivation(email: string, activate: boolean) {
+    if (!token) return;
+    setActivating(email);
+    try {
+      const res = await fetch("/api/admin/activate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, active: activate }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        toast({ title: "خطأ", description: d.error, variant: "destructive" });
+        return;
+      }
+      const updated: AdminUser = await res.json();
+      setUsers((prev) => prev.map((u) => (u.email === email ? updated : u)));
+      toast({ title: activate ? "تم التفعيل" : "تم الإيقاف", description: email });
+    } catch {
+      toast({ title: "خطأ في التفعيل", variant: "destructive" });
+    } finally {
+      setActivating(null);
+    }
+  }
+
+  async function activateByEmail() {
+    if (!activateEmail.trim() || !token) return;
+    setActivateLoading(true);
+    try {
+      const res = await fetch("/api/admin/activate", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: activateEmail.trim(), active: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast({ title: "خطأ", description: data.error, variant: "destructive" }); return; }
+      setUsers((prev) => prev.map((u) => (u.email === data.email ? data : u)));
+      toast({ title: "✓ تم تفعيل الحساب", description: data.email });
+      setActivateEmail("");
+    } catch {
+      toast({ title: "خطأ في الاتصال", variant: "destructive" });
+    } finally {
+      setActivateLoading(false);
+    }
+  }
+
   function logout() {
     localStorage.removeItem(ADMIN_TOKEN_KEY);
     setToken(null);
@@ -91,6 +143,11 @@ export default function Admin() {
     registered: "مسجل",
     professional: "احترافي",
   };
+  const genderLabel: Record<string, string> = { male: "ذكر", female: "أنثى" };
+
+  const filteredUsers = searchFilter
+    ? users.filter((u) => u.email.toLowerCase().includes(searchFilter.toLowerCase()) || u.name.toLowerCase().includes(searchFilter.toLowerCase()))
+    : users;
 
   if (!token) {
     return (
@@ -132,33 +189,20 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-background text-foreground" dir="rtl">
-      {/* Admin header */}
-      <header className="border-b border-border bg-card px-6 py-4 flex items-center justify-between">
+      <header className="border-b border-border bg-card px-4 sm:px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ShieldAlert className="w-6 h-6 text-primary" />
           <h1 className="text-lg font-black text-foreground">لوحة تحكم المدير</h1>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => loadUsers(token)}
-            className="text-sm text-primary hover:underline"
-            data-testid="button-refresh-users"
-          >
-            تحديث
-          </button>
-          <button
-            onClick={logout}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            data-testid="button-admin-logout"
-          >
-            خروج
-          </button>
+          <button onClick={() => loadUsers(token)} className="text-sm text-primary hover:underline" data-testid="button-refresh-users">تحديث</button>
+          <button onClick={logout} className="text-sm text-muted-foreground hover:text-foreground transition-colors" data-testid="button-admin-logout">خروج</button>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-6xl mx-auto px-4 py-8 space-y-6">
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-3 gap-4">
           <div className="bg-card border border-border rounded-xl p-4 text-center">
             <p className="text-2xl font-black text-primary">{users.length}</p>
             <p className="text-xs text-muted-foreground mt-1">إجمالي المستخدمين</p>
@@ -168,16 +212,58 @@ export default function Admin() {
             <p className="text-xs text-muted-foreground mt-1">احترافيون</p>
           </div>
           <div className="bg-card border border-border rounded-xl p-4 text-center">
-            <p className="text-2xl font-black text-primary">{users.reduce((s, u) => s + u.total_checks, 0)}</p>
-            <p className="text-xs text-muted-foreground mt-1">إجمالي الفحوصات</p>
+            <p className="text-2xl font-black text-primary">{users.filter((u) => !u.is_active).length}</p>
+            <p className="text-xs text-muted-foreground mt-1">موقوفون</p>
+          </div>
+        </div>
+
+        {/* Quick email activation */}
+        <div className="bg-card border border-primary/20 rounded-2xl p-5">
+          <h2 className="font-bold text-foreground mb-3 flex items-center gap-2">
+            <UserCheck className="w-5 h-5 text-primary" />
+            تفعيل حساب بالبريد الإلكتروني
+          </h2>
+          <div className="flex gap-2">
+            <input
+              type="email"
+              value={activateEmail}
+              onChange={(e) => setActivateEmail(e.target.value)}
+              placeholder="البريد الإلكتروني للمستخدم"
+              className="flex-1 bg-muted border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-right text-sm"
+              data-testid="input-activate-email"
+              onKeyDown={(e) => e.key === "Enter" && activateByEmail()}
+            />
+            <button
+              onClick={activateByEmail}
+              disabled={activateLoading || !activateEmail.trim()}
+              className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+              data-testid="button-activate-by-email"
+            >
+              {activateLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+              تفعيل
+            </button>
           </div>
         </div>
 
         {/* Users table */}
         <div className="bg-card border border-border rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-border flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" />
-            <h2 className="font-bold text-foreground">المستخدمون</h2>
+          <div className="px-6 py-4 border-b border-border flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <Users className="w-5 h-5 text-primary shrink-0" />
+              <h2 className="font-bold text-foreground">المستخدمون</h2>
+            </div>
+            {/* Search */}
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                placeholder="بحث باسم أو بريد..."
+                className="w-full bg-muted border border-border rounded-xl pr-9 pl-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-right"
+                data-testid="input-search-users"
+              />
+            </div>
           </div>
 
           {usersLoading ? (
@@ -199,57 +285,83 @@ export default function Admin() {
               <table className="w-full text-sm" data-testid="table-users">
                 <thead>
                   <tr className="border-b border-border text-muted-foreground text-xs">
-                    <th className="px-4 py-3 text-right font-medium">البريد الإلكتروني</th>
+                    <th className="px-4 py-3 text-right font-medium">البريد</th>
                     <th className="px-4 py-3 text-right font-medium">الاسم</th>
+                    <th className="px-4 py-3 text-right font-medium">الجنس</th>
                     <th className="px-4 py-3 text-right font-medium">الخطة</th>
-                    <th className="px-4 py-3 text-right font-medium">المحاولات</th>
+                    <th className="px-4 py-3 text-right font-medium">الحالة</th>
                     <th className="px-4 py-3 text-right font-medium">الفحوصات</th>
-                    <th className="px-4 py-3 text-right font-medium">آخر فحص</th>
                     <th className="px-4 py-3 text-right font-medium">إجراء</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
+                  {filteredUsers.map((u) => (
                     <tr key={u.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors" data-testid={`row-user-${u.id}`}>
-                      <td className="px-4 py-3 text-foreground">{u.email}</td>
+                      <td className="px-4 py-3 text-foreground text-xs">{u.email}</td>
                       <td className="px-4 py-3 text-muted-foreground">{u.name || "—"}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs">{u.gender ? genderLabel[u.gender] : "—"}</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-xs border ${
                           u.plan === "professional"
                             ? "border-primary/40 text-primary bg-primary/10"
-                            : u.plan === "registered"
-                            ? "border-border text-muted-foreground"
-                            : "border-border text-muted-foreground/60"
+                            : "border-border text-muted-foreground"
                         }`}>
                           {planLabel[u.plan] ?? u.plan}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground text-center">{u.trials_remaining}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-center">{u.total_checks}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {u.last_check_at ? new Date(u.last_check_at).toLocaleDateString("ar") : "—"}
-                      </td>
                       <td className="px-4 py-3">
-                        {u.plan !== "professional" ? (
-                          <button
-                            onClick={() => upgradeUser(u.id, "professional")}
-                            disabled={upgrading === u.id}
-                            className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors flex items-center gap-1 disabled:opacity-50"
-                            data-testid={`button-upgrade-${u.id}`}
-                          >
-                            {upgrading === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
-                            ترقية لاحترافي
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => upgradeUser(u.id, "registered")}
-                            disabled={upgrading === u.id}
-                            className="text-xs text-muted-foreground border border-border px-3 py-1.5 rounded-lg hover:bg-muted/50 transition-colors disabled:opacity-50"
-                            data-testid={`button-downgrade-${u.id}`}
-                          >
-                            تخفيض للمسجل
-                          </button>
-                        )}
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                          u.is_active
+                            ? "border-green-400/30 text-green-400 bg-green-400/10"
+                            : "border-red-400/30 text-red-400 bg-red-400/10"
+                        }`}>
+                          {u.is_active ? "نشط" : "موقوف"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground text-center">{u.total_checks}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {u.plan !== "professional" ? (
+                            <button
+                              onClick={() => upgradeUser(u.id, "professional")}
+                              disabled={upgrading === u.id}
+                              className="text-xs bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-50"
+                              data-testid={`button-upgrade-${u.id}`}
+                            >
+                              {upgrading === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "ترقية"}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => upgradeUser(u.id, "registered")}
+                              disabled={upgrading === u.id}
+                              className="text-xs text-muted-foreground border border-border px-2.5 py-1 rounded-lg hover:bg-muted/50 transition-colors disabled:opacity-50"
+                              data-testid={`button-downgrade-${u.id}`}
+                            >
+                              تخفيض
+                            </button>
+                          )}
+                          {u.is_active ? (
+                            <button
+                              onClick={() => toggleActivation(u.email, false)}
+                              disabled={activating === u.email}
+                              className="text-xs text-red-400 border border-red-400/20 px-2.5 py-1 rounded-lg hover:bg-red-400/10 transition-colors disabled:opacity-50 flex items-center gap-1"
+                              data-testid={`button-deactivate-${u.id}`}
+                            >
+                              {activating === u.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserX className="w-3 h-3" />}
+                              إيقاف
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => toggleActivation(u.email, true)}
+                              disabled={activating === u.email}
+                              className="text-xs text-green-400 border border-green-400/20 px-2.5 py-1 rounded-lg hover:bg-green-400/10 transition-colors disabled:opacity-50 flex items-center gap-1"
+                              data-testid={`button-activate-${u.id}`}
+                            >
+                              {activating === u.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserCheck className="w-3 h-3" />}
+                              تفعيل
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

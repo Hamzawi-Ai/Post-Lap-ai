@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import jwt from "jsonwebtoken";
 import { db, usersTable, checksTable } from "@workspace/db";
-import { count, eq, gte, sql } from "drizzle-orm";
+import { count, eq, gte } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -9,7 +9,6 @@ const router: IRouter = Router();
 const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123";
 
-// Admin auth middleware
 function requireAdmin(req: any, res: any, next: any) {
   const authHeader = req.headers.authorization as string | undefined;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -49,6 +48,8 @@ router.get("/admin/users", requireAdmin, async (_req, res): Promise<void> => {
       email: u.email,
       name: u.name,
       plan: u.plan,
+      gender: u.gender,
+      is_active: u.is_active,
       trials_remaining: u.trials_remaining,
       total_checks: u.total_checks,
       last_check_at: u.last_check_at?.toISOString() ?? null,
@@ -85,6 +86,43 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
     email: user.email,
     name: user.name,
     plan: user.plan,
+    gender: user.gender,
+    is_active: user.is_active,
+    trials_remaining: user.trials_remaining,
+    total_checks: user.total_checks,
+    last_check_at: user.last_check_at?.toISOString() ?? null,
+    created_at: user.created_at.toISOString(),
+  });
+});
+
+// Activate / deactivate user by email
+router.patch("/admin/activate", requireAdmin, async (req, res): Promise<void> => {
+  const { email, active } = req.body as { email?: string; active?: boolean };
+
+  if (!email || typeof active !== "boolean") {
+    res.status(400).json({ error: "email and active (boolean) required" });
+    return;
+  }
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ is_active: active })
+    .where(eq(usersTable.email, email))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  logger.info({ email, active }, "User activation status changed by admin");
+  res.json({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    plan: user.plan,
+    gender: user.gender,
+    is_active: user.is_active,
     trials_remaining: user.trials_remaining,
     total_checks: user.total_checks,
     last_check_at: user.last_check_at?.toISOString() ?? null,
