@@ -77,19 +77,18 @@ export default function Home() {
   useEffect(() => {
     const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     if (!googleClientId) return;
-    const w = window as any;
-    if (!w.google?.accounts?.id) return;
-    w.google.accounts.id.initialize({
+    if (!window.google?.accounts?.id) return;
+    window.google.accounts.id.initialize({
       client_id: googleClientId,
       callback: handleGoogleCredential,
     });
     if (googleBtnRef.current) {
-      w.google.accounts.id.renderButton(googleBtnRef.current, {
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
         theme: "outline", size: "large", text: "signin_with", locale: "ar",
       });
     }
     if (googleBtnModalRef.current) {
-      w.google.accounts.id.renderButton(googleBtnModalRef.current, {
+      window.google.accounts.id.renderButton(googleBtnModalRef.current, {
         theme: "outline", size: "large", text: "signin_with", locale: "ar",
       });
     }
@@ -361,9 +360,9 @@ export default function Home() {
                 <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">خروج</button>
               </div>
             ) : (
-              <a href="#plans" className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors">
+              <button onClick={() => window.google?.accounts?.id?.prompt()} className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors">
                 سجّل الدخول
-              </a>
+              </button>
             )}
           </div>
         </div>
