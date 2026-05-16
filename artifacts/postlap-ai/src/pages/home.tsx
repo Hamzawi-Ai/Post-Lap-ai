@@ -67,9 +67,11 @@ export default function Home() {
   const [cookieConsent, setCookieConsent] = useState(() => !!localStorage.getItem(COOKIE_KEY));
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [textLoading, setTextLoading] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleBtnModalRef = useRef<HTMLDivElement>(null);
+  const googleBtnLoginModalRef = useRef<HTMLDivElement>(null);
 
   const gender = (user?.gender ?? localStorage.getItem(GENDER_KEY) ?? null) as "male" | "female" | null;
   const discountActive = isDiscountActive();
@@ -94,6 +96,23 @@ export default function Home() {
     }
   }, [googleBtnRef.current, googleBtnModalRef.current]);
 
+  useEffect(() => {
+    if (!showLoginModal) return;
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!googleClientId) return;
+    if (!window.google?.accounts?.id) return;
+    // Re-initialize to ensure callback is fresh, then render into login modal
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleCredential,
+    });
+    if (googleBtnLoginModalRef.current) {
+      window.google.accounts.id.renderButton(googleBtnLoginModalRef.current, {
+        theme: "outline", size: "large", text: "signin_with", locale: "ar",
+      });
+    }
+  }, [showLoginModal, googleBtnLoginModalRef.current]);
+
   async function handleGoogleCredential(response: any) {
     try {
       const res = await fetch("/api/auth/google", {
@@ -106,6 +125,7 @@ export default function Home() {
       localStorage.setItem(TOKEN_KEY, data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       setUser(data.user);
+      setShowLoginModal(false);
       toast({ title: "تم تسجيل الدخول", description: `مرحبا ${data.user.name}` });
       // Show gender modal if gender not set yet
       if (!data.user.gender) setGenderModal(true);
@@ -360,7 +380,7 @@ export default function Home() {
                 <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">خروج</button>
               </div>
             ) : (
-              <button onClick={() => window.google?.accounts?.id?.prompt()} className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors">
+              <button onClick={() => setShowLoginModal(true)} className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors" data-testid="button-header-signin">
                 سجّل الدخول
               </button>
             )}
@@ -630,9 +650,9 @@ export default function Home() {
                 {!user ? (
                   <>
                     <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
-                    <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
-                      عرض الخطط
-                    </a>
+                    <button onClick={() => setShowLoginModal(true)} className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors" data-testid="button-register-free">
+                      سجّل مجاناً
+                    </button>
                   </>
                 ) : (
                   <>
@@ -807,7 +827,7 @@ export default function Home() {
 
           {/* Hidden free tiers — logic kept, UI hidden */}
           <div className="hidden">
-            <div ref={googleBtnRef} data-testid="button-google-signin" />
+            <div data-testid="button-google-signin" />
           </div>
 
           {/* Paid plans */}
@@ -937,6 +957,37 @@ export default function Home() {
                 إغلاق
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login modal */}
+      {showLoginModal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          data-testid="modal-login"
+          onClick={() => setShowLoginModal(false)}
+        >
+          <div
+            className="bg-card border border-border rounded-2xl p-8 max-w-md w-full text-center space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div />
+              <p className="text-lg font-black text-foreground">سجّل الدخول</p>
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="button-login-modal-close"
+                aria-label="إغلاق"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              سجّل دخولك مجاناً للوصول إلى التحليل التفصيلي وميزات المنصة
+            </p>
+            <div className="flex justify-center" ref={googleBtnLoginModalRef} data-testid="button-google-signin-login-modal" />
           </div>
         </div>
       )}
