@@ -6,6 +6,20 @@ import { logger } from "./lib/logger";
 
 const app: Express = express();
 
+app.set("trust proxy", true);
+
+if (process.env.NODE_ENV === "production") {
+  app.use((req, res, next) => {
+    const host = (req.headers.host ?? "").toLowerCase();
+    const bareHost = host.split(":")[0];
+    if (bareHost === "www.postlapai.com") {
+      const redirectUrl = `${req.protocol}://postlapai.com${req.originalUrl}`;
+      return res.redirect(301, redirectUrl);
+    }
+    next();
+  });
+}
+
 app.use(
   pinoHttp({
     logger,
