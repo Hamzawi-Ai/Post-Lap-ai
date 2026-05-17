@@ -8,6 +8,9 @@
 import type { HamzawiChatInputCheckReport } from "./hamzawiChatInputCheckReport";
 
 export interface HamzawiChatInput {
-  message: string;
+  /** User message (required unless isInit is true) */
+  message?: string;
+  /** When true, triggers proactive first message (auto-onboarding) without user input */
+  isInit?: boolean;
   checkReport?: HamzawiChatInputCheckReport;
 }

@@ -9,8 +9,11 @@
 export interface BrandMemoryInput {
   business_name?: string;
   business_type?: string;
+  address?: string;
+  phone?: string;
   logo_url?: string;
   primary_colors?: string;
   preferred_style?: string;
   notes?: string;
+  brand_onboarded?: boolean;
 }

@@ -6,8 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AdViolation } from "./adViolation";
+import type { ImageGenInputMode } from "./imageGenInputMode";
 
 export interface ImageGenInput {
-  imageBase64: string;
+  /** new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+) */
+  mode?: ImageGenInputMode;
+  /** Required for fix-existing-ad mode */
+  imageBase64?: string;
   violations?: AdViolation[];
+  /** Required for new_post mode */
+  productDescription?: string;
+  /** Optional product image for new_post mode */
+  productImageBase64?: string;
+  /** Optional regeneration note for new_post mode */
+  regenerateNote?: string;
 }

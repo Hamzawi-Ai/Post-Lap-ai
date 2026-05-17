@@ -68,10 +68,19 @@ export const GenerateAdTextResponse = zod.object({
 });
 
 /**
- * @summary Generate compliant ad image via Gemini (plan content+)
+ * @summary Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
  */
 export const GenerateImageBody = zod.object({
-  imageBase64: zod.string(),
+  mode: zod
+    .enum(["new_post"])
+    .optional()
+    .describe(
+      "new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)",
+    ),
+  imageBase64: zod
+    .string()
+    .optional()
+    .describe("Required for fix-existing-ad mode"),
   violations: zod
     .array(
       zod.object({
@@ -81,6 +90,18 @@ export const GenerateImageBody = zod.object({
       }),
     )
     .optional(),
+  productDescription: zod
+    .string()
+    .optional()
+    .describe("Required for new_post mode"),
+  productImageBase64: zod
+    .string()
+    .optional()
+    .describe("Optional product image for new_post mode"),
+  regenerateNote: zod
+    .string()
+    .optional()
+    .describe("Optional regeneration note for new_post mode"),
 });
 
 export const GenerateImageResponse = zod.object({
@@ -204,7 +225,16 @@ export const GetStatsResponse = zod.object({
  * @summary Send a message to Hamzawi AI assistant
  */
 export const HamzawiChatBody = zod.object({
-  message: zod.string(),
+  message: zod
+    .string()
+    .optional()
+    .describe("User message (required unless isInit is true)"),
+  isInit: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, triggers proactive first message (auto-onboarding) without user input",
+    ),
   checkReport: zod
     .object({
       status: zod.string().optional(),
@@ -224,8 +254,14 @@ export const HamzawiChatBody = zod.object({
 });
 
 export const HamzawiChatResponse = zod.object({
-  reply: zod.string(),
+  reply: zod
+    .string()
+    .nullish()
+    .describe(
+      "AI reply text; null when isInit is called for a user who doesn't need onboarding",
+    ),
   sessionId: zod.string(),
+  onboardingComplete: zod.boolean().optional(),
 });
 
 /**
@@ -254,10 +290,13 @@ export const GetHamzawiMemoryResponse = zod.object({
       user_id: zod.number().optional(),
       business_name: zod.string().nullish(),
       business_type: zod.string().nullish(),
+      address: zod.string().nullish(),
+      phone: zod.string().nullish(),
       logo_url: zod.string().nullish(),
       primary_colors: zod.string().nullish(),
       preferred_style: zod.string().nullish(),
       notes: zod.string().nullish(),
+      brand_onboarded: zod.boolean().optional(),
       updated_at: zod.string().optional(),
     })
     .nullish(),
@@ -269,12 +308,26 @@ export const GetHamzawiMemoryResponse = zod.object({
 export const UpdateHamzawiMemoryBody = zod.object({
   business_name: zod.string().optional(),
   business_type: zod.string().optional(),
+  address: zod.string().optional(),
+  phone: zod.string().optional(),
   logo_url: zod.string().optional(),
   primary_colors: zod.string().optional(),
   preferred_style: zod.string().optional(),
   notes: zod.string().optional(),
+  brand_onboarded: zod.boolean().optional(),
 });
 
 export const UpdateHamzawiMemoryResponse = zod.object({
   ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary Upload an image asset (logo, design sample, product photo) — returns data URL
+ */
+export const UploadHamzawiAssetBody = zod.object({
+  file: zod.instanceof(File),
+});
+
+export const UploadHamzawiAssetResponse = zod.object({
+  url: zod.string(),
 });

@@ -37,6 +37,8 @@ import type {
   TextGenInput,
   TextGenResult,
   UpdateHamzawiMemory200,
+  UploadAssetInput,
+  UploadHamzawiAsset200,
   UsageStats,
   User,
   UserUpgradeInput,
@@ -377,7 +379,7 @@ export const useGenerateAdText = <
 };
 
 /**
- * @summary Generate compliant ad image via Gemini (plan content+)
+ * @summary Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
  */
 export const getGenerateImageUrl = () => {
   return `/api/image-gen`;
@@ -440,7 +442,7 @@ export type GenerateImageMutationBody = BodyType<ImageGenInput>;
 export type GenerateImageMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Generate compliant ad image via Gemini (plan content+)
+ * @summary Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
  */
 export const useGenerateImage = <
   TError = ErrorType<ErrorResponse>,
@@ -1254,4 +1256,92 @@ export const useUpdateHamzawiMemory = <
   TContext
 > => {
   return useMutation(getUpdateHamzawiMemoryMutationOptions(options));
+};
+
+/**
+ * @summary Upload an image asset (logo, design sample, product photo) — returns data URL
+ */
+export const getUploadHamzawiAssetUrl = () => {
+  return `/api/hamzawi/upload-asset`;
+};
+
+export const uploadHamzawiAsset = async (
+  uploadAssetInput: UploadAssetInput,
+  options?: RequestInit,
+): Promise<UploadHamzawiAsset200> => {
+  const formData = new FormData();
+  formData.append(`file`, uploadAssetInput.file);
+
+  return customFetch<UploadHamzawiAsset200>(getUploadHamzawiAssetUrl(), {
+    ...options,
+    method: "POST",
+    body: formData,
+  });
+};
+
+export const getUploadHamzawiAssetMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadHamzawiAsset>>,
+    TError,
+    { data: BodyType<UploadAssetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof uploadHamzawiAsset>>,
+  TError,
+  { data: BodyType<UploadAssetInput> },
+  TContext
+> => {
+  const mutationKey = ["uploadHamzawiAsset"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof uploadHamzawiAsset>>,
+    { data: BodyType<UploadAssetInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return uploadHamzawiAsset(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UploadHamzawiAssetMutationResult = NonNullable<
+  Awaited<ReturnType<typeof uploadHamzawiAsset>>
+>;
+export type UploadHamzawiAssetMutationBody = BodyType<UploadAssetInput>;
+export type UploadHamzawiAssetMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Upload an image asset (logo, design sample, product photo) — returns data URL
+ */
+export const useUploadHamzawiAsset = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof uploadHamzawiAsset>>,
+    TError,
+    { data: BodyType<UploadAssetInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof uploadHamzawiAsset>>,
+  TError,
+  { data: BodyType<UploadAssetInput> },
+  TContext
+> => {
+  return useMutation(getUploadHamzawiAssetMutationOptions(options));
 };

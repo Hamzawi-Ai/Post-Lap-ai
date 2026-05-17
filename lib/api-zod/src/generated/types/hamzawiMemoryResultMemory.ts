@@ -14,6 +14,10 @@ export type HamzawiMemoryResultMemory = {
   /** @nullable */
   business_type?: string | null;
   /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
   logo_url?: string | null;
   /** @nullable */
   primary_colors?: string | null;
@@ -21,5 +25,6 @@ export type HamzawiMemoryResultMemory = {
   preferred_style?: string | null;
   /** @nullable */
   notes?: string | null;
+  brand_onboarded?: boolean;
   updated_at?: string;
 } | null;

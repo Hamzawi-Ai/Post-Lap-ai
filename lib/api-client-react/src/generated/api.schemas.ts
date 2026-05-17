@@ -86,9 +86,28 @@ export interface TextGenResult {
   text: string;
 }
 
+/**
+ * new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)
+ */
+export type ImageGenInputMode =
+  (typeof ImageGenInputMode)[keyof typeof ImageGenInputMode];
+
+export const ImageGenInputMode = {
+  new_post: "new_post",
+} as const;
+
 export interface ImageGenInput {
-  imageBase64: string;
+  /** new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+) */
+  mode?: ImageGenInputMode;
+  /** Required for fix-existing-ad mode */
+  imageBase64?: string;
   violations?: AdViolation[];
+  /** Required for new_post mode */
+  productDescription?: string;
+  /** Optional product image for new_post mode */
+  productImageBase64?: string;
+  /** Optional regeneration note for new_post mode */
+  regenerateNote?: string;
 }
 
 export interface ImageGenResult {
@@ -178,13 +197,18 @@ export type HamzawiChatInputCheckReport = {
 } | null;
 
 export interface HamzawiChatInput {
-  message: string;
+  /** User message (required unless isInit is true) */
+  message?: string;
+  /** When true, triggers proactive first message (auto-onboarding) without user input */
+  isInit?: boolean;
   checkReport?: HamzawiChatInputCheckReport;
 }
 
 export interface HamzawiChatResult {
-  reply: string;
+  /** AI reply text; null when isInit is called for a user who doesn't need onboarding */
+  reply?: string | null;
   sessionId: string;
+  onboardingComplete?: boolean;
 }
 
 export type HamzawiMessageRole =
@@ -212,10 +236,13 @@ export interface HamzawiMessagesResult {
 export interface BrandMemoryInput {
   business_name?: string;
   business_type?: string;
+  address?: string;
+  phone?: string;
   logo_url?: string;
   primary_colors?: string;
   preferred_style?: string;
   notes?: string;
+  brand_onboarded?: boolean;
 }
 
 export type HamzawiMemoryResultMemory = {
@@ -226,6 +253,10 @@ export type HamzawiMemoryResultMemory = {
   /** @nullable */
   business_type?: string | null;
   /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
   logo_url?: string | null;
   /** @nullable */
   primary_colors?: string | null;
@@ -233,6 +264,7 @@ export type HamzawiMemoryResultMemory = {
   preferred_style?: string | null;
   /** @nullable */
   notes?: string | null;
+  brand_onboarded?: boolean;
   updated_at?: string;
 } | null;
 
@@ -240,6 +272,25 @@ export interface HamzawiMemoryResult {
   memory?: HamzawiMemoryResultMemory;
 }
 
+export interface UploadAssetInput {
+  file: Blob;
+}
+
+export interface GeneratePostInput {
+  productDescription: string;
+  productImageBase64?: string;
+  regenerateNote?: string;
+}
+
+export interface GeneratePostResult {
+  url: string;
+  prompt?: string;
+}
+
 export type UpdateHamzawiMemory200 = {
   ok?: boolean;
+};
+
+export type UploadHamzawiAsset200 = {
+  url: string;
 };

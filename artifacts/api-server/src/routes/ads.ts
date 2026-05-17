@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
-import { db, usersTable, checksTable } from "@workspace/db";
+import { db, usersTable, checksTable, userBrandMemoryTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
@@ -359,29 +359,140 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   }
 });
 
-// POST /image-gen — generate fixed ad image via Gemini
+// POST /image-gen — generate/fix ad image via Gemini
+// mode "new_post" (level 4+): generate branded post using brand memory + product info
+// default mode (level 3+): fix existing ad image per policy violations
 router.post("/image-gen", async (req, res): Promise<void> => {
   const user = await getUserFromToken(req.headers.authorization);
   const plan = (user?.plan ?? "visitor") as Plan;
   const level = planLevel(plan);
 
+  const {
+    mode,
+    imageBase64,
+    violations,
+    productDescription,
+    productImageBase64,
+    regenerateNote,
+  } = req.body as {
+    mode?: string;
+    imageBase64?: string;
+    violations?: Array<{ type: string; reason: string }>;
+    productDescription?: string;
+    productImageBase64?: string;
+    regenerateNote?: string;
+  };
+
+  if (!process.env.GEMINI_API_KEY && !process.env.NANO_BANANA_API_KEY) {
+    res.status(503).json({ error: "خدمة توليد الصور غير متاحة حالياً" });
+    return;
+  }
+
+  // ── new_post mode: generate branded post from scratch ──────────────────────
+  if (mode === "new_post") {
+    if (!user) {
+      res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام هذه الميزة" });
+      return;
+    }
+    if (level < 4) {
+      res.status(403).json({ error: "توليد المنشورات المُبوَّبة متاح من خطة إدارة المحتوى فأعلى" });
+      return;
+    }
+    if (!productDescription) {
+      res.status(400).json({ error: "وصف المنتج مطلوب" });
+      return;
+    }
+
+    try {
+      const memory = await db
+        .select()
+        .from(userBrandMemoryTable)
+        .where(eq(userBrandMemoryTable.user_id, user.id))
+        .limit(1)
+        .then((r) => r[0] ?? null);
+
+      const brandContext = memory?.business_name
+        ? `Brand identity:\n- Business name: ${memory.business_name}\n- Business type: ${memory.business_type ?? "unspecified"}\n- Brand colors: ${memory.primary_colors ?? "professional defaults"}\n- Design style: ${memory.preferred_style ?? "professional and clean"}\n- Notes: ${memory.notes ?? "none"}`
+        : "No brand identity saved — use professional defaults with a clean modern style.";
+
+      let basePrompt = `Create a professional social media advertisement image for Meta (Facebook/Instagram) that is fully compliant with Meta advertising policies.\n\n${brandContext}\n\nProduct/Service: ${productDescription}\n\nRequirements:\n- Professional design matching the brand identity\n- Clean layout with brand colors and style\n- Visually appealing composition for social media\n- No text overlays exceeding 20% of the image\n- No misleading claims or before/after comparisons\n- High quality, scroll-stopping visual`;
+      if (regenerateNote) basePrompt += `\n\nAdditional note: ${regenerateNote}`;
+
+      const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
+        { text: basePrompt },
+      ];
+
+      const hasLogo = memory?.logo_url?.startsWith("data:");
+      if (hasLogo) {
+        const logoMatch = memory!.logo_url!.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+        if (logoMatch) {
+          parts.push({ inlineData: { mimeType: logoMatch[1], data: logoMatch[2] } });
+        }
+      }
+
+      // Include previous design samples (up to 3) as visual style references
+      const designSamples: string[] = (() => {
+        if (!memory?.design_samples) return [];
+        try { return JSON.parse(memory.design_samples) as string[]; } catch { return []; }
+      })();
+      const samplesAdded = designSamples.slice(0, 3).filter((s) => s.startsWith("data:")).map((s) => {
+        const m = s.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+        return m ? { mimeType: m[1], data: m[2] } : null;
+      }).filter(Boolean) as Array<{ mimeType: string; data: string }>;
+      for (const sample of samplesAdded) {
+        parts.push({ inlineData: sample });
+      }
+
+      const contextDesc = [
+        hasLogo ? "brand logo" : "",
+        samplesAdded.length > 0 ? `${samplesAdded.length} design sample(s)` : "",
+      ].filter(Boolean).join(" and ");
+      if (contextDesc) {
+        parts[0].text = `${basePrompt}\n\nProvided visual references: ${contextDesc} — use the logo in the design, and draw inspiration from the style and layout of the design samples.`;
+      }
+
+      if (productImageBase64) {
+        const productMatch = productImageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+        const mimeType = productMatch?.[1] ?? "image/jpeg";
+        const data = productMatch?.[2] ?? productImageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+        const existingNote = contextDesc ? parts[0].text : basePrompt;
+        parts[0].text = `${existingNote ?? basePrompt}\n\nA product image is also provided — feature it prominently in the advertisement.`;
+        parts.push({ inlineData: { mimeType, data } });
+      }
+
+      const gemini = getGemini();
+      const result = await gemini.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: [{ role: "user", parts }],
+        config: { responseModalities: ["IMAGE", "TEXT"] },
+      });
+
+      const generatedParts = result.candidates?.[0]?.content?.parts ?? [];
+      const imagePart = generatedParts.find(
+        (p): p is { inlineData: { mimeType: string; data: string } } =>
+          typeof p === "object" && p !== null && "inlineData" in p && !!p.inlineData
+      );
+
+      if (imagePart?.inlineData?.data) {
+        res.json({ url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}` });
+      } else {
+        res.status(500).json({ error: "لم يتم توليد صورة. حاول مرة أخرى." });
+      }
+    } catch (err) {
+      logger.error({ err }, "Gemini new_post image gen error");
+      res.status(500).json({ error: "حدث خطأ أثناء توليد المنشور" });
+    }
+    return;
+  }
+
+  // ── default mode: fix existing ad image ────────────────────────────────────
   if (level < 3) {
     res.status(403).json({ error: "توليد الصورة متاح من خطة Smart Fix فأعلى" });
     return;
   }
 
-  const { imageBase64, violations } = req.body as {
-    imageBase64?: string;
-    violations?: Array<{ type: string; reason: string }>;
-  };
-
   if (!imageBase64) {
     res.status(400).json({ error: "imageBase64 مطلوب" });
-    return;
-  }
-
-  if (!process.env.GEMINI_API_KEY && !process.env.NANO_BANANA_API_KEY) {
-    res.status(503).json({ error: "خدمة توليد الصور غير متاحة حالياً" });
     return;
   }
 
@@ -408,9 +519,7 @@ router.post("/image-gen", async (req, res): Promise<void> => {
           ],
         },
       ],
-      config: {
-        responseModalities: ["IMAGE", "TEXT"],
-      },
+      config: { responseModalities: ["IMAGE", "TEXT"] },
     });
 
     const parts = result.candidates?.[0]?.content?.parts ?? [];
@@ -420,9 +529,7 @@ router.post("/image-gen", async (req, res): Promise<void> => {
     );
 
     if (imagePart?.inlineData?.data) {
-      res.json({
-        url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
-      });
+      res.json({ url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}` });
     } else {
       res.status(500).json({ error: "لم يتم توليد صورة" });
     }

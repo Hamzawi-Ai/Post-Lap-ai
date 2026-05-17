@@ -22,6 +22,7 @@ export type HamzawiMessage = typeof hamzawiMessagesTable.$inferSelect;
 /**
  * user_brand_memory: Primary/single brand profile per user (levels 2-4).
  * Unique per user — for single-business plans.
+ * brand_onboarded: true once the level-4 guided onboarding session completes.
  */
 export const userBrandMemoryTable = pgTable("user_brand_memory", {
   id: serial("id").primaryKey(),
@@ -31,11 +32,15 @@ export const userBrandMemoryTable = pgTable("user_brand_memory", {
     .references(() => usersTable.id, { onDelete: "cascade" }),
   business_name: text("business_name"),
   business_type: text("business_type"),
+  address: text("address"),
+  phone: text("phone"),
   logo_url: text("logo_url"),
   primary_colors: text("primary_colors"),
   preferred_style: text("preferred_style"),
   liked_posts: jsonb("liked_posts"),
   notes: text("notes"),
+  design_samples: text("design_samples"),
+  brand_onboarded: boolean("brand_onboarded").notNull().default(false),
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 

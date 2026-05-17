@@ -352,6 +352,41 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /hamzawi/upload-asset:
+    post:
+      operationId: uploadHamzawiAsset
+      tags: [hamzawi]
+      summary: Upload an image asset (logo, design sample, product photo) — returns data URL
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadAssetInput"
+      responses:
+        "200":
+          description: Uploaded asset URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url:
+                    type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -455,14 +490,27 @@ components:
 
     ImageGenInput:
       type: object
-      required: [imageBase64]
       properties:
+        mode:
+          type: string
+          enum: [new_post]
+          description: "new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)"
         imageBase64:
           type: string
+          description: "Required for fix-existing-ad mode"
         violations:
           type: array
           items:
             $ref: "#/components/schemas/AdViolation"
+        productDescription:
+          type: string
+          description: "Required for new_post mode"
+        productImageBase64:
+          type: string
+          description: "Optional product image for new_post mode"
+        regenerateNote:
+          type: string
+          description: "Optional regeneration note for new_post mode"
 
     ImageGenResult:
       type: object
@@ -567,10 +615,13 @@ components:
 
     HamzawiChatInput:
       type: object
-      required: [message]
       properties:
         message:
           type: string
+          description: "User message (required unless isInit is true)"
+        isInit:
+          type: boolean
+          description: "When true, triggers proactive first message (auto-onboarding) without user input"
         checkReport:
           type: object
           nullable: true
@@ -590,12 +641,16 @@ components:
 
     HamzawiChatResult:
       type: object
-      required: [reply, sessionId]
+      required: [sessionId]
       properties:
         reply:
           type: string
+          nullable: true
+          description: "AI reply text; null when isInit is called for a user who doesn't need onboarding"
         sessionId:
           type: string
+        onboardingComplete:
+          type: boolean
 
     HamzawiMessage:
       type: object
@@ -631,6 +686,10 @@ components:
           type: string
         business_type:
           type: string
+        address:
+          type: string
+        phone:
+          type: string
         logo_url:
           type: string
         primary_colors:
@@ -639,6 +698,8 @@ components:
           type: string
         notes:
           type: string
+        brand_onboarded:
+          type: boolean
 
     HamzawiMemoryResult:
       type: object
@@ -655,6 +716,10 @@ components:
               type: ["string", "null"]
             business_type:
               type: ["string", "null"]
+            address:
+              type: ["string", "null"]
+            phone:
+              type: ["string", "null"]
             logo_url:
               type: ["string", "null"]
             primary_colors:
@@ -663,5 +728,35 @@ components:
               type: ["string", "null"]
             notes:
               type: ["string", "null"]
+            brand_onboarded:
+              type: boolean
             updated_at:
               type: string
+
+    UploadAssetInput:
+      type: object
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+
+    GeneratePostInput:
+      type: object
+      required: [productDescription]
+      properties:
+        productDescription:
+          type: string
+        productImageBase64:
+          type: string
+        regenerateNote:
+          type: string
+
+    GeneratePostResult:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+        prompt:
+          type: string

@@ -7,6 +7,8 @@
  */
 
 export interface HamzawiChatResult {
-  reply: string;
+  /** AI reply text; null when isInit is called for a user who doesn't need onboarding */
+  reply?: string | null;
   sessionId: string;
+  onboardingComplete?: boolean;
 }
