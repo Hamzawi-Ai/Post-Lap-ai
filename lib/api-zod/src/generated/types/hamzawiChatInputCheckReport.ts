@@ -5,16 +5,11 @@
  * PostLapAI API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdCheckResultStatus } from "./adCheckResultStatus";
 import type { AdViolation } from "./adViolation";
 
-export interface AdCheckResult {
-  status: AdCheckResultStatus;
-  reason: string;
-  score: number;
-  message: string;
-  /** @nullable */
-  frames_checked?: number | null;
+export type HamzawiChatInputCheckReport = {
+  status?: string;
+  score?: number;
   violations?: AdViolation[];
   suggestions?: string[];
-}
+} | null;

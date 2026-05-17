@@ -5,23 +5,33 @@ import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
 import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import { db, usersTable, checksTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 import jwt from "jsonwebtoken";
+import { planLevel, type Plan } from "@workspace/db";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router: IRouter = Router();
 const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
 
-// Lazy-initialize OpenAI client so missing key doesn't crash at import time
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
   if (!_openai) {
     _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
   return _openai;
+}
+
+let _gemini: GoogleGenAI | null = null;
+function getGemini(): GoogleGenAI {
+  if (!_gemini) {
+    const key = process.env.GEMINI_API_KEY ?? process.env.NANO_BANANA_API_KEY ?? "";
+    _gemini = new GoogleGenAI({ apiKey: key });
+  }
+  return _gemini;
 }
 
 // Rate limiter: 10 requests per minute per IP
@@ -47,37 +57,44 @@ const upload = multer({
   },
 });
 
-// System prompt for ad inspection
-const SYSTEM_PROMPT = `أنت خبير سياسات إعلانات Meta وTikTok. افحص الصورة ضد: 
-1. وعود كاذبة أو مضللة
-2. صور قبل/بعد للجسم
-3. محتوى صادم أو مزعج
-4. نسبة النص أكثر من 20%
-5. استهداف سمات شخصية (وزن، مرض، إلخ)
-6. ادعاءات صحية غير مثبتة
-7. محتوى جنسي أو إيحائي
+// Structured Meta policy system prompt
+const SYSTEM_PROMPT = `أنت خبير سياسات إعلانات Meta. افحص الصورة المرفقة وفق الأولويات التالية بالترتيب:
 
-رد فقط بـ JSON بالشكل التالي بدون أي نص إضافي:
-{"status": "ممتاز" | "جيد" | "مرفوض", "reason": "السبب بالعربي", "score": 0-100}`;
+(أولوية قصوى — مخالفات مباشرة):
+1. صور قبل/بعد (Before/After) لأجزاء الجسم أو الوزن
+2. تركيز مفرط أو مكبّر على أجزاء الجسم (بطن، أرداف، صدر، إلخ)
+3. وعود ربح سريع أو نتائج مضمونة أو سحرية
+4. منتجات طبية أو مالية غير مرخصة أو ادعاءات صحية غير مثبتة
+5. نسبة نص في الصورة تتجاوز 20%
 
-// Helper: convert image file to base64
+(تقييم عام):
+6. وعود كاذبة أو مضللة أو مبالغة
+7. محتوى صادم أو استهداف سمات شخصية (وزن، مرض، عرق، دين)
+8. محتوى جنسي أو إيحائي
+
+رد فقط بـ JSON صالح بالشكل التالي بدون أي نص إضافي:
+{
+  "status": "ممتاز" | "جيد" | "مرفوض",
+  "score": 0-100,
+  "violations": [
+    { "type": "نوع المخالفة", "reason": "الشرح بالعربي", "severity": "high" | "medium" | "low" }
+  ],
+  "suggestions": ["اقتراح 1", "اقتراح 2"]
+}
+إذا لم توجد مخالفات، violations يكون مصفوفة فارغة [].`;
+
 async function imageToBase64(filePath: string): Promise<string> {
   const { readFileSync } = await import("fs");
   const buffer = readFileSync(filePath);
   return buffer.toString("base64");
 }
 
-// Helper: extract frames from video using ffmpeg (1 frame per second)
-async function extractFrames(
-  videoPath: string,
-  maxFrames: number
-): Promise<string[]> {
+async function extractFrames(videoPath: string, maxFrames: number): Promise<string[]> {
   const { execSync } = await import("child_process");
   const framesDir = join(tmpdir(), `frames_${Date.now()}`);
   mkdirSync(framesDir, { recursive: true });
 
   try {
-    // Extract 1 frame per second
     execSync(
       `ffmpeg -i "${videoPath}" -vf fps=1 -frames:v ${maxFrames} "${framesDir}/frame_%03d.jpg" -y 2>/dev/null`,
       { timeout: 120000 }
@@ -90,12 +107,10 @@ async function extractFrames(
       .map((f) => join(framesDir, f));
     return files;
   } catch {
-    // ffmpeg not available — return empty
     return [];
   }
 }
 
-// Helper: clean up temp files
 function cleanup(...paths: string[]) {
   for (const p of paths) {
     try {
@@ -104,7 +119,6 @@ function cleanup(...paths: string[]) {
   }
 }
 
-// Helper: clean up directory and its files
 async function cleanupDir(dir: string) {
   try {
     const { readdirSync, rmdirSync } = await import("fs");
@@ -114,11 +128,17 @@ async function cleanupDir(dir: string) {
   } catch {}
 }
 
-// Helper: check a single image with GPT-4o
-async function checkImage(base64: string, mimeType = "image/jpeg") {
+interface CheckResult {
+  status: "ممتاز" | "جيد" | "مرفوض";
+  score: number;
+  violations: Array<{ type: string; reason: string; severity: string }>;
+  suggestions: string[];
+}
+
+async function checkImage(base64: string, mimeType = "image/jpeg"): Promise<CheckResult> {
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
-    max_tokens: 200,
+    max_tokens: 500,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -135,19 +155,19 @@ async function checkImage(base64: string, mimeType = "image/jpeg") {
 
   const text = response.choices[0]?.message?.content ?? "{}";
   try {
-    // Extract JSON from response
     const match = text.match(/\{[\s\S]*\}/);
-    return JSON.parse(match?.[0] ?? "{}") as {
-      status: "ممتاز" | "جيد" | "مرفوض";
-      reason: string;
-      score: number;
+    const parsed = JSON.parse(match?.[0] ?? "{}") as Partial<CheckResult>;
+    return {
+      status: parsed.status ?? "جيد",
+      score: parsed.score ?? 50,
+      violations: parsed.violations ?? [],
+      suggestions: parsed.suggestions ?? [],
     };
   } catch {
-    return { status: "جيد" as const, reason: "تعذر تحليل الاستجابة", score: 50 };
+    return { status: "جيد", score: 50, violations: [], suggestions: [] };
   }
 }
 
-// Helper: get user from JWT token (optional auth)
 async function getUserFromToken(authHeader?: string) {
   if (!authHeader?.startsWith("Bearer ")) return null;
   try {
@@ -176,71 +196,64 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
   const mimeType = req.file.mimetype;
   const isVideo = mimeType === "video/mp4";
 
-  // Get user if authenticated
   const user = await getUserFromToken(req.headers.authorization);
-
-  // Determine max frames based on plan
-  const plan = user?.plan ?? "visitor";
-  const maxFrames = plan === "professional" ? 60 : 11;
+  const plan = (user?.plan ?? "visitor") as Plan;
+  const level = planLevel(plan);
+  const maxFrames = level >= 2 ? 60 : 11;
 
   try {
-    let finalResult: { status: "ممتاز" | "جيد" | "مرفوض"; reason: string; score: number };
+    let finalResult: CheckResult;
     let framesChecked: number | null = null;
 
     if (isVideo) {
-      // Extract frames and check each one
       const frames = await extractFrames(filePath, maxFrames);
       framesChecked = frames.length;
 
       if (frames.length === 0) {
-        // Fallback if ffmpeg not available
-        finalResult = { status: "جيد", reason: "تعذر تحليل الفيديو", score: 50 };
+        finalResult = { status: "جيد", score: 50, violations: [], suggestions: [] };
       } else {
-        finalResult = { status: "ممتاز", reason: "", score: 100 };
+        finalResult = { status: "ممتاز", score: 100, violations: [], suggestions: [] };
 
         for (const framePath of frames) {
           const base64 = await imageToBase64(framePath);
           const result = await checkImage(base64);
 
-          // If any frame is rejected, the whole video is rejected
           if (result.status === "مرفوض") {
             finalResult = result;
             break;
           }
-          // Track worst result
           if (result.status === "جيد" && finalResult.status === "ممتاز") {
             finalResult = result;
           }
-          // Track lowest score
           if (result.score < finalResult.score) {
             finalResult.score = result.score;
           }
+          finalResult.violations.push(...result.violations);
+          finalResult.suggestions.push(...result.suggestions);
         }
 
-        // Cleanup frames
         const framesDir = dirname(frames[0]);
         await cleanupDir(framesDir);
       }
     } else {
-      // Image: send directly
       const mtype = mimeType === "image/png" ? "image/png" : "image/jpeg";
       const base64 = await imageToBase64(filePath);
       finalResult = await checkImage(base64, mtype);
     }
 
-    // Map status to display message
     const messageMap: Record<string, string> = {
       "ممتاز": "ممتاز انطلق",
       "جيد": "جيد لكن وصوله ضعيف",
-      "مرفوض": `سوف يتم رفضه بسبب: ${finalResult.reason}`,
+      "مرفوض": `سوف يتم رفضه${finalResult.violations[0] ? ` بسبب: ${finalResult.violations[0].reason}` : ""}`,
     };
 
-    // Save check to DB and update user stats
+    const reason = finalResult.violations.map((v) => v.reason).join(". ") || "";
+
     if (user) {
       await db.insert(checksTable).values({
         user_id: user.id,
         status: finalResult.status,
-        reason: finalResult.reason,
+        reason,
         score: finalResult.score,
       });
 
@@ -250,27 +263,28 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
           total_checks: sql`${usersTable.total_checks} + 1`,
           last_check_at: new Date(),
           trials_remaining:
-            plan !== "professional"
+            plan === "visitor" || plan === "registered"
               ? sql`GREATEST(${usersTable.trials_remaining} - 1, 0)`
               : usersTable.trials_remaining,
         })
         .where(eq(usersTable.id, user.id));
     } else {
-      // Anonymous check — still log to checks table
       await db.insert(checksTable).values({
         user_id: null,
         status: finalResult.status,
-        reason: finalResult.reason,
+        reason,
         score: finalResult.score,
       });
     }
 
     res.json({
       status: finalResult.status,
-      reason: finalResult.reason,
+      reason,
       score: finalResult.score,
       message: messageMap[finalResult.status] ?? finalResult.status,
       frames_checked: framesChecked,
+      violations: finalResult.violations,
+      suggestions: finalResult.suggestions,
     });
   } catch (err) {
     logger.error({ err }, "Ad check error");
@@ -280,9 +294,28 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
   }
 });
 
-// POST /generate-text — generate Libyan dialect ad copy
+// POST /generate-text — generate Libyan dialect ad copy (requires planLevel >= 3)
+// Level 4+ (content/agency): also accepts imageBase64 to generate post from image+description
 router.post("/generate-text", async (req, res): Promise<void> => {
-  const { product, dialect } = req.body as { product?: string; dialect?: string };
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام هذه الميزة" });
+    return;
+  }
+
+  const plan = user.plan as Plan;
+  const level = planLevel(plan);
+  // Text generation requires Smart Fix / professional or higher (level 3+)
+  if (level < 3) {
+    res.status(403).json({ error: "توليد النصوص متاح من خطة Smart Fix فأعلى" });
+    return;
+  }
+
+  const { product, dialect, imageBase64 } = req.body as {
+    product?: string;
+    dialect?: string;
+    imageBase64?: string;
+  };
 
   if (!product || !dialect) {
     res.status(400).json({ error: "product و dialect مطلوبان" });
@@ -296,15 +329,26 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   }
 
   try {
+    // Level 4+ (content/agency): use image + description for richer post generation
+    const useImageMode = level >= 4 && !!imageBase64;
+
+    const userContent: Parameters<OpenAI["chat"]["completions"]["create"]>[0]["messages"][number]["content"] = useImageMode
+      ? [
+          {
+            type: "image_url" as const,
+            image_url: { url: imageBase64!.startsWith("data:") ? imageBase64! : `data:image/jpeg;base64,${imageBase64}` },
+          },
+          {
+            type: "text" as const,
+            text: `بناءً على صورة المنتج المرفقة، اكتب منشور إعلاني احترافي باللهجة الليبية ${dialect} للمنتج/الخدمة: ${product}. استخدم 2-3 إيموجي مناسبة. ممنوع الوعود الكاذبة. اجعله قصيراً وجذاباً ومتوافقاً مع سياسات Meta.`,
+          },
+        ]
+      : `اكتب نص إعلاني فيسبوك باللهجة الليبية ${dialect} للمنتج: ${product}. استخدم 2-3 إيموجي. ممنوع الوعود الكاذبة. قصير وجذاب ومباشر.`;
+
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-4o-mini",
-      max_tokens: 300,
-      messages: [
-        {
-          role: "user",
-          content: `اكتب نص إعلاني فيسبوك باللهجة الليبية ${dialect} للمنتج: ${product}. استخدم 2-3 إيموجي. ممنوع الوعود الكاذبة. قصير وجذاب ومباشر.`,
-        },
-      ],
+      model: useImageMode ? "gpt-4o" : "gpt-4o-mini",
+      max_tokens: 400,
+      messages: [{ role: "user", content: userContent }],
     });
 
     const text = response.choices[0]?.message?.content ?? "";
@@ -315,10 +359,77 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   }
 });
 
-// POST /image-gen — TODO: ربط API نانو بانانا لتوليد الصور
+// POST /image-gen — generate fixed ad image via Gemini
 router.post("/image-gen", async (req, res): Promise<void> => {
-  // TODO: ربط API نانو بانانا لتوليد الصور
-  res.json({ url: "" });
+  const user = await getUserFromToken(req.headers.authorization);
+  const plan = (user?.plan ?? "visitor") as Plan;
+  const level = planLevel(plan);
+
+  if (level < 3) {
+    res.status(403).json({ error: "توليد الصورة متاح من خطة Smart Fix فأعلى" });
+    return;
+  }
+
+  const { imageBase64, violations } = req.body as {
+    imageBase64?: string;
+    violations?: Array<{ type: string; reason: string }>;
+  };
+
+  if (!imageBase64) {
+    res.status(400).json({ error: "imageBase64 مطلوب" });
+    return;
+  }
+
+  if (!process.env.GEMINI_API_KEY && !process.env.NANO_BANANA_API_KEY) {
+    res.status(503).json({ error: "خدمة توليد الصور غير متاحة حالياً" });
+    return;
+  }
+
+  try {
+    const violationsList = violations?.map((v) => `- ${v.type}: ${v.reason}`).join("\n") ?? "";
+    const editPrompt = violations?.length
+      ? `Edit this advertisement image to fix the following policy violations:\n${violationsList}\nRemove the violations while preserving the overall design, colors, and branding. Make it Meta-compliant.`
+      : "Clean up this advertisement image to make it fully compliant with Meta advertising policies while preserving the design.";
+
+    const gemini = getGemini();
+    const result = await gemini.models.generateContent({
+      model: "gemini-2.0-flash-exp",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: editPrompt },
+            {
+              inlineData: {
+                mimeType: "image/jpeg",
+                data: imageBase64.replace(/^data:image\/[a-z]+;base64,/, ""),
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: ["IMAGE", "TEXT"],
+      },
+    });
+
+    const parts = result.candidates?.[0]?.content?.parts ?? [];
+    const imagePart = parts.find(
+      (p): p is { inlineData: { mimeType: string; data: string } } =>
+        typeof p === "object" && p !== null && "inlineData" in p && !!p.inlineData
+    );
+
+    if (imagePart?.inlineData?.data) {
+      res.json({
+        url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+      });
+    } else {
+      res.status(500).json({ error: "لم يتم توليد صورة" });
+    }
+  } catch (err) {
+    logger.error({ err }, "Gemini image gen error");
+    res.status(500).json({ error: "حدث خطأ أثناء توليد الصورة" });
+  }
 });
 
 export default router;

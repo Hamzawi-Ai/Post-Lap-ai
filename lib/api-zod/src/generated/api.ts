@@ -43,6 +43,16 @@ export const CheckAdResponse = zod.object({
   score: zod.number(),
   message: zod.string(),
   frames_checked: zod.number().nullish(),
+  violations: zod
+    .array(
+      zod.object({
+        type: zod.string(),
+        reason: zod.string(),
+        severity: zod.enum(["high", "medium", "low"]),
+      }),
+    )
+    .optional(),
+  suggestions: zod.array(zod.string()).optional(),
 });
 
 /**
@@ -58,10 +68,19 @@ export const GenerateAdTextResponse = zod.object({
 });
 
 /**
- * @summary Generate image (TODO NanoBanana)
+ * @summary Generate compliant ad image via Gemini (plan content+)
  */
 export const GenerateImageBody = zod.object({
-  prompt: zod.string(),
+  imageBase64: zod.string(),
+  violations: zod
+    .array(
+      zod.object({
+        type: zod.string(),
+        reason: zod.string(),
+        severity: zod.enum(["high", "medium", "low"]),
+      }),
+    )
+    .optional(),
 });
 
 export const GenerateImageResponse = zod.object({
@@ -80,7 +99,14 @@ export const AuthGoogleResponse = zod.object({
     id: zod.number(),
     email: zod.string(),
     name: zod.string(),
-    plan: zod.enum(["visitor", "registered", "professional"]),
+    plan: zod.enum([
+      "visitor",
+      "registered",
+      "professional",
+      "smart_fix",
+      "content",
+      "agency",
+    ]),
     trials_remaining: zod.number(),
     total_checks: zod.number(),
     last_check_at: zod.string().nullish(),
@@ -95,7 +121,14 @@ export const GetCurrentUserResponse = zod.object({
   id: zod.number(),
   email: zod.string(),
   name: zod.string(),
-  plan: zod.enum(["visitor", "registered", "professional"]),
+  plan: zod.enum([
+    "visitor",
+    "registered",
+    "professional",
+    "smart_fix",
+    "content",
+    "agency",
+  ]),
   trials_remaining: zod.number(),
   total_checks: zod.number(),
   last_check_at: zod.string().nullish(),
@@ -128,14 +161,21 @@ export const ListAdminUsersResponseItem = zod.object({
 export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);
 
 /**
- * @summary Upgrade user to professional plan
+ * @summary Upgrade user plan
  */
 export const UpgradeUserParams = zod.object({
   id: zod.coerce.number(),
 });
 
 export const UpgradeUserBody = zod.object({
-  plan: zod.enum(["visitor", "registered", "professional"]),
+  plan: zod.enum([
+    "visitor",
+    "registered",
+    "professional",
+    "smart_fix",
+    "content",
+    "agency",
+  ]),
 });
 
 export const UpgradeUserResponse = zod.object({
@@ -158,4 +198,83 @@ export const GetStatsResponse = zod.object({
   checks_today: zod.number(),
   approved_count: zod.number().optional(),
   rejected_count: zod.number().optional(),
+});
+
+/**
+ * @summary Send a message to Hamzawi AI assistant
+ */
+export const HamzawiChatBody = zod.object({
+  message: zod.string(),
+  checkReport: zod
+    .object({
+      status: zod.string().optional(),
+      score: zod.number().optional(),
+      violations: zod
+        .array(
+          zod.object({
+            type: zod.string(),
+            reason: zod.string(),
+            severity: zod.enum(["high", "medium", "low"]),
+          }),
+        )
+        .optional(),
+      suggestions: zod.array(zod.string()).optional(),
+    })
+    .nullish(),
+});
+
+export const HamzawiChatResponse = zod.object({
+  reply: zod.string(),
+  sessionId: zod.string(),
+});
+
+/**
+ * @summary Get recent conversation messages
+ */
+export const GetHamzawiMessagesResponse = zod.object({
+  messages: zod.array(
+    zod.object({
+      id: zod.number(),
+      user_id: zod.number().nullish(),
+      session_id: zod.string(),
+      role: zod.enum(["user", "assistant"]),
+      content: zod.string(),
+      created_at: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get user brand memory
+ */
+export const GetHamzawiMemoryResponse = zod.object({
+  memory: zod
+    .object({
+      id: zod.number().optional(),
+      user_id: zod.number().optional(),
+      business_name: zod.string().nullish(),
+      business_type: zod.string().nullish(),
+      logo_url: zod.string().nullish(),
+      primary_colors: zod.string().nullish(),
+      preferred_style: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      updated_at: zod.string().optional(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Update user brand memory
+ */
+export const UpdateHamzawiMemoryBody = zod.object({
+  business_name: zod.string().optional(),
+  business_type: zod.string().optional(),
+  logo_url: zod.string().optional(),
+  primary_colors: zod.string().optional(),
+  preferred_style: zod.string().optional(),
+  notes: zod.string().optional(),
+});
+
+export const UpdateHamzawiMemoryResponse = zod.object({
+  ok: zod.boolean().optional(),
 });

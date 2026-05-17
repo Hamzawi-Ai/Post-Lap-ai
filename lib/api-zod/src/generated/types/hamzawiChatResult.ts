@@ -5,9 +5,8 @@
  * PostLapAI API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { AdViolation } from "./adViolation";
 
-export interface ImageGenInput {
-  imageBase64: string;
-  violations?: AdViolation[];
+export interface HamzawiChatResult {
+  reply: string;
+  sessionId: string;
 }

@@ -12,4 +12,7 @@ export const UserPlan = {
   visitor: "visitor",
   registered: "registered",
   professional: "professional",
+  smart_fix: "smart_fix",
+  content: "content",
+  agency: "agency",
 } as const;

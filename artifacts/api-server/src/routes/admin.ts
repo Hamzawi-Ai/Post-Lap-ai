@@ -78,19 +78,21 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
     duration_days?: number;
   };
 
-  if (!email || !plan || !["visitor", "registered", "professional"].includes(plan ?? "")) {
+  const VALID_PLANS = ["visitor", "registered", "professional", "smart_fix", "content", "agency"];
+  if (!email || !plan || !VALID_PLANS.includes(plan ?? "")) {
     res.status(400).json({ error: "email and valid plan required" });
     return;
   }
 
   const expiresAt = duration_days ? expiryFromDays(duration_days) : undefined;
+  const isPaidPlan = ["professional", "smart_fix", "content", "agency"].includes(plan);
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
     const [updated] = await db
       .update(usersTable)
       .set({
-        plan: plan as "visitor" | "registered" | "professional",
+        plan: plan as typeof usersTable.$inferInsert["plan"],
         subscription_label: subscription_label ?? null,
         subscription_expires_at: expiresAt ?? null,
         is_active: true,
@@ -107,11 +109,11 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
     .values({
       email,
       name: name ?? email.split("@")[0],
-      plan: plan as "visitor" | "registered" | "professional",
+      plan: plan as typeof usersTable.$inferInsert["plan"],
       subscription_label: subscription_label ?? null,
       subscription_expires_at: expiresAt ?? null,
       is_active: true,
-      trials_remaining: plan === "professional" ? 9999 : 6,
+      trials_remaining: isPaidPlan ? 9999 : 6,
     })
     .returning();
 
@@ -129,7 +131,8 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
     duration_days?: number;
   };
 
-  if (!plan || !["visitor", "registered", "professional"].includes(plan)) {
+  const VALID_PLANS = ["visitor", "registered", "professional", "smart_fix", "content", "agency"];
+  if (!plan || !VALID_PLANS.includes(plan)) {
     res.status(400).json({ error: "Invalid plan" });
     return;
   }
@@ -137,7 +140,7 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
   const expiresAt = duration_days ? expiryFromDays(duration_days) : undefined;
 
   const updateData: Partial<typeof usersTable.$inferInsert> = {
-    plan: plan as "visitor" | "registered" | "professional",
+    plan: plan as typeof usersTable.$inferInsert["plan"],
     ...(subscription_label !== undefined && { subscription_label }),
     ...(expiresAt !== undefined && { subscription_expires_at: expiresAt }),
   };

@@ -33,6 +33,21 @@ export interface AdCheckInput {
   plan?: string;
 }
 
+export type AdViolationSeverity =
+  (typeof AdViolationSeverity)[keyof typeof AdViolationSeverity];
+
+export const AdViolationSeverity = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export interface AdViolation {
+  type: string;
+  reason: string;
+  severity: AdViolationSeverity;
+}
+
 export type AdCheckResultStatus =
   (typeof AdCheckResultStatus)[keyof typeof AdCheckResultStatus];
 
@@ -49,6 +64,8 @@ export interface AdCheckResult {
   message: string;
   /** @nullable */
   frames_checked?: number | null;
+  violations?: AdViolation[];
+  suggestions?: string[];
 }
 
 export type TextGenInputDialect =
@@ -70,7 +87,8 @@ export interface TextGenResult {
 }
 
 export interface ImageGenInput {
-  prompt: string;
+  imageBase64: string;
+  violations?: AdViolation[];
 }
 
 export interface ImageGenResult {
@@ -87,6 +105,9 @@ export const UserPlan = {
   visitor: "visitor",
   registered: "registered",
   professional: "professional",
+  smart_fix: "smart_fix",
+  content: "content",
+  agency: "agency",
 } as const;
 
 export interface User {
@@ -132,6 +153,9 @@ export const UserUpgradeInputPlan = {
   visitor: "visitor",
   registered: "registered",
   professional: "professional",
+  smart_fix: "smart_fix",
+  content: "content",
+  agency: "agency",
 } as const;
 
 export interface UserUpgradeInput {
@@ -145,3 +169,77 @@ export interface UsageStats {
   approved_count?: number;
   rejected_count?: number;
 }
+
+export type HamzawiChatInputCheckReport = {
+  status?: string;
+  score?: number;
+  violations?: AdViolation[];
+  suggestions?: string[];
+} | null;
+
+export interface HamzawiChatInput {
+  message: string;
+  checkReport?: HamzawiChatInputCheckReport;
+}
+
+export interface HamzawiChatResult {
+  reply: string;
+  sessionId: string;
+}
+
+export type HamzawiMessageRole =
+  (typeof HamzawiMessageRole)[keyof typeof HamzawiMessageRole];
+
+export const HamzawiMessageRole = {
+  user: "user",
+  assistant: "assistant",
+} as const;
+
+export interface HamzawiMessage {
+  id: number;
+  /** @nullable */
+  user_id?: number | null;
+  session_id: string;
+  role: HamzawiMessageRole;
+  content: string;
+  created_at: string;
+}
+
+export interface HamzawiMessagesResult {
+  messages: HamzawiMessage[];
+}
+
+export interface BrandMemoryInput {
+  business_name?: string;
+  business_type?: string;
+  logo_url?: string;
+  primary_colors?: string;
+  preferred_style?: string;
+  notes?: string;
+}
+
+export type HamzawiMemoryResultMemory = {
+  id?: number;
+  user_id?: number;
+  /** @nullable */
+  business_name?: string | null;
+  /** @nullable */
+  business_type?: string | null;
+  /** @nullable */
+  logo_url?: string | null;
+  /** @nullable */
+  primary_colors?: string | null;
+  /** @nullable */
+  preferred_style?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  updated_at?: string;
+} | null;
+
+export interface HamzawiMemoryResult {
+  memory?: HamzawiMemoryResultMemory;
+}
+
+export type UpdateHamzawiMemory200 = {
+  ok?: boolean;
+};

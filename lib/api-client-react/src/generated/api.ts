@@ -24,13 +24,19 @@ import type {
   AdminUser,
   AppConfig,
   AuthResult,
+  BrandMemoryInput,
   ErrorResponse,
   GoogleAuthInput,
+  HamzawiChatInput,
+  HamzawiChatResult,
+  HamzawiMemoryResult,
+  HamzawiMessagesResult,
   HealthStatus,
   ImageGenInput,
   ImageGenResult,
   TextGenInput,
   TextGenResult,
+  UpdateHamzawiMemory200,
   UsageStats,
   User,
   UserUpgradeInput,
@@ -371,7 +377,7 @@ export const useGenerateAdText = <
 };
 
 /**
- * @summary Generate image (TODO NanoBanana)
+ * @summary Generate compliant ad image via Gemini (plan content+)
  */
 export const getGenerateImageUrl = () => {
   return `/api/image-gen`;
@@ -390,7 +396,7 @@ export const generateImage = async (
 };
 
 export const getGenerateImageMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -431,13 +437,13 @@ export type GenerateImageMutationResult = NonNullable<
   Awaited<ReturnType<typeof generateImage>>
 >;
 export type GenerateImageMutationBody = BodyType<ImageGenInput>;
-export type GenerateImageMutationError = ErrorType<unknown>;
+export type GenerateImageMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Generate image (TODO NanoBanana)
+ * @summary Generate compliant ad image via Gemini (plan content+)
  */
 export const useGenerateImage = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -777,7 +783,7 @@ export function useListAdminUsers<
 }
 
 /**
- * @summary Upgrade user to professional plan
+ * @summary Upgrade user plan
  */
 export const getUpgradeUserUrl = (id: number) => {
   return `/api/admin/users/${id}/upgrade`;
@@ -841,7 +847,7 @@ export type UpgradeUserMutationBody = BodyType<UserUpgradeInput>;
 export type UpgradeUserMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Upgrade user to professional plan
+ * @summary Upgrade user plan
  */
 export const useUpgradeUser = <
   TError = ErrorType<ErrorResponse>,
@@ -927,3 +933,325 @@ export function useGetStats<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Send a message to Hamzawi AI assistant
+ */
+export const getHamzawiChatUrl = () => {
+  return `/api/hamzawi/chat`;
+};
+
+export const hamzawiChat = async (
+  hamzawiChatInput: HamzawiChatInput,
+  options?: RequestInit,
+): Promise<HamzawiChatResult> => {
+  return customFetch<HamzawiChatResult>(getHamzawiChatUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(hamzawiChatInput),
+  });
+};
+
+export const getHamzawiChatMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof hamzawiChat>>,
+    TError,
+    { data: BodyType<HamzawiChatInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof hamzawiChat>>,
+  TError,
+  { data: BodyType<HamzawiChatInput> },
+  TContext
+> => {
+  const mutationKey = ["hamzawiChat"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof hamzawiChat>>,
+    { data: BodyType<HamzawiChatInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return hamzawiChat(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type HamzawiChatMutationResult = NonNullable<
+  Awaited<ReturnType<typeof hamzawiChat>>
+>;
+export type HamzawiChatMutationBody = BodyType<HamzawiChatInput>;
+export type HamzawiChatMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Send a message to Hamzawi AI assistant
+ */
+export const useHamzawiChat = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof hamzawiChat>>,
+    TError,
+    { data: BodyType<HamzawiChatInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof hamzawiChat>>,
+  TError,
+  { data: BodyType<HamzawiChatInput> },
+  TContext
+> => {
+  return useMutation(getHamzawiChatMutationOptions(options));
+};
+
+/**
+ * @summary Get recent conversation messages
+ */
+export const getGetHamzawiMessagesUrl = () => {
+  return `/api/hamzawi/messages`;
+};
+
+export const getHamzawiMessages = async (
+  options?: RequestInit,
+): Promise<HamzawiMessagesResult> => {
+  return customFetch<HamzawiMessagesResult>(getGetHamzawiMessagesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetHamzawiMessagesQueryKey = () => {
+  return [`/api/hamzawi/messages`] as const;
+};
+
+export const getGetHamzawiMessagesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getHamzawiMessages>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHamzawiMessages>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetHamzawiMessagesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getHamzawiMessages>>
+  > = ({ signal }) => getHamzawiMessages({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getHamzawiMessages>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetHamzawiMessagesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getHamzawiMessages>>
+>;
+export type GetHamzawiMessagesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get recent conversation messages
+ */
+
+export function useGetHamzawiMessages<
+  TData = Awaited<ReturnType<typeof getHamzawiMessages>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHamzawiMessages>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetHamzawiMessagesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get user brand memory
+ */
+export const getGetHamzawiMemoryUrl = () => {
+  return `/api/hamzawi/memory`;
+};
+
+export const getHamzawiMemory = async (
+  options?: RequestInit,
+): Promise<HamzawiMemoryResult> => {
+  return customFetch<HamzawiMemoryResult>(getGetHamzawiMemoryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetHamzawiMemoryQueryKey = () => {
+  return [`/api/hamzawi/memory`] as const;
+};
+
+export const getGetHamzawiMemoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getHamzawiMemory>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHamzawiMemory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetHamzawiMemoryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getHamzawiMemory>>
+  > = ({ signal }) => getHamzawiMemory({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getHamzawiMemory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetHamzawiMemoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getHamzawiMemory>>
+>;
+export type GetHamzawiMemoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get user brand memory
+ */
+
+export function useGetHamzawiMemory<
+  TData = Awaited<ReturnType<typeof getHamzawiMemory>>,
+  TError = ErrorType<ErrorResponse>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHamzawiMemory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetHamzawiMemoryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update user brand memory
+ */
+export const getUpdateHamzawiMemoryUrl = () => {
+  return `/api/hamzawi/memory`;
+};
+
+export const updateHamzawiMemory = async (
+  brandMemoryInput: BrandMemoryInput,
+  options?: RequestInit,
+): Promise<UpdateHamzawiMemory200> => {
+  return customFetch<UpdateHamzawiMemory200>(getUpdateHamzawiMemoryUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(brandMemoryInput),
+  });
+};
+
+export const getUpdateHamzawiMemoryMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHamzawiMemory>>,
+    TError,
+    { data: BodyType<BrandMemoryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateHamzawiMemory>>,
+  TError,
+  { data: BodyType<BrandMemoryInput> },
+  TContext
+> => {
+  const mutationKey = ["updateHamzawiMemory"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateHamzawiMemory>>,
+    { data: BodyType<BrandMemoryInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateHamzawiMemory(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateHamzawiMemoryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateHamzawiMemory>>
+>;
+export type UpdateHamzawiMemoryMutationBody = BodyType<BrandMemoryInput>;
+export type UpdateHamzawiMemoryMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update user brand memory
+ */
+export const useUpdateHamzawiMemory = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateHamzawiMemory>>,
+    TError,
+    { data: BodyType<BrandMemoryInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateHamzawiMemory>>,
+  TError,
+  { data: BodyType<BrandMemoryInput> },
+  TContext
+> => {
+  return useMutation(getUpdateHamzawiMemoryMutationOptions(options));
+};

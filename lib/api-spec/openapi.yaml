@@ -18,6 +18,8 @@ tags:
     description: Admin panel
   - name: config
     description: Configuration
+  - name: hamzawi
+    description: Hamzawi AI assistant
 
 paths:
   /healthz:
@@ -106,7 +108,7 @@ paths:
     post:
       operationId: generateImage
       tags: [ads]
-      summary: Generate image (TODO NanoBanana)
+      summary: Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
       requestBody:
         required: true
         content:
@@ -120,6 +122,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImageGenResult"
+        "403":
+          description: Insufficient plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/google:
     post:
@@ -215,7 +223,7 @@ paths:
     patch:
       operationId: upgradeUser
       tags: [admin]
-      summary: Upgrade user to professional plan
+      summary: Upgrade user plan
       parameters:
         - name: id
           in: path
@@ -254,6 +262,95 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UsageStats"
+
+  /hamzawi/chat:
+    post:
+      operationId: hamzawiChat
+      tags: [hamzawi]
+      summary: Send a message to Hamzawi AI assistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HamzawiChatInput"
+      responses:
+        "200":
+          description: Assistant reply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HamzawiChatResult"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /hamzawi/messages:
+    get:
+      operationId: getHamzawiMessages
+      tags: [hamzawi]
+      summary: Get recent conversation messages
+      responses:
+        "200":
+          description: Messages list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HamzawiMessagesResult"
+
+  /hamzawi/memory:
+    get:
+      operationId: getHamzawiMemory
+      tags: [hamzawi]
+      summary: Get user brand memory
+      responses:
+        "200":
+          description: Brand memory
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HamzawiMemoryResult"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateHamzawiMemory
+      tags: [hamzawi]
+      summary: Update user brand memory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrandMemoryInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Insufficient plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
 components:
   schemas:
@@ -303,6 +400,18 @@ components:
         plan:
           type: string
 
+    AdViolation:
+      type: object
+      required: [type, reason, severity]
+      properties:
+        type:
+          type: string
+        reason:
+          type: string
+        severity:
+          type: string
+          enum: [high, medium, low]
+
     AdCheckResult:
       type: object
       required: [status, reason, score, message]
@@ -318,6 +427,14 @@ components:
           type: string
         frames_checked:
           type: ["integer", "null"]
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdViolation"
+        suggestions:
+          type: array
+          items:
+            type: string
 
     TextGenInput:
       type: object
@@ -338,10 +455,14 @@ components:
 
     ImageGenInput:
       type: object
-      required: [prompt]
+      required: [imageBase64]
       properties:
-        prompt:
+        imageBase64:
           type: string
+        violations:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdViolation"
 
     ImageGenResult:
       type: object
@@ -378,7 +499,7 @@ components:
           type: string
         plan:
           type: string
-          enum: [visitor, registered, professional]
+          enum: [visitor, registered, professional, smart_fix, content, agency]
         trials_remaining:
           type: integer
         total_checks:
@@ -427,7 +548,7 @@ components:
       properties:
         plan:
           type: string
-          enum: [visitor, registered, professional]
+          enum: [visitor, registered, professional, smart_fix, content, agency]
 
     UsageStats:
       type: object
@@ -443,3 +564,104 @@ components:
           type: integer
         rejected_count:
           type: integer
+
+    HamzawiChatInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        checkReport:
+          type: object
+          nullable: true
+          properties:
+            status:
+              type: string
+            score:
+              type: number
+            violations:
+              type: array
+              items:
+                $ref: "#/components/schemas/AdViolation"
+            suggestions:
+              type: array
+              items:
+                type: string
+
+    HamzawiChatResult:
+      type: object
+      required: [reply, sessionId]
+      properties:
+        reply:
+          type: string
+        sessionId:
+          type: string
+
+    HamzawiMessage:
+      type: object
+      required: [id, session_id, role, content, created_at]
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: ["integer", "null"]
+        session_id:
+          type: string
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        created_at:
+          type: string
+
+    HamzawiMessagesResult:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/HamzawiMessage"
+
+    BrandMemoryInput:
+      type: object
+      properties:
+        business_name:
+          type: string
+        business_type:
+          type: string
+        logo_url:
+          type: string
+        primary_colors:
+          type: string
+        preferred_style:
+          type: string
+        notes:
+          type: string
+
+    HamzawiMemoryResult:
+      type: object
+      properties:
+        memory:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            user_id:
+              type: integer
+            business_name:
+              type: ["string", "null"]
+            business_type:
+              type: ["string", "null"]
+            logo_url:
+              type: ["string", "null"]
+            primary_colors:
+              type: ["string", "null"]
+            preferred_style:
+              type: ["string", "null"]
+            notes:
+              type: ["string", "null"]
+            updated_at:
+              type: string

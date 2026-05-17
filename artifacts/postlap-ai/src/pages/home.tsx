@@ -3,6 +3,8 @@ import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, L
 import { useGetConfig, useGetStats, getGetConfigQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
+import { useLanguage } from "@/lib/useLanguage";
+import { ui } from "@/lib/i18n";
 
 const TRIALS_KEY = "postlap_trials";
 const MAX_VISITOR_TRIALS = 3;
@@ -39,6 +41,15 @@ function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
 }
 
+// Plan level mapping (mirrors backend planLevel() in lib/db/src/schema/users.ts)
+// visitor=1, registered=2, professional=3(legacy), smart_fix=3, content=4, agency=5
+function planLevelFrontend(plan: string): number {
+  const levels: Record<string, number> = {
+    visitor: 1, registered: 2, professional: 3, smart_fix: 3, content: 4, agency: 5,
+  };
+  return levels[plan] ?? 1;
+}
+
 // Discount active if month is May (4) or June (5) — May 2026 = month index 4
 function isDiscountActive(): boolean {
   const m = new Date().getMonth();
@@ -50,14 +61,17 @@ export default function Home() {
   const { toast } = useToast();
   const { data: config } = useGetConfig({ query: { queryKey: getGetConfigQueryKey() } });
   const { data: stats } = useGetStats({ query: { queryKey: getGetStatsQueryKey() } });
+  const { lang } = useLanguage();
+  const t = ui[lang];
 
   const [user, setUser] = useState<LocalUser | null>(getStoredUser);
   const [dragging, setDragging] = useState(false);
   const [checking, setChecking] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [checkResult, setCheckResult] = useState<{ status: CheckStatus; message: string; score: number; frames_checked?: number | null } | null>(null);
+  const [checkResult, setCheckResult] = useState<{ status: CheckStatus; message: string; score: number; frames_checked?: number | null; violations?: Array<{ type: string; reason: string; severity: string }>; suggestions?: string[] } | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
   const [trialBlockModal, setTrialBlockModal] = useState(false);
   const [genderModal, setGenderModal] = useState(false);
   const [product, setProduct] = useState("");
@@ -190,16 +204,24 @@ export default function Home() {
     if (!user) {
       const trials = getTrials();
       if (trials <= 0) { setTrialBlockModal(true); return; }
-    } else if (user.plan !== "professional" && user.trials_remaining <= 0) {
+    } else if (["visitor", "registered"].includes(user.plan) && user.trials_remaining <= 0) {
       setTrialBlockModal(true); return;
     }
 
-    // Show image preview (images only)
+    // Show image preview and store base64 (images only)
     if (file.type !== "video/mp4") {
       const url = URL.createObjectURL(file);
       setUploadedImageUrl(url);
+      // Read as base64 for level-4 image+description post generation
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result;
+        setUploadedImageBase64(typeof result === "string" ? result : null);
+      };
+      reader.readAsDataURL(file);
     } else {
       setUploadedImageUrl(null);
+      setUploadedImageBase64(null);
     }
 
     setCheckResult(null);
@@ -238,11 +260,21 @@ export default function Home() {
   async function handleGenerateText() {
     if (!product.trim()) { toast({ title: "أدخل معلومات المنتج", variant: "destructive" }); return; }
     setTextLoading(true);
+    const token = localStorage.getItem(TOKEN_KEY);
+    const userLevel = user ? planLevelFrontend(user.plan) : 0;
     try {
+      const body: Record<string, string> = { product, dialect };
+      // Level 4+ (content/agency): include the uploaded image for richer post generation
+      if (userLevel >= 4 && uploadedImageBase64) {
+        body.imageBase64 = uploadedImageBase64;
+      }
       const res = await fetch("/api/generate-text", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product, dialect }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -357,7 +389,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-background text-foreground" dir="rtl">
+    <div className="min-h-screen bg-background text-foreground" dir={t.dir}>
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-border bg-black/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -367,21 +399,21 @@ export default function Home() {
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#upload" className="hover:text-foreground transition-colors">الفحص</a>
-            <a href="#generate" className="hover:text-foreground transition-colors">توليد النص</a>
-            <a href="#agents" className="hover:text-foreground transition-colors">الوكلاء</a>
+            <a href="#generate" className="hover:text-foreground transition-colors">{t.nav.generateText}</a>
+            <a href="#agents" className="hover:text-foreground transition-colors">{t.nav.agents}</a>
           </nav>
           <div className="flex items-center gap-2">
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground hidden sm:inline">{user.name}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${user.plan === "professional" ? "border-primary/50 text-primary bg-primary/10" : "border-border text-muted-foreground"}`}>
-                  {user.plan === "professional" ? "احترافي" : user.plan === "registered" ? "مسجل" : "زائر"}
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${["professional","smart_fix","content","agency"].includes(user.plan) ? "border-primary/50 text-primary bg-primary/10" : "border-border text-muted-foreground"}`}>
+                  {user.plan === "agency" ? "وكالة" : user.plan === "content" ? "إدارة محتوى" : user.plan === "smart_fix" || user.plan === "professional" ? "Smart Fix" : user.plan === "registered" ? "مسجل" : "زائر"}
                 </span>
-                <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">خروج</button>
+                <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">{t.nav.signOut}</button>
               </div>
             ) : (
               <button onClick={() => setShowLoginModal(true)} className="text-xs bg-primary/10 text-primary border border-primary/20 px-3 py-1.5 rounded-lg hover:bg-primary/20 transition-colors" data-testid="button-header-signin">
-                سجّل الدخول
+                {t.nav.signIn}
               </button>
             )}
           </div>
@@ -396,14 +428,14 @@ export default function Home() {
           <div className="text-center mb-8 space-y-4">
             <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              مدعوم بالذكاء الاصطناعي
+              {t.hero.badge}
             </div>
             <h1 className="text-4xl sm:text-5xl font-black text-foreground leading-tight tracking-tight">
-              اكتشف المخالفات{" "}
-              <span className="text-primary">قبل النشر</span>
+              {t.hero.headline1}{" "}
+              <span className="text-primary">{t.hero.headline2}</span>
             </h1>
             <p className="text-xs text-muted-foreground/60">
-              مبني للمسوّقين والوكالات والشركات التي تريد إعلانات أذكى وأأمن
+              {t.hero.sub}
             </p>
           </div>
 
@@ -472,13 +504,13 @@ export default function Home() {
                   <span className="text-2xl font-black text-primary">{countdown}</span>
                 </div>
               </div>
-              <p className="text-sm text-muted-foreground">جاري تحليل الإعلان...</p>
+              <p className="text-sm text-muted-foreground">{t.upload.analyzing}</p>
             </div>
           )}
           {checking && countdown === null && (
             <div className="mt-6 flex flex-col items-center gap-3 text-muted-foreground">
               <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-sm">لحظة أخيرة...</p>
+              <p className="text-sm">{t.upload.oneMore}</p>
             </div>
           )}
 
@@ -583,9 +615,16 @@ export default function Home() {
             </p>
           </div>
 
-          {user?.plan === "professional" ? (
-            /* Paid users — full text generator */
+          {user && planLevelFrontend(user.plan) >= 3 ? (
+            /* Smart Fix+ users (level 3+) — full text generator; level 4+ gets image+description mode */
             <div className="max-w-2xl mx-auto space-y-4">
+              {/* Level 4+ (content/agency): hint that uploaded image is used */}
+              {user && planLevelFrontend(user.plan) >= 4 && uploadedImageBase64 && (
+                <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                  <ScanLine className="w-3.5 h-3.5 shrink-0" />
+                  <span>سيتم استخدام صورة الإعلان المرفوعة لإنشاء منشور أكثر دقة وتخصيصاً</span>
+                </div>
+              )}
               <textarea
                 className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
                 placeholder="(اسم المنتج، السعر، العرض...)"
@@ -1049,6 +1088,7 @@ export default function Home() {
         gender={gender}
         checkResult={checkResult}
         whatsapp={whatsapp}
+        userPlan={user?.plan}
       />
     </div>
   );
