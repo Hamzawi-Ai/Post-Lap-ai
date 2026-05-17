@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Download, RefreshCw, Image as ImageIcon } from "lucide-react";
+import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Download, RefreshCw, Image as ImageIcon, ScanLine } from "lucide-react";
 
 const LANG_KEY = "postlap_lang";
 const SESSION_OPENED_KEY = "hamzawi_opened";
@@ -36,7 +36,6 @@ const i18n = {
     save: "حفظ",
     cancel: "إلغاء",
     upgradeMsg: "حفظ هوية النشاط متاح للمستخدمين المسجّلين فأعلى",
-    welcome: "السلام عليكم! 👋 أنا حمزاوي، مساعدك الإعلاني الذكي. أقدر أساعدك في فحص إعلاناتك، اقتراح تحسينات، وتوليد محتوى تسويقي. كيف أخدمك؟",
     newPost: "✦ منشور جديد",
     newPostTitle: "إنشاء منشور جديد",
     productDescPlaceholder: "مثال: عرض خاص على برغر الدجاج — 50% خصم اليوم فقط",
@@ -52,6 +51,9 @@ const i18n = {
     uploadedLogo: "تم رفع الشعار ✓",
     attachTip: "انقر لإرفاق صورة (شعار، تصميم سابق، أو صورة منتج)",
     regeneratePrompt: "ملاحظة للتوليد (اختياري):",
+    checkAdTip: "ارفع صورة إعلانك للفحص",
+    analyzingAd: "جاري تحليل إعلانك... ⏳",
+    welcome: "أهلاً! 👋 ارفع لي صورة إعلانك وأقولك هل يعدي سياسات ميتا أو لا. أو اسألني أي سؤال إعلاني.",
   },
   en: {
     title: "Hamzawi",
@@ -73,7 +75,6 @@ const i18n = {
     save: "Save",
     cancel: "Cancel",
     upgradeMsg: "Brand identity is available for registered users and above",
-    welcome: "Hello! 👋 I'm Hamzawi, your smart advertising assistant. I can help you check your ads, suggest improvements, and generate marketing content. How can I help you?",
     newPost: "✦ New Post",
     newPostTitle: "Create New Post",
     productDescPlaceholder: "e.g., Special offer on chicken burger — 50% off today only",
@@ -89,6 +90,9 @@ const i18n = {
     uploadedLogo: "Logo uploaded ✓",
     attachTip: "Click to attach an image (logo, design sample, or product photo)",
     regeneratePrompt: "Regeneration note (optional):",
+    checkAdTip: "Upload your ad image to check it",
+    analyzingAd: "Analyzing your ad... ⏳",
+    welcome: "Hello! 👋 Upload your ad image and I'll tell you if it passes Meta's policies. Or ask me anything about advertising.",
   },
 };
 
@@ -102,6 +106,10 @@ interface HamzawiChatProps {
   } | null;
   whatsapp: string;
   userPlan?: string;
+  onFileCheck?: (file: File) => void;
+  checking?: boolean;
+  heroVisible?: boolean;
+  forceOpen?: number;
 }
 
 interface Message {
@@ -134,7 +142,7 @@ function planLevel(plan?: string): number {
   return levels[plan ?? "visitor"] ?? 1;
 }
 
-export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }: HamzawiChatProps) {
+export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen }: HamzawiChatProps) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -142,6 +150,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
   const lastReportedCheckRef = useRef<typeof checkResult>(null);
   const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const objectUrlsRef = useRef<string[]>([]);
   const [showBrandForm, setShowBrandForm] = useState(false);
   const [brandForm, setBrandForm] = useState({
     business_name: "",
@@ -173,12 +182,18 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
   const postImageInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
+  const checkAdInputRef = useRef<HTMLInputElement>(null);
 
   const t = i18n[lang];
   const level = planLevel(userPlan);
 
   useEffect(() => {
     setLang(detectLanguage());
+  }, []);
+
+  useEffect(() => {
+    const urls = objectUrlsRef.current;
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
   }, []);
 
   function addHamzawi(text: string, extra?: Partial<Message>) {
@@ -206,16 +221,43 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
     } catch {}
   }, [historyLoaded]);
 
+  // Auto-open: only fire immediately when there is no inline hero; otherwise wait for hero to scroll away
   useEffect(() => {
     const hasOpened = sessionStorage.getItem(SESSION_OPENED_KEY);
     if (hasOpened) return;
+    // If a hero section is present (heroVisible defined), let the heroVisible effect handle opening
+    if (heroVisible !== undefined) return;
     const timer = setTimeout(() => {
       setOpen(true);
       sessionStorage.setItem(SESSION_OPENED_KEY, "1");
       setUnread(false);
-    }, 1800);
+    }, 400);
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When hero scrolls out of view for the first time → auto-open floating chat
+  const prevHeroVisibleRef = useRef<boolean | undefined>(undefined);
+  useEffect(() => {
+    if (heroVisible === undefined) return;
+    const justScrolledPast = prevHeroVisibleRef.current === true && heroVisible === false;
+    prevHeroVisibleRef.current = heroVisible;
+    if (!justScrolledPast) return;
+    const hasOpened = sessionStorage.getItem(SESSION_OPENED_KEY);
+    if (hasOpened) return;
+    setOpen(true);
+    sessionStorage.setItem(SESSION_OPENED_KEY, "1");
+    setUnread(false);
+  }, [heroVisible]);
+
+  // forceOpen: increment counter from parent to open chat on demand
+  const prevForceOpenRef = useRef<number>(0);
+  useEffect(() => {
+    if (!forceOpen || forceOpen === prevForceOpenRef.current) return;
+    prevForceOpenRef.current = forceOpen;
+    setOpen(true);
+    setUnread(false);
+  }, [forceOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -273,9 +315,14 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
   }, [open]);
 
   useEffect(() => {
-    if (!checkResult || !open) return;
+    if (!checkResult) return;
     if (lastReportedCheckRef.current === checkResult) return;
     lastReportedCheckRef.current = checkResult;
+    // Auto-open chat so the result is visible
+    if (!open) {
+      setOpen(true);
+      setUnread(false);
+    }
     const report = {
       status: checkResult.status,
       score: checkResult.score,
@@ -286,7 +333,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
       ? `تحقق من نتيجة فحص الإعلان وأخبرني بتوصياتك`
       : `Check the ad review result and tell me your recommendations`;
     sendMessage(autoMsg, report);
-  }, [checkResult, open]);
+  }, [checkResult]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -404,6 +451,48 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
       setPostImageName(file.name);
     };
     reader.readAsDataURL(file);
+  }
+
+  /**
+   * Ad check file input handler.
+   * Shows image preview in chat, opens the chat, then calls onFileCheck.
+   */
+  function handleAdCheckFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    // Open chat if not already open
+    if (!open) {
+      setOpen(true);
+      setUnread(false);
+    }
+
+    // Show image preview in user message bubble (images only)
+    if (file.type !== "video/mp4") {
+      const url = URL.createObjectURL(file);
+      objectUrlsRef.current.push(url);
+      setMessages((prev) => [
+        ...prev,
+        {
+          from: "user" as const,
+          text: lang === "ar" ? "افحص هذا الإعلان" : "Check this ad",
+          time: now(),
+          imageUrl: url,
+        },
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          from: "user" as const,
+          text: lang === "ar" ? "افحص هذا الفيديو الإعلاني" : "Check this video ad",
+          time: now(),
+        },
+      ]);
+    }
+
+    onFileCheck?.(file);
   }
 
   /**
@@ -776,7 +865,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
                     ? "bg-muted text-foreground rounded-tr-none"
                     : "bg-primary text-primary-foreground rounded-tl-none"
                 } ${m.imageUrl ? "overflow-hidden p-0" : "px-3 py-2 whitespace-pre-wrap"}`}>
-                  {m.imageUrl ? (
+                  {m.isGeneratedPost && m.imageUrl ? (
+                    /* Generated post — show download + regenerate actions */
                     <div>
                       <img
                         src={m.imageUrl}
@@ -805,6 +895,20 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
                         </div>
                       </div>
                     </div>
+                  ) : m.imageUrl ? (
+                    /* User ad preview — simple thumbnail only */
+                    <div>
+                      <img
+                        src={m.imageUrl}
+                        alt="ad preview"
+                        className="w-full max-h-48 object-cover cursor-zoom-in"
+                        onClick={() => window.open(m.imageUrl, "_blank")}
+                      />
+                      <div className="px-3 py-2">
+                        <p className="text-xs opacity-80">{m.text}</p>
+                        <p className="text-[10px] opacity-50 mt-0.5">{m.time}</p>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       {m.text}
@@ -814,6 +918,17 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
                 </div>
               </div>
             ))}
+            {checking && (
+              <div className="flex gap-2 flex-row">
+                <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
+                  ح
+                </div>
+                <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2 flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
+                  <span className="text-xs text-muted-foreground">{t.analyzingAd}</span>
+                </div>
+              </div>
+            )}
             {loading && (
               <div className="flex gap-2 flex-row">
                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
@@ -836,7 +951,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
                 </div>
               </div>
             )}
-            {checkResult?.status === "مرفوض" && messages.length > 0 && !loading && (
+            {(checkResult?.status === "مرفوض" || checkResult?.status === "جيد" || checkResult?.status === "rejected" || checkResult?.status === "good") && messages.length > 0 && !loading && !checking && (
               <a
                 href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(lang === "ar" ? "أريد الاشتراك في Smart Fix" : "I want to subscribe to Smart Fix")}`}
                 target="_blank"
@@ -851,7 +966,20 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
 
           {/* Input bar */}
           <div className="border-t border-border p-2 shrink-0 flex gap-2 items-center">
-            {/* Paperclip — hidden input */}
+            {/* Ad check button — available to all users */}
+            <input ref={checkAdInputRef} type="file" accept="image/png,image/jpeg,video/mp4" className="hidden" onChange={handleAdCheckFile} />
+            <button
+              onClick={() => checkAdInputRef.current?.click()}
+              disabled={checking}
+              title={t.checkAdTip}
+              className="text-muted-foreground hover:text-primary transition-colors shrink-0 disabled:opacity-30"
+            >
+              {checking
+                ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                : <ScanLine className="w-4 h-4" />
+              }
+            </button>
+            {/* Paperclip — logo/asset upload for authenticated users */}
             <input ref={attachInputRef} type="file" accept="image/*" className="hidden" onChange={handleChatAttach} />
             <button
               onClick={() => attachInputRef.current?.click()}
@@ -884,10 +1012,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan }:
         </div>
       )}
 
-      {/* Toggle bubble */}
+      {/* Toggle bubble — hidden while the inline hero chat is visible so the two don't overlap */}
       <button
         onClick={() => { setOpen(!open); setUnread(false); }}
-        className="w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:scale-105 transition-transform relative"
+        className={`w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:scale-105 transition-all duration-300 relative ${heroVisible ? "opacity-0 pointer-events-none scale-75" : "opacity-100 scale-100"}`}
         title={isRTL ? "تحدث مع حمزاوي" : "Chat with Hamzawi"}
       >
         {open ? (

@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine, Send } from "lucide-react";
 import { useGetConfig, useGetStats, getGetConfigQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
@@ -65,12 +65,14 @@ export default function Home() {
   const t = ui[lang];
 
   const [user, setUser] = useState<LocalUser | null>(getStoredUser);
-  const [dragging, setDragging] = useState(false);
+  const [heroVisible, setHeroVisible] = useState(true);
+  const heroRef = useRef<HTMLDivElement>(null);
+  const heroFileInputRef = useRef<HTMLInputElement>(null);
+  const [chatForceOpen, setChatForceOpen] = useState(0);
   const [checking, setChecking] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [checkResult, setCheckResult] = useState<{ status: CheckStatus; message: string; score: number; frames_checked?: number | null; violations?: Array<{ type: string; reason: string; severity: string }>; suggestions?: string[] } | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
   const [trialBlockModal, setTrialBlockModal] = useState(false);
   const [genderModal, setGenderModal] = useState(false);
@@ -82,13 +84,36 @@ export default function Home() {
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [textLoading, setTextLoading] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleBtnModalRef = useRef<HTMLDivElement>(null);
   const googleBtnLoginModalRef = useRef<HTMLDivElement>(null);
 
   const gender = (user?.gender ?? localStorage.getItem(GENDER_KEY) ?? null) as "male" | "female" | null;
   const discountActive = isDiscountActive();
+
+  // IntersectionObserver: track when hero Hamzawi section scrolls out of view
+  useEffect(() => {
+    const el = heroRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => setHeroVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  function handleHeroInteraction() {
+    setChatForceOpen((n) => n + 1);
+  }
+
+  function handleHeroFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    handleHeroInteraction();
+    handleFile(file);
+  }
 
   useEffect(() => {
     const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -208,11 +233,8 @@ export default function Home() {
       setTrialBlockModal(true); return;
     }
 
-    // Show image preview and store base64 (images only)
+    // Store base64 (images only) for level-4 image+description post generation
     if (file.type !== "video/mp4") {
-      const url = URL.createObjectURL(file);
-      setUploadedImageUrl(url);
-      // Read as base64 for level-4 image+description post generation
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result;
@@ -220,7 +242,6 @@ export default function Home() {
       };
       reader.readAsDataURL(file);
     } else {
-      setUploadedImageUrl(null);
       setUploadedImageBase64(null);
     }
 
@@ -250,12 +271,6 @@ export default function Home() {
     }
   }
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }, [user]);
 
   async function handleGenerateText() {
     if (!product.trim()) { toast({ title: "أدخل معلومات المنتج", variant: "destructive" }); return; }
@@ -297,26 +312,6 @@ export default function Home() {
     setCookieConsent(true);
   }
 
-  const statusColor: Record<CheckStatus, string> = {
-    "ممتاز": "border-green-400/40 bg-green-400/5",
-    "جيد": "border-yellow-400/40 bg-yellow-400/5",
-    "مرفوض": "border-red-400/40 bg-red-400/5",
-  };
-  const statusTextColor: Record<CheckStatus, string> = {
-    "ممتاز": "text-green-400",
-    "جيد": "text-yellow-400",
-    "مرفوض": "text-red-400",
-  };
-  const statusIcon: Record<CheckStatus, React.ReactNode> = {
-    "ممتاز": <CheckCircle className="w-8 h-8 text-green-400 shrink-0" />,
-    "جيد": <AlertCircle className="w-8 h-8 text-yellow-400 shrink-0" />,
-    "مرفوض": <XCircle className="w-8 h-8 text-red-400 shrink-0" />,
-  };
-  const statusBarColor: Record<CheckStatus, string> = {
-    "ممتاز": "bg-green-400",
-    "جيد": "bg-yellow-400",
-    "مرفوض": "bg-red-400",
-  };
 
   const faqs = [
     { q: "كيف يعمل PostLapAI؟", a: "ارفع صورة أو فيديو إعلانك، يحللها الذكاء الاصطناعي مقارنةً بسياسات Meta وTikTok ويعطيك نتيجة فورية." },
@@ -398,7 +393,6 @@ export default function Home() {
             <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">فحص الإعلانات</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="#upload" className="hover:text-foreground transition-colors">الفحص</a>
             <a href="#generate" className="hover:text-foreground transition-colors">{t.nav.generateText}</a>
             <a href="#agents" className="hover:text-foreground transition-colors">{t.nav.agents}</a>
           </nav>
@@ -422,184 +416,99 @@ export default function Home() {
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-16">
 
-        {/* 1. Upload / Check */}
-        <section id="upload" className="w-full">
-          {/* Hero headline */}
-          <div className="text-center mb-8 space-y-4">
-            <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-              {t.hero.badge}
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-black text-foreground leading-tight tracking-tight">
-              {t.hero.headline1}{" "}
-              <span className="text-primary">{t.hero.headline2}</span>
-            </h1>
-            <p className="text-xs text-muted-foreground/60">
-              {t.hero.sub}
-            </p>
-          </div>
-
-          {/* Upload dropzone */}
-          <div
-            className={`group relative w-full border-2 border-dashed rounded-2xl p-7 sm:p-10 text-center cursor-pointer transition-all duration-200 ${
-              dragging
-                ? "border-primary bg-primary/5 scale-[1.01] shadow-[0_0_28px_rgba(59,130,246,0.25)]"
-                : "border-border hover:border-primary/40 hover:bg-card/60 hover:shadow-[0_0_24px_rgba(59,130,246,0.18)]"
-            }`}
-            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            onClick={() => !checking && fileInputRef.current?.click()}
-            data-testid="upload-dropzone"
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,video/mp4"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-              data-testid="input-file"
-            />
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <ScanLine className="w-8 h-8 text-primary group-hover:animate-pulse transition-all duration-300" />
+        {/* Inline hero Hamzawi chat — transitions to floating when scrolled past */}
+        <section ref={heroRef} id="hamzawi-hero" className="w-full">
+          <div className="max-w-md mx-auto">
+            {/* Headline */}
+            <div className="text-center mb-6 space-y-3">
+              <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                {lang === "ar" ? "مدعوم بالذكاء الاصطناعي" : "Powered by AI"}
               </div>
-              <div className="space-y-1">
-                <p className="text-lg sm:text-xl font-black text-foreground">ارفع هنا للفحص</p>
-                <p className="text-muted-foreground text-sm">صورة PNG / JPG أو فيديو MP4 — حتى 50 ميجابايت</p>
-              </div>
-              <div className="bg-primary text-primary-foreground font-bold text-sm px-8 py-3 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-primary/20">
-                حلّل إعلاني الآن
-              </div>
-              <p className="text-xs text-muted-foreground/50">{accuracyText}</p>
-            </div>
-          </div>
-
-          {/* Trials remaining hint */}
-          {!user && (
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              متبقي لك <span className="text-primary font-bold">{getTrials()}</span> محاولات مجانية —{" "}
-              <a href="#plans" className="text-primary hover:underline">سجّل للحصول على المزيد</a>
-            </p>
-          )}
-
-          {/* Countdown timer */}
-          {checking && countdown !== null && (
-            <div className="mt-6 flex flex-col items-center gap-3" data-testid="status-loading">
-              <div className="relative w-20 h-20">
-                <svg className="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
-                  <circle cx="40" cy="40" r="34" fill="none" stroke="hsl(var(--border))" strokeWidth="6" />
-                  <circle
-                    cx="40" cy="40" r="34"
-                    fill="none"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                    strokeDasharray={`${2 * Math.PI * 34}`}
-                    strokeDashoffset={`${2 * Math.PI * 34 * (1 - countdown / 8)}`}
-                    className="transition-all duration-1000"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-2xl font-black text-primary">{countdown}</span>
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground">{t.upload.analyzing}</p>
-            </div>
-          )}
-          {checking && countdown === null && (
-            <div className="mt-6 flex flex-col items-center gap-3 text-muted-foreground">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-sm">{t.upload.oneMore}</p>
-            </div>
-          )}
-
-          {/* Result with image preview */}
-          {checkResult && !checking && (
-            <div className={`mt-6 rounded-2xl border p-4 sm:p-6 ${statusColor[checkResult.status]}`} data-testid="status-result">
-              <div className="flex flex-col sm:flex-row gap-4">
-                {/* Image preview with status overlay */}
-                {uploadedImageUrl && (
-                  <div className="relative w-full sm:w-32 h-32 rounded-xl overflow-hidden border border-border shrink-0">
-                    <img
-                      src={uploadedImageUrl}
-                      alt="الإعلان المرفوع"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className={`absolute inset-0 flex items-center justify-center ${
-                      checkResult.status === "ممتاز" ? "bg-green-500/20" :
-                      checkResult.status === "جيد" ? "bg-yellow-500/20" : "bg-red-500/20"
-                    }`}>
-                      <div className="bg-black/60 rounded-full p-2">
-                        {statusIcon[checkResult.status]}
-                      </div>
-                    </div>
-                  </div>
+              <h1 className="text-3xl sm:text-4xl font-black text-foreground leading-tight">
+                {lang === "ar" ? (
+                  <>افحص إعلانك مع <span className="text-primary">حمزاوي</span></>
+                ) : (
+                  <>Check your ad with <span className="text-primary">Hamzawi</span></>
                 )}
-                <div className="flex-1">
-                  <div className="flex items-start gap-3">
-                    {!uploadedImageUrl && statusIcon[checkResult.status]}
-                    <div className="flex-1">
-                      <p className={`text-xl font-black ${statusTextColor[checkResult.status]}`}>{checkResult.message}</p>
-                      {checkResult.frames_checked != null && (
-                        <p className="text-sm text-muted-foreground mt-1">فُحص {checkResult.frames_checked} فريم</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="mt-4 space-y-1.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground font-medium">مستوى المخاطرة الإعلانية</span>
-                      <span className={`font-black text-base ${statusTextColor[checkResult.status]}`}>{checkResult.score}<span className="text-xs font-normal opacity-60">/100</span></span>
-                    </div>
-                    <div className="h-3 rounded-full bg-black/20 overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-1000 ease-out ${statusBarColor[checkResult.status]}`}
-                        style={{ width: `${checkResult.score}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground/60">
-                      {checkResult.status === "ممتاز" ? "✅ إعلانك آمن — جاهز للنشر" : checkResult.status === "جيد" ? "⚠️ يحتاج مراجعة — الوصول قد يكون محدوداً" : "🚫 خطر مرتفع — سيُرفض من المنصة"}
-                    </p>
-                  </div>
+              </h1>
+              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                {lang === "ar"
+                  ? "ارفع صورة إعلانك وأقولك هل يعدي سياسات Meta أو لا"
+                  : "Upload your ad image and I'll tell you if it passes Meta's policies"}
+              </p>
+            </div>
 
-                  {/* CTA after result */}
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {checkResult.status === "ممتاز" && (
-                      <a
-                        href="#generate"
-                        className="text-sm bg-green-500/10 text-green-400 border border-green-400/20 px-4 py-2 rounded-xl hover:bg-green-500/20 transition-colors font-semibold"
-                      >
-                        ✍️ ولّد نصاً لهذا الإعلان
-                      </a>
-                    )}
-                    {checkResult.status === "جيد" && (
-                      <a
-                        href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix لتحسين إعلاني`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="text-sm bg-yellow-500/10 text-yellow-400 border border-yellow-400/20 px-4 py-2 rounded-xl hover:bg-yellow-500/20 transition-colors font-semibold"
-                      >
-                        🔧 حسّن إعلانك مع Smart Fix
-                      </a>
-                    )}
-                    {checkResult.status === "مرفوض" && (
-                      <a
-                        href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix لتصحيح إعلاني المرفوض`}
-                        target="_blank" rel="noopener noreferrer"
-                        className="text-sm bg-primary text-primary-foreground px-4 py-2 rounded-xl hover:opacity-90 transition-opacity font-semibold"
-                      >
-                        🚀 أصلح إعلانك الآن — Smart Fix
-                      </a>
-                    )}
-                    {!user && (
-                      <a href="#plans" className="text-sm text-muted-foreground border border-border px-4 py-2 rounded-xl hover:bg-muted/50 transition-colors">
-                        سجّل للحصول على المزيد
-                      </a>
-                    )}
+            {/* Chat window */}
+            <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden" dir="rtl">
+              {/* Header */}
+              <div className="bg-primary px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg font-black text-white select-none">ح</div>
+                  <div>
+                    <p className="text-sm font-bold text-white">حمزاوي</p>
+                    <p className="text-xs text-white/70">{lang === "ar" ? "مساعدك الإعلاني الذكي" : "Your smart ad assistant"}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  <span className="text-xs text-white/70">{lang === "ar" ? "متصل" : "Online"}</span>
+                </div>
+              </div>
+
+              {/* Welcome bubble */}
+              <div className="p-4">
+                <div className="flex gap-2">
+                  <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 select-none">ح</div>
+                  <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2.5 text-sm text-foreground leading-relaxed max-w-[88%]">
+                    {lang === "ar"
+                      ? "أهلاً! 👋 ارفع لي صورة إعلانك وأقولك هل يعدي سياسات ميتا أو لا. أو اسألني أي سؤال إعلاني."
+                      : "Hello! 👋 Upload your ad image and I'll tell you if it passes Meta's policies. Or ask me anything about advertising."}
                   </div>
                 </div>
               </div>
+
+              {/* Input bar */}
+              <div className="border-t border-border p-2 flex gap-2 items-center">
+                <input
+                  ref={heroFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,video/mp4"
+                  className="hidden"
+                  onChange={handleHeroFileUpload}
+                />
+                <button
+                  onClick={() => heroFileInputRef.current?.click()}
+                  title={lang === "ar" ? "ارفع إعلانك للفحص" : "Upload your ad for checking"}
+                  className="text-muted-foreground hover:text-primary transition-colors shrink-0"
+                >
+                  {checking
+                    ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                    : <ScanLine className="w-4 h-4" />
+                  }
+                </button>
+                <input
+                  type="text"
+                  readOnly
+                  placeholder={lang === "ar" ? "اكتب سؤالك أو ارفع إعلانك..." : "Type your question or upload your ad..."}
+                  className="flex-1 bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground text-right placeholder:text-muted-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  onFocus={handleHeroInteraction}
+                  onClick={handleHeroInteraction}
+                />
+                <button
+                  onClick={handleHeroInteraction}
+                  className="bg-primary text-primary-foreground px-3 py-2 rounded-xl hover:opacity-90 transition-opacity"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          )}
+
+            {/* Scroll hint */}
+            <p className="text-center text-xs text-muted-foreground mt-3 animate-bounce">
+              {lang === "ar" ? "↓ انزل لاكتشاف المزيد" : "↓ Scroll to explore"}
+            </p>
+          </div>
         </section>
 
         {/* 2. Ad Text Generator — paid only */}
@@ -1083,12 +992,16 @@ export default function Home() {
         </div>
       )}
 
-      {/* Hamzawi Chat */}
+      {/* Hamzawi Chat — floating; hero-aware for smooth inline→floating transition */}
       <HamzawiChat
         gender={gender}
         checkResult={checkResult}
         whatsapp={whatsapp}
         userPlan={user?.plan}
+        onFileCheck={handleFile}
+        checking={checking}
+        heroVisible={heroVisible}
+        forceOpen={chatForceOpen}
       />
     </div>
   );
