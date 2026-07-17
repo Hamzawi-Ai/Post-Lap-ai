@@ -72,7 +72,10 @@ export default function Home() {
   const [checking, setChecking] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [checkResult, setCheckResult] = useState<{ status: CheckStatus; message: string; score: number; frames_checked?: number | null; violations?: Array<{ type: string; reason: string; severity: string }>; suggestions?: string[] } | null>(null);
+  const [checkResult, setCheckResult] = useState<{ id?: number; status: CheckStatus; message: string; score: number; frames_checked?: number | null; violations?: Array<{ type: string; reason: string; severity: string }>; suggestions?: string[]; is_guest?: boolean; guest_scans_remaining?: number; guest_blocked?: boolean } | null>(null);
+  // Phase 1: when a guest scans then registers, keep the last guest check id so
+  // we can reveal the full analysis after login without re-uploading.
+  const [lastGuestCheckId, setLastGuestCheckId] = useState<number | null>(null);
   const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
   const [trialBlockModal, setTrialBlockModal] = useState(false);
   const [genderModal, setGenderModal] = useState(false);
@@ -166,6 +169,19 @@ export default function Home() {
       setUser(data.user);
       setShowLoginModal(false);
       toast({ title: "تم تسجيل الدخول", description: `مرحبا ${data.user.name}` });
+      // Phase 1: reveal the full analysis for the guest's last scan without re-upload
+      if (lastGuestCheckId != null) {
+        try {
+          const full = await fetch(`/api/check/${lastGuestCheckId}`, {
+            headers: { Authorization: `Bearer ${data.token}` },
+          });
+          if (full.ok) {
+            const fullData = await full.json();
+            setCheckResult((prev) => (prev ? { ...prev, ...fullData, is_guest: false } : prev));
+          }
+        } catch {}
+        setLastGuestCheckId(null);
+      }
       // Show gender modal if gender not set yet
       if (!data.user.gender) setGenderModal(true);
     } catch {
@@ -261,8 +277,16 @@ export default function Home() {
       const data = await res.json();
       stopCountdown();
       setChecking(false);
-      if (!res.ok) { toast({ title: "خطأ", description: data.error, variant: "destructive" }); return; }
+      if (!res.ok) {
+        if (data?.guest_blocked) {
+          setTrialBlockModal(true);
+          return;
+        }
+        toast({ title: "خطأ", description: data.error, variant: "destructive" });
+        return;
+      }
       setCheckResult(data);
+      if (data.is_guest && typeof data.id === "number") setLastGuestCheckId(data.id);
       if (!user) decrementTrials();
     } catch {
       stopCountdown();
@@ -883,20 +907,20 @@ export default function Home() {
             <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
               <Shield className="w-8 h-8 text-primary" />
             </div>
-            <p className="text-lg font-bold text-foreground leading-relaxed">
-              سادك هكي يا غالي! جربت النظام وشفت الفلاحة.. لو تبي تكمل وتفحص كميات أكبر، سجل الدخول بس.
-            </p>
-            <div className="space-y-3">
-              <div ref={googleBtnModalRef} className="flex justify-center" />
-              <a
-                href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full bg-primary text-primary-foreground py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
-                data-testid="button-modal-subscribe"
-              >
-                اشترك في Smart Fix — {discountActive ? "200" : "400"} د.ل
-              </a>
+             <p className="text-lg font-bold text-foreground leading-relaxed">
+               سادك هكي يا غالي! جربت النظام وشفت الفلاحة.. لو تبي تكمل وتفحص كميات أكبر، سجّل الدخول مجاناً.
+             </p>
+             <div className="space-y-3">
+               <div ref={googleBtnModalRef} className="flex justify-center" />
+               <a
+                 href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 className="block w-full bg-primary text-primary-foreground py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                 data-testid="button-modal-subscribe"
+               >
+                 أنشئ حساباً مجانياً لمتابعة الفحص وكشف التحليل الكامل
+               </a>
               <button
                 onClick={() => setTrialBlockModal(false)}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"

@@ -79,6 +79,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /check/{id}:
+    get:
+      operationId: getCheckById
+      tags: [ads]
+      summary: Get full analysis for a guest check (Phase 1 reveal-after-register)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Full check result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdCheckResult"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Check not found or not a guest check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /generate-text:
     post:
       operationId: generateAdText
@@ -451,11 +482,15 @@ components:
       type: object
       required: [status, reason, score, message]
       properties:
+        id:
+          type: integer
+          description: "Check id (used by guests to reveal full analysis after registering)"
         status:
           type: string
           enum: ["ممتاز", "جيد", "مرفوض"]
         reason:
           type: string
+          description: "Empty string for guests (redacted in Phase 1)"
         score:
           type: number
         message:
@@ -466,10 +501,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdViolation"
+          description: "Empty array for guests (redacted in Phase 1)"
         suggestions:
           type: array
           items:
             type: string
+          description: "Empty array for guests (redacted in Phase 1)"
+        is_guest:
+          type: boolean
+          description: "True when the request was made by an unauthenticated guest"
+        guest_scans_remaining:
+          type: integer
+          description: "Remaining guest scans (Phase 1 cap = 3)"
+        guest_blocked:
+          type: boolean
+          description: "True when the guest scan cap has been reached"
+
+    GuestBlockedError:
+      type: object
+      required: [error, guest_blocked, guest_scans_remaining, is_guest]
+      properties:
+        error:
+          type: string
+        guest_blocked:
+          type: boolean
+        guest_scans_remaining:
+          type: integer
+        is_guest:
+          type: boolean
 
     TextGenInput:
       type: object

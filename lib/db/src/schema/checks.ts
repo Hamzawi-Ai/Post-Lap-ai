@@ -10,6 +10,9 @@ export const checksTable = pgTable("checks", {
   status: checkStatusEnum("status").notNull(),
   reason: text("reason").notNull().default(""),
   score: integer("score").notNull().default(0),
+  // Phase 1 guest tracking: guest scans are counted server-side by IP so the
+  // 3-scan cap cannot be bypassed by clearing localStorage.
+  guest_ip: text("guest_ip"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 

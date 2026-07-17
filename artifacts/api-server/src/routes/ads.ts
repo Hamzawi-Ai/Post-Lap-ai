@@ -185,6 +185,18 @@ async function getUserFromToken(authHeader?: string) {
   }
 }
 
+// Phase 1 guest limits
+const GUEST_MAX_SCANS = 3;
+
+// Count successful guest scans from this IP (server-side cap, cannot be bypassed via localStorage)
+async function countGuestScans(ip: string): Promise<number> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(checksTable)
+    .where(eq(checksTable.guest_ip, ip));
+  return rows[0]?.count ?? 0;
+}
+
 // POST /check — main ad inspection endpoint
 router.post("/check", checkRateLimit, upload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) {
@@ -197,6 +209,23 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
   const isVideo = mimeType === "video/mp4";
 
   const user = await getUserFromToken(req.headers.authorization);
+  const isGuest = !user;
+  const clientIp = req.ip ?? req.socket.remoteAddress ?? "unknown";
+
+  // Phase 1: enforce the 3-scan guest cap BEFORE incurring any OpenAI cost
+  if (isGuest) {
+    const used = await countGuestScans(clientIp);
+    if (used >= GUEST_MAX_SCANS) {
+      res.status(429).json({
+        error: "Create a free account to continue scanning and unlock the full analysis.",
+        guest_blocked: true,
+        guest_scans_remaining: 0,
+        is_guest: true,
+      });
+      return;
+    }
+  }
+
   const plan = (user?.plan ?? "visitor") as Plan;
   const level = planLevel(plan);
   const maxFrames = level >= 2 ? 60 : 11;
@@ -249,14 +278,18 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
 
     const reason = finalResult.violations.map((v) => v.reason).join(". ") || "";
 
-    if (user) {
-      await db.insert(checksTable).values({
-        user_id: user.id,
+    const [inserted] = await db
+      .insert(checksTable)
+      .values({
+        user_id: user?.id ?? null,
         status: finalResult.status,
         reason,
         score: finalResult.score,
-      });
+        guest_ip: isGuest ? clientIp : null,
+      })
+      .returning({ id: checksTable.id });
 
+    if (user) {
       await db
         .update(usersTable)
         .set({
@@ -268,29 +301,88 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
               : usersTable.trials_remaining,
         })
         .where(eq(usersTable.id, user.id));
-    } else {
-      await db.insert(checksTable).values({
-        user_id: null,
-        status: finalResult.status,
-        reason,
-        score: finalResult.score,
-      });
     }
 
-    res.json({
+    // Phase 1: guests only receive Safe/Warning/High-Risk — full analysis is hidden.
+    const guestScansRemaining = isGuest
+      ? Math.max(0, GUEST_MAX_SCANS - (await countGuestScans(clientIp)))
+      : 0;
+
+    const response: Record<string, unknown> = {
+      id: inserted.id,
       status: finalResult.status,
-      reason,
+      reason: isGuest ? "" : reason,
       score: finalResult.score,
       message: messageMap[finalResult.status] ?? finalResult.status,
       frames_checked: framesChecked,
-      violations: finalResult.violations,
-      suggestions: finalResult.suggestions,
-    });
+      violations: isGuest ? [] : finalResult.violations,
+      suggestions: isGuest ? [] : finalResult.suggestions,
+    };
+    if (isGuest) {
+      response.is_guest = true;
+      response.guest_scans_remaining = guestScansRemaining;
+      response.guest_blocked = guestScansRemaining <= 0;
+    }
+
+    res.json(response);
   } catch (err) {
     logger.error({ err }, "Ad check error");
     res.status(500).json({ error: "حدث خطأ أثناء تحليل الإعلان" });
   } finally {
     cleanup(filePath);
+  }
+});
+
+// GET /check/:id — Phase 1 post-register reveal.
+// A guest who registers after a scan can fetch the full analysis for that check
+// without re-uploading. Only unowned (guest) checks are retrievable here, and
+// only by an authenticated user.
+router.get("/check/:id", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول لعرض التحليل الكامل" });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "معرّف الفحص غير صالح" });
+    return;
+  }
+  try {
+    const [row] = await db
+      .select()
+      .from(checksTable)
+      .where(eq(checksTable.id, id))
+      .limit(1);
+    if (!row || row.user_id !== null) {
+      res.status(404).json({ error: "التحليل غير متوفر" });
+      return;
+    }
+    let parsedViolations: Array<{ type: string; reason: string; severity: string }> = [];
+    let parsedSuggestions: string[] = [];
+    if (row.reason) {
+      try {
+        const parsed = JSON.parse(row.reason) as {
+          violations?: Array<{ type: string; reason: string; severity: string }>;
+          suggestions?: string[];
+        };
+        parsedViolations = parsed.violations ?? [];
+        parsedSuggestions = parsed.suggestions ?? [];
+      } catch {
+        // reason stored as plain text in some paths — leave empty
+      }
+    }
+    res.json({
+      id: row.id,
+      status: row.status,
+      reason: row.reason,
+      score: row.score,
+      violations: parsedViolations,
+      suggestions: parsedSuggestions,
+    });
+  } catch (err) {
+    logger.error({ err }, "Check reveal error");
+    res.status(500).json({ error: "حدث خطأ أثناء جلب التحليل" });
   }
 });
 
