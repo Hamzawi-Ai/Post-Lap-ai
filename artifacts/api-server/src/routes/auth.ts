@@ -7,7 +7,7 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
+import { SESSION_SECRET } from "../lib/secrets";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 
 // Verify Google credential and upsert user

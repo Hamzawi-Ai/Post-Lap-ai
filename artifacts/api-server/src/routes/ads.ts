@@ -15,7 +15,7 @@ import { planLevel, type Plan } from "@workspace/db";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router: IRouter = Router();
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
+import { SESSION_SECRET } from "../lib/secrets";
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {

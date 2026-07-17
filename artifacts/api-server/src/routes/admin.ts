@@ -6,8 +6,7 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "admin123";
+import { SESSION_SECRET, ADMIN_PASSWORD } from "../lib/secrets";
 
 function requireAdmin(req: any, res: any, next: any) {
   const authHeader = req.headers.authorization as string | undefined;

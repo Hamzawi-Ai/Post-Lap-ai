@@ -12,7 +12,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
 
 const router: IRouter = Router();
-const SESSION_SECRET = process.env.SESSION_SECRET ?? "dev-secret";
+import { SESSION_SECRET } from "../lib/secrets";
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
