@@ -8,9 +8,9 @@ import { useToast } from "@/hooks/use-toast";
 const ADMIN_TOKEN_KEY = "postlap_admin_token";
 
 const PLAN_OPTIONS = [
-  { label: "Smart Fix — 350 د.ل", value: "smart_fix", plan: "professional" },
-  { label: "إدارة المحتوى — 500 د.ل", value: "content_mgmt", plan: "professional" },
-  { label: "خطة الوكالة — 800 د.ل", value: "agency", plan: "professional" },
+  { label: "Smart Fix — 400 د.ل", value: "smart_fix", plan: "smart_fix" },
+  { label: "إدارة المحتوى — 800 د.ل", value: "content", plan: "content" },
+  { label: "خطة الوكالة — 1000 د.ل", value: "agency", plan: "agency" },
 ];
 
 const DURATION_OPTIONS = [
@@ -46,7 +46,10 @@ interface Stats {
 const PLAN_LABEL: Record<string, string> = {
   visitor: "زائر",
   registered: "مسجل",
-  professional: "احترافي",
+  professional: "Smart Fix",
+  smart_fix: "Smart Fix",
+  content: "إدارة المحتوى",
+  agency: "وكالة",
 };
 
 function expiryBadge(expiresAt: string | null): React.ReactNode {
@@ -121,15 +124,17 @@ export default function Admin() {
     try {
       const res = await fetch("/api/stats", { headers: { Authorization: `Bearer ${t}` } });
       if (res.ok) setStats(await res.json());
-    } catch {}
+    } catch {
+      console.error("Failed to load stats");
+    }
   }
 
   useEffect(() => {
     if (token) { loadUsers(token); loadStats(token); }
   }, [token]);
 
-  function planOptionForLabel(label: string | null): string {
-    const match = PLAN_OPTIONS.find((p) => p.label.startsWith(label ?? ""));
+  function planOptionForPlan(plan: string): string {
+    const match = PLAN_OPTIONS.find((p) => p.plan === plan);
     return match?.value ?? PLAN_OPTIONS[0].value;
   }
 
@@ -234,15 +239,13 @@ export default function Admin() {
 
   function openEdit(u: AdminUser) {
     setEditUser(u);
-    setEditPlanOption(planOptionForLabel(u.subscription_label));
+    setEditPlanOption(planOptionForPlan(u.plan));
     setEditDuration(30);
   }
 
   const filtered = searchFilter
     ? users.filter((u) => u.email.toLowerCase().includes(searchFilter.toLowerCase()) || u.name.toLowerCase().includes(searchFilter.toLowerCase()))
     : users;
-
-  const BASE = 100;
 
   if (!token) {
     return (
@@ -360,10 +363,10 @@ export default function Admin() {
         {/* Stats */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { icon: <BarChart3 className="w-5 h-5 text-primary" />, label: "إجمالي الفحوصات", value: (stats?.total_checks ?? 0) + BASE },
-            { icon: <Users className="w-5 h-5 text-primary" />, label: "إجمالي المستخدمين", value: (stats?.total_users ?? 0) + BASE },
-            { icon: <UserCheck className="w-5 h-5 text-primary" />, label: "مشتركون احترافيون", value: users.filter((u) => u.plan === "professional").length + BASE },
-            { icon: <CheckCircle className="w-5 h-5 text-green-400" />, label: "فحوصات اليوم", value: (stats?.checks_today ?? 0) + BASE },
+            { icon: <BarChart3 className="w-5 h-5 text-primary" />, label: "إجمالي الفحوصات", value: stats?.total_checks ?? 0 },
+            { icon: <Users className="w-5 h-5 text-primary" />, label: "إجمالي المستخدمين", value: stats?.total_users ?? 0 },
+            { icon: <UserCheck className="w-5 h-5 text-primary" />, label: "مشتركون احترافيون", value: users.filter((u) => u.plan === "professional" || u.plan === "smart_fix" || u.plan === "content" || u.plan === "agency").length },
+            { icon: <CheckCircle className="w-5 h-5 text-green-400" />, label: "فحوصات اليوم", value: stats?.checks_today ?? 0 },
           ].map((s) => (
             <div key={s.label} className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-2">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">{s.icon}</div>

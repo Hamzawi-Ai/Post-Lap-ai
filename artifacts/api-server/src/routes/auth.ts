@@ -15,7 +15,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
 router.post("/auth/google", async (req, res): Promise<void> => {
   const { credential } = req.body as { credential?: string };
   if (!credential) {
-    res.status(400).json({ error: "credential required" });
+    res.status(400).json({ error: "رمز الدخول مطلوب" });
     return;
   }
 
@@ -27,7 +27,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
     });
     const payload = ticket.getPayload();
     if (!payload?.email) {
-      res.status(401).json({ error: "Invalid Google token" });
+      res.status(401).json({ error: "رمز Google غير صالح" });
       return;
     }
 
@@ -91,7 +91,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
     });
   } catch (err) {
     logger.error({ err }, "Google auth error");
-    res.status(401).json({ error: "Authentication failed" });
+    res.status(401).json({ error: "فشل تسجيل الدخول" });
   }
 });
 
@@ -99,7 +99,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
 router.get("/users/me", async (req, res): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Not authenticated" });
+    res.status(401).json({ error: "لم تسجل الدخول" });
     return;
   }
 
@@ -113,7 +113,7 @@ router.get("/users/me", async (req, res): Promise<void> => {
       .limit(1);
 
     if (!user) {
-      res.status(401).json({ error: "User not found" });
+      res.status(401).json({ error: "المستخدم غير موجود" });
       return;
     }
 
@@ -129,7 +129,7 @@ router.get("/users/me", async (req, res): Promise<void> => {
       last_check_at: user.last_check_at?.toISOString() ?? null,
     });
   } catch {
-    res.status(401).json({ error: "Invalid token" });
+    res.status(401).json({ error: "رمز الدخول غير صالح" });
   }
 });
 
@@ -137,12 +137,12 @@ router.get("/users/me", async (req, res): Promise<void> => {
 router.patch("/users/me/gender", async (req, res): Promise<void> => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Not authenticated" });
+    res.status(401).json({ error: "لم تسجل الدخول" });
     return;
   }
   const { gender } = req.body as { gender?: string };
   if (!gender || !["male", "female"].includes(gender)) {
-    res.status(400).json({ error: "gender must be male or female" });
+    res.status(400).json({ error: "يجب اختيار ذكر أو أنثى" });
     return;
   }
 
@@ -156,13 +156,13 @@ router.patch("/users/me/gender", async (req, res): Promise<void> => {
       .returning();
 
     if (!user) {
-      res.status(404).json({ error: "User not found" });
+      res.status(404).json({ error: "المستخدم غير موجود" });
       return;
     }
 
     res.json({ gender: user.gender });
   } catch {
-    res.status(401).json({ error: "Invalid token" });
+    res.status(401).json({ error: "رمز الدخول غير صالح" });
   }
 });
 

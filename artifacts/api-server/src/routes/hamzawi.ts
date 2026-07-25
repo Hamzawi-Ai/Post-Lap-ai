@@ -3,6 +3,7 @@ import multer from "multer";
 import { tmpdir } from "os";
 import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 import { planLevel, type Plan } from "@workspace/db";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
@@ -17,6 +18,14 @@ import {
 } from "../services/brand/brain";
 
 const router: IRouter = Router();
+
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "تجاوزت الحد المسموح به للمحادثة. حاول بعد دقيقة." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 import { SESSION_SECRET } from "../lib/secrets";
 
 const uploadMulter = multer({
@@ -226,7 +235,7 @@ function parsePartialSaves(reply: string): {
 // POST /api/hamzawi/chat
 // Supports isInit: true — proactive first message from Hamzawi, no user input needed.
 // Used to auto-start guided onboarding for level 4+ users on chat open.
-router.post("/hamzawi/chat", async (req, res): Promise<void> => {
+router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
   const { message, checkReport, isInit } = req.body as {
     message?: string;
     isInit?: boolean;
@@ -240,7 +249,7 @@ router.post("/hamzawi/chat", async (req, res): Promise<void> => {
 
   // isInit allows generating the first proactive message without a user message
   if (!isInit && !message?.trim()) {
-    res.status(400).json({ error: "message is required" });
+    res.status(400).json({ error: "الرسالة مطلوبة" });
     return;
   }
 

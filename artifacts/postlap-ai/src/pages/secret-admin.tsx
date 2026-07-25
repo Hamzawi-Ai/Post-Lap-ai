@@ -18,13 +18,19 @@ interface AdminUser {
 const PLAN_LABELS: Record<string, string> = {
   visitor: "زائر",
   registered: "مسجل",
-  professional: "احترافي",
+  professional: "Smart Fix",
+  smart_fix: "Smart Fix",
+  content: "إدارة المحتوى",
+  agency: "وكالة",
 };
 
 const PLAN_COLORS: Record<string, string> = {
   visitor: "text-muted-foreground border-border",
   registered: "text-yellow-400 border-yellow-400/40",
   professional: "text-primary border-primary/50",
+  smart_fix: "text-primary border-primary/50",
+  content: "text-green-400 border-green-400/40",
+  agency: "text-purple-400 border-purple-400/40",
 };
 
 export default function SecretAdmin() {
@@ -38,7 +44,7 @@ export default function SecretAdmin() {
   const [search, setSearch] = useState("");
 
   const [byEmailInput, setByEmailInput] = useState("");
-  const [byEmailPlan, setByEmailPlan] = useState<"visitor" | "registered" | "professional">("professional");
+  const [byEmailPlan, setByEmailPlan] = useState("smart_fix");
   const [byEmailLoading, setByEmailLoading] = useState(false);
 
   async function login() {
@@ -212,7 +218,10 @@ export default function SecretAdmin() {
               onChange={(e) => setByEmailPlan(e.target.value as any)}
               className="bg-background border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
-              <option value="professional">احترافي (مدفوع)</option>
+              <option value="agency">وكالة</option>
+              <option value="content">إدارة المحتوى</option>
+              <option value="smart_fix">Smart Fix</option>
+              <option value="professional">Smart Fix (قديم)</option>
               <option value="registered">مسجل</option>
               <option value="visitor">زائر</option>
             </select>
@@ -284,9 +293,12 @@ export default function SecretAdmin() {
                       onChange={(e) => upgradePlan(u.id, e.target.value)}
                       className="bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
                     >
-                      <option value="visitor">زائر</option>
+                      <option value="agency">وكالة</option>
+                      <option value="content">إدارة المحتوى</option>
+                      <option value="smart_fix">Smart Fix</option>
+                      <option value="professional">Smart Fix (قديم)</option>
                       <option value="registered">مسجل</option>
-                      <option value="professional">احترافي</option>
+                      <option value="visitor">زائر</option>
                     </select>
                     <button
                       onClick={() => toggleActive(u.id, u.email, !u.is_active)}
@@ -297,6 +309,44 @@ export default function SecretAdmin() {
                       }`}
                     >
                       {u.is_active ? <><XCircle className="w-3 h-3" /> تعطيل</> : <><CheckCircle className="w-3 h-3" /> تفعيل</>}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!token) return;
+                        try {
+                          await fetch(`/api/admin/users/${u.id}/unlimited`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${token}` },
+                          });
+                          toast({ title: "✅ تم منح استخدام غير محدود", description: u.email });
+                          fetchUsers();
+                        } catch {
+                          toast({ title: "خطأ", variant: "destructive" });
+                        }
+                      }}
+                      className="text-xs px-2 py-1 rounded-lg border border-purple-400/30 text-purple-400 hover:bg-purple-400/10 transition-colors"
+                      title={u.trials_remaining >= 99999 ? "استخدام غير محدود" : "منح استخدام غير محدود"}
+                    >
+                      ∞
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!token) return;
+                        try {
+                          await fetch(`/api/admin/users/${u.id}/reset-limits`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${token}` },
+                          });
+                          toast({ title: "✅ تم إعادة تعيين الحدود اليومية", description: u.email });
+                          fetchUsers();
+                        } catch {
+                          toast({ title: "خطأ", variant: "destructive" });
+                        }
+                      }}
+                      className="text-xs px-2 py-1 rounded-lg border border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10 transition-colors"
+                      title="إعادة تعيين الحدود اليومية"
+                    >
+                      ↻
                     </button>
                   </div>
                 </div>

@@ -4,6 +4,7 @@ import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Download, RefreshC
 const LANG_KEY = "postlap_lang";
 const SESSION_OPENED_KEY = "hamzawi_opened";
 const TOKEN_KEY = "postlap_token";
+const USER_KEY = "postlap_user";
 
 function detectLanguage(): "ar" | "en" {
   const stored = localStorage.getItem(LANG_KEY);
@@ -218,7 +219,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         }));
         if (msgs.length > 0) setMessages(msgs);
       }
-    } catch {}
+    } catch {
+      console.error("Failed to load chat history");
+    }
   }, [historyLoaded]);
 
   // Auto-open: only fire immediately when there is no inline hero; otherwise wait for hero to scroll away
@@ -292,7 +295,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                 return;
               }
             }
-          } catch {}
+          } catch {
+            console.error("Failed to init chat onboarding");
+          }
           // Fallback: remove placeholder and show static welcome
           setMessages((prev) => {
             const withoutPlaceholder = prev.filter((m) => m.text !== "...");
@@ -361,7 +366,11 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         body: JSON.stringify({ message: msgText, checkReport: checkReport ?? null }),
       });
 
-      if (res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(USER_KEY);
+        addHamzawi(lang === "ar" ? "انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى." : "Session expired. Please log in again.");
+      } else if (res.ok) {
         const data = await res.json();
         addHamzawi(data.reply);
       } else {

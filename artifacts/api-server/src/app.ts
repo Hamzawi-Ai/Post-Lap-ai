@@ -39,7 +39,23 @@ app.use(
     },
   }),
 );
-app.use(cors());
+const allowedOrigins = [
+  "https://postlapai.com",
+  "https://www.postlapai.com",
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || !process.env.NODE_ENV || process.env.NODE_ENV !== "production") {
+      callback(null, true);
+      return;
+    }
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

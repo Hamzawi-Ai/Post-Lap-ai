@@ -2,9 +2,18 @@ import { Router, type IRouter } from "express";
 import jwt from "jsonwebtoken";
 import { db, usersTable, checksTable } from "@workspace/db";
 import { count, eq, gte } from "drizzle-orm";
+import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+const adminLoginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: "محاولات دخول كثيرة. حاول بعد دقيقة." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 import { SESSION_SECRET, ADMIN_PASSWORD } from "../lib/secrets";
 
@@ -51,7 +60,7 @@ function expiryFromDays(days: number): Date {
 }
 
 // Admin login
-router.post("/admin/login", async (req, res): Promise<void> => {
+router.post("/admin/login", adminLoginLimiter, async (req, res): Promise<void> => {
   const { password } = req.body as { password?: string };
   if (password !== ADMIN_PASSWORD) {
     res.status(401).json({ error: "كلمة السر غلط" });
@@ -199,17 +208,18 @@ router.patch("/admin/activate", requireAdmin, async (req, res): Promise<void> =>
 });
 
 // Set plan by email (owner tool)
+const VALID_PLANS = ["visitor", "registered", "professional", "smart_fix", "content", "agency"];
 router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise<void> => {
   const { email, plan } = req.body as { email?: string; plan?: string };
 
-  if (!email || !plan || !["visitor", "registered", "professional"].includes(plan)) {
+  if (!email || !plan || !VALID_PLANS.includes(plan)) {
     res.status(400).json({ error: "email and valid plan required" });
     return;
   }
 
   const [user] = await db
     .update(usersTable)
-    .set({ plan: plan as "visitor" | "registered" | "professional" })
+    .set({ plan: plan as typeof usersTable.$inferInsert["plan"] })
     .where(eq(usersTable.email, email))
     .returning();
 
@@ -219,6 +229,46 @@ router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise
   }
 
   logger.info({ email, plan }, "User plan set by email via owner panel");
+  res.json(formatUser(user));
+});
+
+// Grant unlimited usage to a user
+router.post("/admin/users/:id/unlimited", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ trials_remaining: 99999 })
+    .where(eq(usersTable.id, id))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: "المستخدم غير موجود" });
+    return;
+  }
+
+  logger.info({ userId: id }, "Unlimited usage granted by admin");
+  res.json(formatUser(user));
+});
+
+// Reset daily limits (restore default trials)
+router.post("/admin/users/:id/reset-limits", requireAdmin, async (req, res): Promise<void> => {
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const [user] = await db
+    .update(usersTable)
+    .set({ trials_remaining: 10 })
+    .where(eq(usersTable.id, id))
+    .returning();
+
+  if (!user) {
+    res.status(404).json({ error: "المستخدم غير موجود" });
+    return;
+  }
+
+  logger.info({ userId: id }, "Daily limits reset by admin");
   res.json(formatUser(user));
 });
 

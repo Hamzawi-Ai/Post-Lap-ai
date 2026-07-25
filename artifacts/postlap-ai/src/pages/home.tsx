@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
 import { useLanguage } from "@/lib/useLanguage";
 import { ui } from "@/lib/i18n";
+import { handleAuthError as authError, clearAuth as clearAuthState } from "@/lib/utils";
 
 const TRIALS_KEY = "postlap_trials";
 const MAX_VISITOR_TRIALS = 3;
@@ -50,11 +51,8 @@ function planLevelFrontend(plan: string): number {
   return levels[plan] ?? 1;
 }
 
-// Discount active if month is May (4) or June (5) — May 2026 = month index 4
 function isDiscountActive(): boolean {
-  const m = new Date().getMonth();
-  const y = new Date().getFullYear();
-  return (m === 4 || m === 5) && y === 2026;
+  return false;
 }
 
 export default function Home() {
@@ -179,17 +177,21 @@ export default function Home() {
     const token = getToken();
     if (!token) return;
     try {
-      await fetch("/api/users/me/gender", {
+      const res = await fetch("/api/users/me/gender", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ gender: g }),
       });
+      if (authError(res)) { logout(); return; }
+      if (!res.ok) return;
       if (user) {
         const updated = { ...user, gender: g };
         localStorage.setItem(USER_KEY, JSON.stringify(updated));
         setUser(updated);
       }
-    } catch {}
+    } catch {
+      console.error("Failed to save gender");
+    }
   }
 
   function logout() {
@@ -692,9 +694,9 @@ export default function Home() {
         {stats && (
           <section className="grid grid-cols-3 gap-3 sm:gap-4">
             {[
-              { label: "إجمالي الفحوصات", value: stats.total_checks + 100 },
-              { label: "المستخدمون", value: stats.total_users + 100 },
-              { label: "فحوصات اليوم", value: stats.checks_today + 100 },
+              { label: "إجمالي الفحوصات", value: stats.total_checks },
+              { label: "المستخدمون", value: stats.total_users },
+              { label: "فحوصات اليوم", value: stats.checks_today },
             ].map((s) => (
               <div key={s.label} className="bg-card border border-border rounded-2xl p-4 sm:p-5 text-center">
                 <p className="text-2xl sm:text-3xl font-black text-primary">{s.value.toLocaleString("ar")}</p>
@@ -870,8 +872,8 @@ export default function Home() {
               <p className="text-sm text-muted-foreground mt-1">أداة فحص الإعلانات بالذكاء الاصطناعي للمنصات الإعلانية</p>
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <a href="#" className="hover:text-foreground transition-colors">سياسة الخصوصية</a>
-              <a href="#" className="hover:text-foreground transition-colors">الشروط والأحكام</a>
+              <a href="/privacy" className="hover:text-foreground transition-colors">سياسة الخصوصية</a>
+              <a href="/terms" className="hover:text-foreground transition-colors">الشروط والأحكام</a>
               <a href={`https://wa.me/${whatsapp}`} target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">تواصل معنا</a>
             </div>
           </div>

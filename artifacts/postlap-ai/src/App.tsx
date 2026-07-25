@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import Admin from "@/pages/admin";
 import SecretAdmin from "@/pages/secret-admin";
+import Privacy from "@/pages/privacy";
+import Terms from "@/pages/terms";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -13,6 +15,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route path="/khtfa-secure-portal" component={Admin} />
       <Route path="/dashboard-admin-access" component={SecretAdmin} />
       <Route component={NotFound} />
