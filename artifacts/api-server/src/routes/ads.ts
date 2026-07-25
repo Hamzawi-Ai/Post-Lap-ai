@@ -1,38 +1,21 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
-import { createWriteStream, unlinkSync, existsSync, mkdirSync } from "fs";
+import { unlinkSync, existsSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
-import OpenAI from "openai";
-import { GoogleGenAI } from "@google/genai";
 import { db, usersTable, checksTable, userBrandMemoryTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
-import jwt from "jsonwebtoken";
 import { planLevel, type Plan } from "@workspace/db";
+import { getUserFromToken } from "../middleware/auth";
+import { getOpenAI, getGemini, isGeminiAvailable } from "../services/ai/client";
+import type OpenAI from "openai";
+import { buildGeminiBrandContext } from "../services/brand/brain";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const router: IRouter = Router();
-import { SESSION_SECRET } from "../lib/secrets";
-
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return _openai;
-}
-
-let _gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  if (!_gemini) {
-    const key = process.env.GEMINI_API_KEY ?? process.env.NANO_BANANA_API_KEY ?? "";
-    _gemini = new GoogleGenAI({ apiKey: key });
-  }
-  return _gemini;
-}
 
 // Rate limiter: 10 requests per minute per IP
 const checkRateLimit = rateLimit({
@@ -168,35 +151,6 @@ async function checkImage(base64: string, mimeType = "image/jpeg"): Promise<Chec
   }
 }
 
-async function getUserFromToken(authHeader?: string) {
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  try {
-    const token = authHeader.slice(7);
-    const decoded = jwt.verify(token, SESSION_SECRET) as { userId?: number; role?: string };
-    if (!decoded.userId) return null;
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, decoded.userId))
-      .limit(1);
-    return user ?? null;
-  } catch {
-    return null;
-  }
-}
-
-// Phase 1 guest limits
-const GUEST_MAX_SCANS = 3;
-
-// Count successful guest scans from this IP (server-side cap, cannot be bypassed via localStorage)
-async function countGuestScans(ip: string): Promise<number> {
-  const rows = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(checksTable)
-    .where(eq(checksTable.guest_ip, ip));
-  return rows[0]?.count ?? 0;
-}
-
 // POST /check — main ad inspection endpoint
 router.post("/check", checkRateLimit, upload.single("file"), async (req, res): Promise<void> => {
   if (!req.file) {
@@ -210,21 +164,6 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
 
   const user = await getUserFromToken(req.headers.authorization);
   const isGuest = !user;
-  const clientIp = req.ip ?? req.socket.remoteAddress ?? "unknown";
-
-  // Phase 1: enforce the 3-scan guest cap BEFORE incurring any OpenAI cost
-  if (isGuest) {
-    const used = await countGuestScans(clientIp);
-    if (used >= GUEST_MAX_SCANS) {
-      res.status(429).json({
-        error: "Create a free account to continue scanning and unlock the full analysis.",
-        guest_blocked: true,
-        guest_scans_remaining: 0,
-        is_guest: true,
-      });
-      return;
-    }
-  }
 
   const plan = (user?.plan ?? "visitor") as Plan;
   const level = planLevel(plan);
@@ -285,7 +224,6 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
         status: finalResult.status,
         reason,
         score: finalResult.score,
-        guest_ip: isGuest ? clientIp : null,
       })
       .returning({ id: checksTable.id });
 
@@ -303,11 +241,7 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
         .where(eq(usersTable.id, user.id));
     }
 
-    // Phase 1: guests only receive Safe/Warning/High-Risk — full analysis is hidden.
-    const guestScansRemaining = isGuest
-      ? Math.max(0, GUEST_MAX_SCANS - (await countGuestScans(clientIp)))
-      : 0;
-
+    // Guests only receive Safe/Warning/High-Risk — full analysis is hidden.
     const response: Record<string, unknown> = {
       id: inserted.id,
       status: finalResult.status,
@@ -318,11 +252,6 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
       violations: isGuest ? [] : finalResult.violations,
       suggestions: isGuest ? [] : finalResult.suggestions,
     };
-    if (isGuest) {
-      response.is_guest = true;
-      response.guest_scans_remaining = guestScansRemaining;
-      response.guest_blocked = guestScansRemaining <= 0;
-    }
 
     res.json(response);
   } catch (err) {
@@ -330,59 +259,6 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
     res.status(500).json({ error: "حدث خطأ أثناء تحليل الإعلان" });
   } finally {
     cleanup(filePath);
-  }
-});
-
-// GET /check/:id — Phase 1 post-register reveal.
-// A guest who registers after a scan can fetch the full analysis for that check
-// without re-uploading. Only unowned (guest) checks are retrievable here, and
-// only by an authenticated user.
-router.get("/check/:id", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
-  if (!user) {
-    res.status(401).json({ error: "يجب تسجيل الدخول لعرض التحليل الكامل" });
-    return;
-  }
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    res.status(400).json({ error: "معرّف الفحص غير صالح" });
-    return;
-  }
-  try {
-    const [row] = await db
-      .select()
-      .from(checksTable)
-      .where(eq(checksTable.id, id))
-      .limit(1);
-    if (!row || row.user_id !== null) {
-      res.status(404).json({ error: "التحليل غير متوفر" });
-      return;
-    }
-    let parsedViolations: Array<{ type: string; reason: string; severity: string }> = [];
-    let parsedSuggestions: string[] = [];
-    if (row.reason) {
-      try {
-        const parsed = JSON.parse(row.reason) as {
-          violations?: Array<{ type: string; reason: string; severity: string }>;
-          suggestions?: string[];
-        };
-        parsedViolations = parsed.violations ?? [];
-        parsedSuggestions = parsed.suggestions ?? [];
-      } catch {
-        // reason stored as plain text in some paths — leave empty
-      }
-    }
-    res.json({
-      id: row.id,
-      status: row.status,
-      reason: row.reason,
-      score: row.score,
-      violations: parsedViolations,
-      suggestions: parsedSuggestions,
-    });
-  } catch (err) {
-    logger.error({ err }, "Check reveal error");
-    res.status(500).json({ error: "حدث خطأ أثناء جلب التحليل" });
   }
 });
 
@@ -475,7 +351,7 @@ router.post("/image-gen", async (req, res): Promise<void> => {
     regenerateNote?: string;
   };
 
-  if (!process.env.GEMINI_API_KEY && !process.env.NANO_BANANA_API_KEY) {
+  if (!isGeminiAvailable()) {
     res.status(503).json({ error: "خدمة توليد الصور غير متاحة حالياً" });
     return;
   }
@@ -496,16 +372,13 @@ router.post("/image-gen", async (req, res): Promise<void> => {
     }
 
     try {
-      const memory = await db
+      const [memory] = await db
         .select()
         .from(userBrandMemoryTable)
         .where(eq(userBrandMemoryTable.user_id, user.id))
-        .limit(1)
-        .then((r) => r[0] ?? null);
+        .limit(1);
 
-      const brandContext = memory?.business_name
-        ? `Brand identity:\n- Business name: ${memory.business_name}\n- Business type: ${memory.business_type ?? "unspecified"}\n- Brand colors: ${memory.primary_colors ?? "professional defaults"}\n- Design style: ${memory.preferred_style ?? "professional and clean"}\n- Notes: ${memory.notes ?? "none"}`
-        : "No brand identity saved — use professional defaults with a clean modern style.";
+      const brandContext = buildGeminiBrandContext(memory ?? null);
 
       let basePrompt = `Create a professional social media advertisement image for Meta (Facebook/Instagram) that is fully compliant with Meta advertising policies.\n\n${brandContext}\n\nProduct/Service: ${productDescription}\n\nRequirements:\n- Professional design matching the brand identity\n- Clean layout with brand colors and style\n- Visually appealing composition for social media\n- No text overlays exceeding 20% of the image\n- No misleading claims or before/after comparisons\n- High quality, scroll-stopping visual`;
       if (regenerateNote) basePrompt += `\n\nAdditional note: ${regenerateNote}`;

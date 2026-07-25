@@ -30,6 +30,7 @@ export const userBrandMemoryTable = pgTable("user_brand_memory", {
     .notNull()
     .unique()
     .references(() => usersTable.id, { onDelete: "cascade" }),
+  company_id: integer("company_id"),
   business_name: text("business_name"),
   business_type: text("business_type"),
   address: text("address"),

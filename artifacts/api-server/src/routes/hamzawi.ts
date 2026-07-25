@@ -4,32 +4,20 @@ import { tmpdir } from "os";
 import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import jwt from "jsonwebtoken";
-import OpenAI from "openai";
-import { GoogleGenAI } from "@google/genai";
 import { planLevel, type Plan } from "@workspace/db";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
+import { getUserFromToken } from "../middleware/auth";
+import { getOpenAI } from "../services/ai/client";
+import {
+  applyPartialBrandSave,
+  markBrandOnboardingComplete,
+  buildBrandMemoryBlock,
+  upsertBrandMemory,
+} from "../services/brand/brain";
 
 const router: IRouter = Router();
 import { SESSION_SECRET } from "../lib/secrets";
-
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return _openai;
-}
-
-let _gemini: GoogleGenAI | null = null;
-function getGemini(): GoogleGenAI {
-  if (!_gemini) {
-    const key = process.env.GEMINI_API_KEY ?? process.env.NANO_BANANA_API_KEY ?? "";
-    _gemini = new GoogleGenAI({ apiKey: key });
-  }
-  return _gemini;
-}
 
 const uploadMulter = multer({
   dest: tmpdir(),
@@ -88,23 +76,6 @@ function setSessionCookie(res: { setHeader: (k: string, v: string) => void }, si
     "Set-Cookie",
     `hamzawi_session=${encodeURIComponent(signed)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
   );
-}
-
-async function getUserFromToken(authHeader?: string) {
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  try {
-    const token = authHeader.slice(7);
-    const decoded = jwt.verify(token, SESSION_SECRET) as { userId?: number };
-    if (!decoded.userId) return null;
-    const [user] = await db
-      .select()
-      .from(usersTable)
-      .where(eq(usersTable.id, decoded.userId))
-      .limit(1);
-    return user ?? null;
-  } catch {
-    return null;
-  }
 }
 
 interface BrandMemoryData {
@@ -194,24 +165,7 @@ function buildSystemPrompt(
     5: "Agency (المستوى 5/5) — وكالة: كامل الصلاحيات. يدعم أنشطة تجارية متعددة. يمكنه إدارة هويات بصرية متعددة",
   };
 
-  let memoryBlock = "";
-  if (memory?.business_name) {
-    const sampleCount = memory.design_samples
-      ? (() => { try { return (JSON.parse(memory.design_samples) as unknown[]).length; } catch { return 0; } })()
-      : 0;
-    memoryBlock = `
-معلومات النشاط التجاري المحفوظة لهذا المستخدم:
-- اسم النشاط: ${memory.business_name}
-- نوع النشاط: ${memory.business_type ?? "غير محدد"}
-- العنوان: ${memory.address ?? "غير محدد"}
-- الهاتف: ${memory.phone ?? "غير محدد"}
-- الألوان: ${memory.primary_colors ?? "غير محدد"}
-- الأسلوب المفضل: ${memory.preferred_style ?? "غير محدد"}
-- ملاحظات: ${memory.notes ?? "لا يوجد"}
-${memory.logo_url ? "- الشعار: محفوظ ✓" : "- الشعار: لم يُرفع بعد"}
-${sampleCount > 0 ? `- نماذج تصاميم سابقة: ${sampleCount} مرفوعة ✓` : "- نماذج تصاميم سابقة: لا يوجد"}
-`;
-  }
+  const memoryBlock = buildBrandMemoryBlock(memory);
 
   const funnelInstruction = isOnboarding ? "" : getFunnelInstruction(level);
   const onboardingInstruction = isOnboarding ? getOnboardingInstruction() : "";
@@ -267,23 +221,6 @@ function parsePartialSaves(reply: string): {
   cleanedReply = cleanedReply.replace(/%%ONBOARDING_COMPLETE%%/g, "").trim();
 
   return { cleanedReply, partialData, isOnboardingComplete };
-}
-
-async function upsertBrandMemory(userId: number, fields: Partial<BrandMemoryData>) {
-  const existing = await db
-    .select()
-    .from(userBrandMemoryTable)
-    .where(eq(userBrandMemoryTable.user_id, userId))
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .update(userBrandMemoryTable)
-      .set({ ...fields, updated_at: new Date() })
-      .where(eq(userBrandMemoryTable.user_id, userId));
-  } else {
-    await db.insert(userBrandMemoryTable).values({ user_id: userId, ...fields });
-  }
 }
 
 // POST /api/hamzawi/chat
@@ -401,34 +338,19 @@ router.post("/hamzawi/chat", async (req, res): Promise<void> => {
     // Parse partial saves and onboarding completion markers
     const { cleanedReply, partialData, isOnboardingComplete } = parsePartialSaves(rawReply);
 
-    // Apply partial field saves incrementally — works both during onboarding AND post-onboarding
-    // (for "حدّث بياناتي" conversational updates). Whitelist fields for safety.
-    const ALLOWED_PARTIAL_FIELDS = new Set([
-      "business_name", "business_type", "address", "phone",
-      "primary_colors", "preferred_style", "notes",
-    ]);
+    // Apply partial field saves incrementally — both during onboarding AND post-onboarding
     if (user && partialData.length > 0) {
-      const mergedFields: Partial<BrandMemoryData> = {};
-      for (const chunk of partialData) {
-        for (const [k, v] of Object.entries(chunk)) {
-          if (ALLOWED_PARTIAL_FIELDS.has(k)) {
-            (mergedFields as Record<string, unknown>)[k] = v;
-          }
-        }
-      }
-      if (Object.keys(mergedFields).length > 0) {
-        try {
-          await upsertBrandMemory(user.id, mergedFields);
-        } catch (e) {
-          logger.error({ e }, "Failed to save partial brand data");
-        }
+      try {
+        await applyPartialBrandSave(user.id, partialData);
+      } catch (e) {
+        logger.error({ e }, "Failed to save partial brand data");
       }
     }
 
     // Mark onboarding as complete
     if (user && isOnboardingComplete) {
       try {
-        await upsertBrandMemory(user.id, { brand_onboarded: true });
+        await markBrandOnboardingComplete(user.id);
       } catch (e) {
         logger.error({ e }, "Failed to mark onboarding complete");
       }
@@ -551,26 +473,7 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
   };
 
   try {
-    // If appending a design sample, fetch existing samples and merge
-    let design_samples_value: string | undefined;
-    if (append_design_sample) {
-      const existing = await db
-        .select({ design_samples: userBrandMemoryTable.design_samples })
-        .from(userBrandMemoryTable)
-        .where(eq(userBrandMemoryTable.user_id, user.id))
-        .limit(1)
-        .then((r) => r[0]?.design_samples ?? null);
-
-      let arr: string[] = [];
-      if (existing) {
-        try { arr = JSON.parse(existing) as string[]; } catch { arr = []; }
-      }
-      // Keep max 5 design samples (avoid unbounded DB growth)
-      arr = [...arr, append_design_sample].slice(-5);
-      design_samples_value = JSON.stringify(arr);
-    }
-
-    const payload: Partial<BrandMemoryData> & { updated_at?: Date } = {
+    const payload: Record<string, unknown> = {
       business_name,
       business_type,
       address,
@@ -580,11 +483,14 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
       preferred_style,
       notes,
       ...(brand_onboarded !== undefined ? { brand_onboarded } : {}),
-      ...(design_samples_value !== undefined ? { design_samples: design_samples_value } : {}),
-      updated_at: new Date(),
     };
 
-    await upsertBrandMemory(user.id, payload);
+    // Remove undefined values
+    for (const key of Object.keys(payload)) {
+      if (payload[key] === undefined) delete payload[key];
+    }
+
+    await upsertBrandMemory(user.id, payload as Parameters<typeof upsertBrandMemory>[1]);
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "Hamzawi update memory error");

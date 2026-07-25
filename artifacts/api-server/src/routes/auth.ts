@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { autoCreateCompanyForUser } from "../services/brand/brain";
 
 const router: IRouter = Router();
 
@@ -51,6 +52,8 @@ router.post("/auth/google", async (req, res): Promise<void> => {
           total_checks: 0,
         })
         .returning();
+
+      await autoCreateCompanyForUser(user.id, payload.name ?? "");
     }
 
     // Reset daily trials if needed
