@@ -427,7 +427,7 @@ router.post("/image-gen", async (req, res): Promise<void> => {
 
       const gemini = getGemini();
       const result = await gemini.models.generateContent({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-2.5-flash-image",
         contents: [{ role: "user", parts }],
         config: { responseModalities: ["IMAGE", "TEXT"] },
       });
@@ -469,7 +469,7 @@ router.post("/image-gen", async (req, res): Promise<void> => {
 
     const gemini = getGemini();
     const result = await gemini.models.generateContent({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-2.5-flash-image",
       contents: [
         {
           role: "user",
