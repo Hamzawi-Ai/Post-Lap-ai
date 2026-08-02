@@ -4,9 +4,69 @@ import { GoogleGenAI } from "@google/genai";
 let _openai: OpenAI | null = null;
 let _gemini: GoogleGenAI | null = null;
 
+const isProduction = process.env.NODE_ENV === "production";
+
+/**
+ * DEV-ONLY stub used when NODE_ENV !== "production" and no OPENAI_API_KEY is
+ * configured. Lets the full pipeline (upload → analysis → response) be tested
+ * without burning API credits. Production is untouched: without a real key the
+ * real OpenAI client is created and requests fail as before.
+ */
+function devStubOpenAI(): OpenAI {
+  const contentFrom = (
+    messages: Array<{ content?: unknown }>,
+  ): string =>
+    messages
+      .map((m) =>
+        typeof m.content === "string"
+          ? m.content
+          : JSON.stringify(m.content ?? ""),
+      )
+      .join("\n");
+
+  return {
+    chat: {
+      completions: {
+        create: async (params: { messages: Array<{ content?: unknown }> }) => {
+          const prompt = contentFrom(params.messages);
+          let content: string;
+          if (prompt.includes("رد فقط بـ JSON")) {
+            content = JSON.stringify({
+              status: "جيد",
+              score: 82,
+              violations: [
+                {
+                  type: "نسبة النص",
+                  reason: "مساحة النص قريبة من الحد المسموح (20%).",
+                  severity: "low",
+                },
+              ],
+              suggestions: [
+                "قلّل مساحة النص داخل الصورة لتظل تحت 20%.",
+                "استخدم ألواناً أوضح للنص لزيادة التباين.",
+              ],
+            });
+          } else if (prompt.includes("أنت حمزاوي")) {
+            content = "أهلاً بك! أنا حمزاوي، مساعدك الإعلاني. اطلب مني تحليل إعلانك أو اكتب سؤالك وسأجيبك مباشرة.";
+          } else if (prompt.includes("اكتب نص إعلاني") || prompt.includes("بناءً على صورة المنتج")) {
+            content = "إعلانك جاهز ✨\n\nمنتجك يستحق أن يراه الجميع — جودة مميزة، خدمة موثوقة، وسعر مناسب. اطلب اليوم وتوصيل سريع لجميع المدن. 📦🔥";
+          } else {
+            content = "هذه استجابة تجريبية من وضع التطوير.";
+          }
+          return { choices: [{ message: { content } }] };
+        },
+      },
+    },
+  } as unknown as OpenAI;
+}
+
 export function getOpenAI(): OpenAI {
   if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    if (!isProduction && !process.env.OPENAI_API_KEY) {
+      _openai = devStubOpenAI();
+    } else {
+      _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
   }
   return _openai;
 }

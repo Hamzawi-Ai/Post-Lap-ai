@@ -313,6 +313,7 @@ export default function SecretAdmin() {
                     <button
                       onClick={async () => {
                         if (!token) return;
+                        if (!window.confirm(`منح استخدام غير محدود لـ ${u.email}؟`)) return;
                         try {
                           await fetch(`/api/admin/users/${u.id}/unlimited`, {
                             method: "POST",
@@ -332,6 +333,7 @@ export default function SecretAdmin() {
                     <button
                       onClick={async () => {
                         if (!token) return;
+                        if (!window.confirm(`إعادة تعيين الحدود اليومية لـ ${u.email}؟`)) return;
                         try {
                           await fetch(`/api/admin/users/${u.id}/reset-limits`, {
                             method: "POST",

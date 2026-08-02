@@ -194,6 +194,7 @@ export default function Admin() {
 
   async function deleteUser(id: number) {
     if (!token) return;
+    if (!window.confirm("هل أنت متأكد من حذف هذا المستخدم؟ لا يمكن التراجع عن هذا الإجراء.")) return;
     setDeletingId(id);
     try {
       const res = await fetch(`/api/admin/users/${id}`, {

@@ -95,6 +95,62 @@ router.post("/auth/google", async (req, res): Promise<void> => {
   }
 });
 
+// DEV-ONLY login bypass. Never mounted in production — returns 404.
+// Lets the full authenticated flow be tested without Google OAuth.
+router.post("/dev/login", async (_req, res): Promise<void> => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  try {
+    const email = "dev@test.local";
+    const [existing] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.email, email))
+      .limit(1);
+
+    let user = existing;
+    if (!user) {
+      [user] = await db
+        .insert(usersTable)
+        .values({
+          email,
+          name: "Dev Tester",
+          plan: "agency",
+          is_active: true,
+          trials_remaining: 99999,
+          total_checks: 0,
+        })
+        .returning();
+      await autoCreateCompanyForUser(user.id, user.name);
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, SESSION_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        plan: user.plan,
+        gender: user.gender ?? null,
+        is_active: user.is_active,
+        trials_remaining: user.trials_remaining,
+        total_checks: user.total_checks,
+        last_check_at: user.last_check_at?.toISOString() ?? null,
+      },
+      token,
+    });
+  } catch (err) {
+    logger.error({ err }, "Dev login error");
+    res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
 // Get current user from JWT
 router.get("/users/me", async (req, res): Promise<void> => {
   const authHeader = req.headers.authorization;

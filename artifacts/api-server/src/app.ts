@@ -43,19 +43,37 @@ const allowedOrigins = [
   "https://postlapai.com",
   "https://www.postlapai.com",
 ];
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || !process.env.NODE_ENV || process.env.NODE_ENV !== "production") {
-      callback(null, true);
-      return;
+const extraOrigins = (process.env.CORS_ORIGINS ?? "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+app.use((req, res, next) => {
+  const requestHost = (req.headers.host ?? "").toLowerCase();
+  const isSameOrigin = (origin: string): boolean => {
+    try {
+      return new URL(origin).host === requestHost;
+    } catch {
+      return false;
     }
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-}));
+  };
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || !process.env.NODE_ENV || process.env.NODE_ENV !== "production") {
+        callback(null, true);
+        return;
+      }
+      if (
+        allowedOrigins.includes(origin) ||
+        extraOrigins.includes(origin) ||
+        isSameOrigin(origin)
+      ) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+  })(req, res, next);
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
