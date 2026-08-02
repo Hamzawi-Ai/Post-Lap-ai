@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine, Send } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine, Image as ImageIcon, Download } from "lucide-react";
 import { useGetConfig, useGetStats, getGetConfigQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
@@ -63,10 +63,8 @@ export default function Home() {
   const t = ui[lang];
 
   const [user, setUser] = useState<LocalUser | null>(getStoredUser);
-  const [heroVisible, setHeroVisible] = useState(true);
-  const heroRef = useRef<HTMLDivElement>(null);
   const heroFileInputRef = useRef<HTMLInputElement>(null);
-  const [chatForceOpen, setChatForceOpen] = useState(0);
+  const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [checking, setChecking] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -81,6 +79,10 @@ export default function Home() {
   const [cookieConsent, setCookieConsent] = useState(() => !!localStorage.getItem(COOKIE_KEY));
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [textLoading, setTextLoading] = useState(false);
+  const [imageProduct, setImageProduct] = useState("");
+  const [imageProductName, setImageProductName] = useState("");
+  const [imageGenLoading, setImageGenLoading] = useState(false);
+  const [imageGenResult, setImageGenResult] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleBtnModalRef = useRef<HTMLDivElement>(null);
@@ -89,27 +91,10 @@ export default function Home() {
   const gender = (user?.gender ?? localStorage.getItem(GENDER_KEY) ?? null) as "male" | "female" | null;
   const discountActive = isDiscountActive();
 
-  // IntersectionObserver: track when hero Hamzawi section scrolls out of view
-  useEffect(() => {
-    const el = heroRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => setHeroVisible(entry.isIntersecting),
-      { threshold: 0.1 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  function handleHeroInteraction() {
-    setChatForceOpen((n) => n + 1);
-  }
-
   function handleHeroFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    handleHeroInteraction();
     handleFile(file);
   }
 
@@ -149,6 +134,22 @@ export default function Home() {
       });
     }
   }, [showLoginModal, googleBtnLoginModalRef.current]);
+
+  useEffect(() => {
+    if (!trialBlockModal) return;
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!googleClientId) return;
+    if (!window.google?.accounts?.id) return;
+    window.google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleCredential,
+    });
+    if (googleBtnModalRef.current) {
+      window.google.accounts.id.renderButton(googleBtnModalRef.current, {
+        theme: "outline", size: "large", text: "signin_with", locale: "ar",
+      });
+    }
+  }, [trialBlockModal, googleBtnModalRef.current]);
 
   async function handleGoogleCredential(response: any) {
     try {
@@ -263,6 +264,7 @@ export default function Home() {
       const data = await res.json();
       stopCountdown();
       setChecking(false);
+      if (res.status === 401) { logout(); toast({ title: "انتهت الجلسة", variant: "destructive" }); return; }
       if (!res.ok) {
         toast({ title: "خطأ", description: data.error, variant: "destructive" });
         return;
@@ -297,6 +299,7 @@ export default function Home() {
         body: JSON.stringify(body),
       });
       const data = await res.json();
+      if (res.status === 401) { logout(); toast({ title: "انتهت الجلسة", variant: "destructive" }); return; }
       if (!res.ok) throw new Error(data.error);
       setGeneratedText(data.text);
     } catch (e: any) {
@@ -310,6 +313,53 @@ export default function Home() {
     navigator.clipboard.writeText(text);
     setter(true);
     setTimeout(() => setter(false), 2000);
+  }
+
+  function handleImageProductFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setImageProductName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUploadedImageBase64(typeof reader.result === "string" ? reader.result : null);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function downloadImage(url: string) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `postlap-post-${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function handleGenerateImage() {
+    if (!imageProduct.trim()) { toast({ title: "أدخل معلومات المنتج", variant: "destructive" }); return; }
+    setImageGenLoading(true);
+    const token = localStorage.getItem(TOKEN_KEY);
+    try {
+      const body: Record<string, string> = { mode: "new_post", productDescription: imageProduct };
+      if (uploadedImageBase64) body.productImageBase64 = uploadedImageBase64;
+      const res = await fetch("/api/image-gen", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.status === 401) { logout(); toast({ title: "انتهت الجلسة", variant: "destructive" }); return; }
+      if (!res.ok) throw new Error(data.error);
+      setImageGenResult(data.url);
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setImageGenLoading(false);
+    }
   }
 
   function acceptCookies() {
@@ -327,7 +377,6 @@ export default function Home() {
     { q: "هل يدعم فيديوهات تيك توك؟", a: "نعم، نقبل ملفات MP4. يُرفع الفيديو ويُحلل فريم بفريم وفق سياسات Meta وTikTok." },
   ];
 
-  const accuracyText = config?.accuracy_text ?? "النتيجة 90% صحيحة بسبب تحديث سياسات Meta & TikTok باستمرار";
   const whatsapp = config?.whatsapp ?? "218915811115";
 
   // Pricing with optional 50% discount
@@ -398,8 +447,10 @@ export default function Home() {
             <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">فحص الإعلانات</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="#generate" className="hover:text-foreground transition-colors">{t.nav.generateText}</a>
-            <a href="#agents" className="hover:text-foreground transition-colors">{t.nav.agents}</a>
+            <a href="#generate" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد المنشورات" : "Post Generation"}</a>
+            <a href="#image-gen" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد الصور" : "Image Generation"}</a>
+            <a href="#check" className="hover:text-foreground transition-colors">{lang === "ar" ? "فحص الإعلانات" : "Ad Check"}</a>
+            <a href="#plans" className="hover:text-foreground transition-colors">{lang === "ar" ? "الخطط" : "Plans"}</a>
           </nav>
           <div className="flex items-center gap-2">
             {user ? (
@@ -421,163 +472,199 @@ export default function Home() {
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-16">
 
-        {/* Inline hero Hamzawi chat — transitions to floating when scrolled past */}
-        <section ref={heroRef} id="hamzawi-hero" className="w-full">
-          <div className="max-w-md mx-auto">
-            {/* Headline */}
-            <div className="text-center mb-6 space-y-3">
-              <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                {lang === "ar" ? "مدعوم بالذكاء الاصطناعي" : "Powered by AI"}
+        {/* ── 1. HERO: AI Post Generation ─────────────────────────────────── */}
+        <section id="generate" className="w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Left: headline + text generator */}
+            <div className="space-y-6">
+              <div className="text-center lg:text-right space-y-3">
+                <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  {lang === "ar" ? "توليد المنشورات بالذكاء الاصطناعي" : "AI Post Generation"}
+                </div>
+                <h1 className="text-3xl sm:text-4xl font-black text-foreground leading-tight">
+                  {lang === "ar" ? (
+                    <>ولّد منشورك الإعلاني مع <span className="text-primary">حمزاوي</span></>
+                  ) : (
+                    <>Generate your ad post with <span className="text-primary">Hamzawi</span></>
+                  )}
+                </h1>
+                <p className="text-sm text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed">
+                  {lang === "ar"
+                    ? "نصوص ليبية أصيلة متوافقة مع سياسات Meta — وصف المنتج، السعر، والعرض. وارفق صورة المنتج لنتيجة أدق"
+                    : "Authentic Libyan ad copy that complies with Meta's policies. Describe your product and attach an image for sharper results"}
+                </p>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-black text-foreground leading-tight">
-                {lang === "ar" ? (
-                  <>افحص إعلانك مع <span className="text-primary">حمزاوي</span></>
-                ) : (
-                  <>Check your ad with <span className="text-primary">Hamzawi</span></>
-                )}
-              </h1>
-              <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                {lang === "ar"
-                  ? "ارفع صورة إعلانك وأقولك هل يعدي سياسات Meta أو لا"
-                  : "Upload your ad image and I'll tell you if it passes Meta's policies"}
-              </p>
-            </div>
 
-            {/* Chat window */}
-            <div className="bg-card border border-border rounded-2xl shadow-2xl overflow-hidden" dir="rtl">
-              {/* Header */}
-              <div className="bg-primary px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg font-black text-white select-none">ح</div>
+              {user && planLevelFrontend(user.plan) >= 3 ? (
+                /* Smart Fix+ users (level 3+) — full text generator; level 4+ gets image+description mode */
+                <div className="space-y-4">
+                  {planLevelFrontend(user.plan) >= 4 && uploadedImageBase64 && (
+                    <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                      <ScanLine className="w-3.5 h-3.5 shrink-0" />
+                      <span>سيتم استخدام صورة الإعلان المرفوعة لإنشاء منشور أكثر دقة وتخصيصاً</span>
+                    </div>
+                  )}
+                  <textarea
+                    className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
+                    placeholder="(اسم المنتج، السعر، العرض...)"
+                    value={product}
+                    onChange={(e) => setProduct(e.target.value)}
+                    data-testid="input-product"
+                  />
+                  <div className="flex gap-3">
+                    <select
+                      className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      value={dialect}
+                      onChange={(e) => setDialect(e.target.value as any)}
+                      data-testid="select-dialect"
+                    >
+                      <option value="غربية">اللهجة الغربية</option>
+                      <option value="شرقية">اللهجة الشرقية</option>
+                      <option value="جنوبية">اللهجة الجنوبية</option>
+                    </select>
+                    <button
+                      onClick={handleGenerateText}
+                      disabled={textLoading}
+                      className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
+                      data-testid="button-generate-text"
+                    >
+                      {textLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      ولّد النص
+                    </button>
+                  </div>
+                  {generatedText && (
+                    <div className="relative bg-card border border-border rounded-xl p-4 pb-12" data-testid="text-generated-result">
+                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">{generatedText}</p>
+                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between border-t border-border pt-2 mt-2">
+                        <p className="text-xs text-muted-foreground">متوافق مع سياسات Meta ✓</p>
+                        <button
+                          onClick={() => copyToClipboard(generatedText, setCopiedText)}
+                          className="flex items-center gap-1.5 text-xs bg-muted text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
+                          data-testid="button-copy-text"
+                        >
+                          {copiedText ? <><Check className="w-3 h-3 text-green-400" /> تم النسخ</> : <><Copy className="w-3 h-3" /> نسخ النص</>}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Non-paid / non-logged users — gated prompt */
+                <div className="bg-card border border-primary/20 rounded-2xl p-8 text-center space-y-4">
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+                    <Lock className="w-7 h-7 text-primary" />
+                  </div>
                   <div>
-                    <p className="text-sm font-bold text-white">حمزاوي</p>
-                    <p className="text-xs text-white/70">{lang === "ar" ? "مساعدك الإعلاني الذكي" : "Your smart ad assistant"}</p>
+                    <p className="text-lg font-black text-foreground">
+                      {!user ? "سجّل الدخول مجاناً للوصول" : "ميزة للمشتركين المدفوعين"}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                      {!user
+                        ? "سجل دخولك مجاناً وشوف تحليل الرفض التفصيلي — توليد النصوص الإعلانية يتطلب خطة مدفوعة."
+                        : <>توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.</>}
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    {!user ? (
+                      <>
+                        <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
+                        <button onClick={() => setShowLoginModal(true)} className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors" data-testid="button-register-free">
+                          سجّل مجاناً
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <a
+                          href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                        >
+                          اشترك وابدأ التوليد
+                        </a>
+                        <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
+                          عرض الخطط
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                  <span className="text-xs text-white/70">{lang === "ar" ? "متصل" : "Online"}</span>
-                </div>
-              </div>
-
-              {/* Welcome bubble */}
-              <div className="p-4">
-                <div className="flex gap-2">
-                  <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 select-none">ح</div>
-                  <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2.5 text-sm text-foreground leading-relaxed max-w-[88%]">
-                    {lang === "ar"
-                      ? "أهلاً! 👋 ارفع لي صورة إعلانك وأقولك هل يعدي سياسات ميتا أو لا. أو اسألني أي سؤال إعلاني."
-                      : "Hello! 👋 Upload your ad image and I'll tell you if it passes Meta's policies. Or ask me anything about advertising."}
-                  </div>
-                </div>
-              </div>
-
-              {/* Input bar */}
-              <div className="border-t border-border p-2 flex gap-2 items-center">
-                <input
-                  ref={heroFileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,video/mp4"
-                  className="hidden"
-                  onChange={handleHeroFileUpload}
-                />
-                <button
-                  onClick={() => heroFileInputRef.current?.click()}
-                  title={lang === "ar" ? "ارفع إعلانك للفحص" : "Upload your ad for checking"}
-                  className="text-muted-foreground hover:text-primary transition-colors shrink-0"
-                >
-                  {checking
-                    ? <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                    : <ScanLine className="w-4 h-4" />
-                  }
-                </button>
-                <input
-                  type="text"
-                  readOnly
-                  placeholder={lang === "ar" ? "اكتب سؤالك أو ارفع إعلانك..." : "Type your question or upload your ad..."}
-                  className="flex-1 bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground text-right placeholder:text-muted-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/50"
-                  onFocus={handleHeroInteraction}
-                  onClick={handleHeroInteraction}
-                />
-                <button
-                  onClick={handleHeroInteraction}
-                  className="bg-primary text-primary-foreground px-3 py-2 rounded-xl hover:opacity-90 transition-opacity"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
+              )}
             </div>
 
-            {/* Scroll hint */}
-            <p className="text-center text-xs text-muted-foreground mt-3 animate-bounce">
-              {lang === "ar" ? "↓ انزل لاكتشاف المزيد" : "↓ Scroll to explore"}
-            </p>
+            {/* Right: embedded functional Hamzawi assistant */}
+            <div className="lg:sticky lg:top-24">
+              <HamzawiChat
+                embedded
+                gender={gender}
+                checkResult={checkResult}
+                whatsapp={whatsapp}
+                userPlan={user?.plan}
+                onFileCheck={handleFile}
+                checking={checking}
+              />
+            </div>
           </div>
         </section>
 
-        {/* 2. Ad Text Generator — paid only */}
-        <section id="generate" className="w-full">
+        {/* ── 2. AI Image Generation ──────────────────────────────────────── */}
+        <section id="image-gen" className="w-full">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-black text-foreground mb-2">
-              {user ? "ولّد نص إعلانك" : "تبي تعرف أكثر عن سبب الرفض؟ سجل الدخول مجاناً"}
+              {lang === "ar" ? "توليد صور المنشورات" : "AI Image Generation"}
             </h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
-              {user
-                ? "نصوص بالليبي الأصيل، متوافقة مع سياسات Meta"
-                : "سجل دخولك وشوف تحليل الرفض التفصيلي + ولّد نصوص إعلانية متوافقة مع سياسات Meta و TikTok بالذكاء الاصطناعي"}
+              {lang === "ar"
+                ? "صمم منشوراً احترافياً بشعار نشاطك وألوان هويتك من وصف منتجك مباشرةً"
+                : "Design a professional post with your brand's logo and colors directly from your product description"}
             </p>
           </div>
 
-          {user && planLevelFrontend(user.plan) >= 3 ? (
-            /* Smart Fix+ users (level 3+) — full text generator; level 4+ gets image+description mode */
+          {user && planLevelFrontend(user.plan) >= 4 ? (
             <div className="max-w-2xl mx-auto space-y-4">
-              {/* Level 4+ (content/agency): hint that uploaded image is used */}
-              {user && planLevelFrontend(user.plan) >= 4 && uploadedImageBase64 && (
+              {uploadedImageBase64 && (
                 <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-                  <ScanLine className="w-3.5 h-3.5 shrink-0" />
-                  <span>سيتم استخدام صورة الإعلان المرفوعة لإنشاء منشور أكثر دقة وتخصيصاً</span>
+                  <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{lang === "ar" ? "سيتم استخدام صورة المنتج المرفوعة في التصميم" : "The uploaded product image will be used in the design"}</span>
                 </div>
               )}
               <textarea
                 className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
-                placeholder="(اسم المنتج، السعر، العرض...)"
-                value={product}
-                onChange={(e) => setProduct(e.target.value)}
-                data-testid="input-product"
+                placeholder={lang === "ar" ? "(اسم المنتج، السعر، العرض...)" : "(product name, price, offer...)"}
+                value={imageProduct}
+                onChange={(e) => setImageProduct(e.target.value)}
+                data-testid="input-image-product"
               />
-              <div className="flex gap-3">
-                <select
-                  className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  value={dialect}
-                  onChange={(e) => setDialect(e.target.value as any)}
-                  data-testid="select-dialect"
-                >
-                  <option value="غربية">اللهجة الغربية</option>
-                  <option value="شرقية">اللهجة الشرقية</option>
-                  <option value="جنوبية">اللهجة الجنوبية</option>
-                </select>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input ref={imageFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageProductFile} />
                 <button
-                  onClick={handleGenerateText}
-                  disabled={textLoading}
-                  className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
-                  data-testid="button-generate-text"
+                  onClick={() => imageFileInputRef.current?.click()}
+                  className="flex-1 bg-muted border border-dashed border-border rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:border-primary/50 transition-colors flex items-center justify-center gap-2"
                 >
-                  {textLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  ولّد النص
+                  <ImageIcon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{imageProductName || (lang === "ar" ? "ارفع صورة المنتج (اختياري)" : "Upload product image (optional)")}</span>
+                </button>
+                <button
+                  onClick={handleGenerateImage}
+                  disabled={imageGenLoading}
+                  className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50 justify-center"
+                  data-testid="button-generate-image"
+                >
+                  {imageGenLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {lang === "ar" ? "ولّد الصورة" : "Generate Image"}
                 </button>
               </div>
-              {generatedText && (
-                <div className="relative bg-card border border-border rounded-xl p-4 pb-12" data-testid="text-generated-result">
-                  <p className="text-foreground leading-relaxed whitespace-pre-wrap">{generatedText}</p>
-                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between border-t border-border pt-2 mt-2">
-                    <p className="text-xs text-muted-foreground">متوافق مع سياسات Meta</p>
+              {imageGenResult && (
+                <div className="bg-card border border-border rounded-xl overflow-hidden" data-testid="image-generated-result">
+                  <img src={imageGenResult} alt="generated post" className="w-full" />
+                  <div className="flex items-center justify-between p-3 border-t border-border">
+                    <p className="text-xs text-muted-foreground">{lang === "ar" ? "متوافق مع سياسات Meta ✓" : "Compliant with Meta policies ✓"}</p>
                     <button
-                      onClick={() => copyToClipboard(generatedText, setCopiedText)}
+                      onClick={() => downloadImage(imageGenResult)}
                       className="flex items-center gap-1.5 text-xs bg-muted text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
-                      data-testid="button-copy-text"
+                      data-testid="button-download-image"
                     >
-                      {copiedText ? <><Check className="w-3 h-3 text-green-400" /> تم النسخ</> : <><Copy className="w-3 h-3" /> نسخ النص</>}
+                      <Download className="w-3 h-3" /> {lang === "ar" ? "حمّل الصورة" : "Download"}
                     </button>
                   </div>
                 </div>
@@ -587,7 +674,7 @@ export default function Home() {
             /* Non-paid / non-logged users — gated prompt */
             <div className="max-w-xl mx-auto bg-card border border-primary/20 rounded-2xl p-8 text-center space-y-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-                <Lock className="w-7 h-7 text-primary" />
+                <ImageIcon className="w-7 h-7 text-primary" />
               </div>
               <div>
                 <p className="text-lg font-black text-foreground">
@@ -595,22 +682,22 @@ export default function Home() {
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   {!user
-                    ? "سجل دخولك مجاناً وشوف تحليل الرفض التفصيلي — توليد النصوص الإعلانية يتطلب خطة مدفوعة."
-                    : <>توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.</>}
+                    ? "سجل دخولك مجاناً — توليد صور المنشورات متاح لخطط إدارة المحتوى والوكالة."
+                    : <>توليد صور المنشورات بالشعار والهوية متاح لخطط <span className="text-primary font-semibold">إدارة المحتوى</span> وما فوق.</>}
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 {!user ? (
                   <>
-                    <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
-                    <button onClick={() => setShowLoginModal(true)} className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors" data-testid="button-register-free">
+                    <div ref={googleBtnModalRef} className="flex justify-center" />
+                    <button onClick={() => setShowLoginModal(true)} className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors" data-testid="button-register-free-image">
                       سجّل مجاناً
                     </button>
                   </>
                 ) : (
                   <>
                     <a
-                      href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
+                      href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في إدارة المحتوى - PostLapAI`}
                       target="_blank" rel="noopener noreferrer"
                       className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
                     >
@@ -626,31 +713,122 @@ export default function Home() {
           )}
         </section>
 
-        {/* 3. How it works */}
-        <section id="how" className="w-full">
-          <h2 className="text-2xl font-black text-center text-foreground mb-2">كيف يعمل؟</h2>
-          <p className="text-center text-muted-foreground text-sm mb-10">ثلاث خطوات بسيطة — نتيجة في ثوانٍ</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-            {/* Connector line (desktop) */}
-            <div className="hidden md:block absolute top-10 right-[16.66%] left-[16.66%] h-px bg-gradient-to-l from-border via-primary/30 to-border" />
-            {[
-              { step: "01", emoji: "📤", title: "ارفع الإعلان", desc: "اسحب وأفلت صورتك أو فيديو MP4 مباشرةً في منطقة الرفع" },
-              { step: "02", emoji: "🤖", title: "الذكاء الاصطناعي يحلّل", desc: "يفحص النصوص والمرئيات فريم بفريم وفق سياسات Meta وTikTok" },
-              { step: "03", emoji: "📊", title: "نتائج فورية", desc: "تحصل على تقييم المخاطر، نقاط الامتثال، ونصائح التحسين" },
-            ].map((s) => (
-              <div key={s.step} className="bg-card border border-border rounded-2xl p-7 flex flex-col gap-4 relative">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{s.emoji}</span>
-                  <span className="text-xs font-black text-primary/40 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-full">خطوة {s.step}</span>
+        {/* ── 3. Existing Post Check ──────────────────────────────────────── */}
+        <section id="check" className="w-full">
+          <div className="text-center mb-8">
+            <h2 className="text-2xl font-black text-foreground mb-2">
+              {lang === "ar" ? "افحص إعلانك الحالي" : "Check Your Existing Ad"}
+            </h2>
+            <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
+              {lang === "ar"
+                ? "ارفع صورة أو فيديو إعلانك واحصل على تقييم المخاطر ونقاط الامتثال فوراً"
+                : "Upload your ad image or video and get a risk assessment and compliance score instantly"}
+            </p>
+          </div>
+
+          <div className="max-w-xl mx-auto">
+            <input
+              ref={heroFileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,video/mp4"
+              className="hidden"
+              onChange={handleHeroFileUpload}
+            />
+            <button
+              onClick={() => heroFileInputRef.current?.click()}
+              disabled={checking}
+              className="w-full bg-card border-2 border-dashed border-border rounded-2xl p-10 text-center hover:border-primary/50 transition-colors disabled:opacity-70"
+              data-testid="dropzone-check"
+            >
+              {checking ? (
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                  <p className="text-sm text-muted-foreground animate-pulse">
+                    {lang === "ar" ? "جاري تحليل إعلانك..." : "Analyzing your ad..."}
+                    {countdown !== null && <span className="ml-2">{countdown}s</span>}
+                  </p>
                 </div>
-                <h3 className="text-lg font-black text-foreground">{s.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{s.desc}</p>
+              ) : (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <ScanLine className="w-7 h-7 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-lg font-black text-foreground">
+                      {lang === "ar" ? "ارفع إعلانك للفحص" : "Upload your ad to check"}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {lang === "ar" ? "صورة PNG / JPG أو فيديو MP4 — حتى 50 ميجابايت" : "PNG / JPG image or MP4 video — up to 50 MB"}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </button>
+
+            {checkResult && !checking && (
+              <div className="mt-6 bg-card border border-border rounded-2xl overflow-hidden" data-testid="inline-check-result">
+                <div className={`p-5 border-b border-border flex items-center justify-between gap-3 ${checkResult.status === "ممتاز" ? "bg-green-500/10" : checkResult.status === "مرفوض" ? "bg-red-500/10" : "bg-yellow-500/10"}`}>
+                  <div className="flex items-center gap-2">
+                    {checkResult.status === "ممتاز" ? (
+                      <CheckCircle className="w-5 h-5 text-green-400" />
+                    ) : checkResult.status === "مرفوض" ? (
+                      <XCircle className="w-5 h-5 text-red-400" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-yellow-400" />
+                    )}
+                    <p className="font-bold text-foreground">{checkResult.status}</p>
+                  </div>
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">{lang === "ar" ? "النقاط:" : "Score:"}</span>{" "}
+                    <span className="font-black text-primary text-lg">{checkResult.score}</span>
+                  </div>
+                </div>
+                <div className="p-5 space-y-4">
+                  {checkResult.message && (
+                    <p className="text-sm text-foreground leading-relaxed">{checkResult.message}</p>
+                  )}
+                  {checkResult.violations && checkResult.violations.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground mb-2">{lang === "ar" ? "المخالفات" : "Violations"}</p>
+                      <ul className="space-y-2">
+                        {checkResult.violations.map((v, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
+                            <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
+                            <span>{v.reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {checkResult.suggestions && checkResult.suggestions.length > 0 && (
+                    <div>
+                      <p className="text-xs font-bold text-muted-foreground mb-2">{lang === "ar" ? "الاقتراحات" : "Suggestions"}</p>
+                      <ul className="space-y-2">
+                        {checkResult.suggestions.map((s, i) => (
+                          <li key={i} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
+                            <Check className="w-4 h-4 mt-0.5 shrink-0 text-green-400" />
+                            <span>{s}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(!user || ["visitor", "registered"].includes(user.plan)) && (
+                    <a
+                      href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(lang === "ar" ? "أريد الاشتراك في Smart Fix" : "I want to subscribe to Smart Fix")}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="block w-full bg-green-600 text-white text-center text-sm py-2.5 rounded-xl font-bold hover:bg-green-700 transition-colors"
+                    >
+                      📲 {lang === "ar" ? "اشترك في Smart Fix للتحليل التفصيلي" : "Subscribe to Smart Fix for detailed analysis"}
+                    </a>
+                  )}
+                </div>
               </div>
-            ))}
+            )}
           </div>
         </section>
 
-        {/* 4. Why PostLapAI */}
+        {/* ── 4. Features ─────────────────────────────────────────────────── */}
         <section id="why" className="w-full">
           <h2 className="text-2xl font-black text-center text-foreground mb-2">لماذا PostLapAI؟</h2>
           <p className="text-center text-muted-foreground text-sm mb-10">كل ما تحتاجه لإعلانات أذكى وأأمن</p>
@@ -674,99 +852,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 5. Trust badges */}
-        <section className="flex flex-wrap justify-center gap-3">
-          {[
-            { label: "آمن 100%", emoji: "🔒" },
-            { label: "لا نخزن إعلاناتك", emoji: "🗑️" },
-            { label: "متوافق مع Meta & TikTok", emoji: "✅" },
-            { label: "نتيجة خلال 8 ثوانٍ", emoji: "⚡" },
-            { label: "دعم متعدد اللهجات", emoji: "🗣️" },
-          ].map((b) => (
-            <div key={b.label} className="flex items-center gap-2 border border-border rounded-full px-4 py-2 bg-card text-xs sm:text-sm text-muted-foreground hover:border-primary/30 transition-colors">
-              <span>{b.emoji}</span>
-              {b.label}
-            </div>
-          ))}
-        </section>
-
-        {/* 6. Stats */}
-        {stats && (
-          <section className="grid grid-cols-3 gap-3 sm:gap-4">
-            {[
-              { label: "إجمالي الفحوصات", value: stats.total_checks },
-              { label: "المستخدمون", value: stats.total_users },
-              { label: "فحوصات اليوم", value: stats.checks_today },
-            ].map((s) => (
-              <div key={s.label} className="bg-card border border-border rounded-2xl p-4 sm:p-5 text-center">
-                <p className="text-2xl sm:text-3xl font-black text-primary">{s.value.toLocaleString("ar")}</p>
-                <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
-              </div>
-            ))}
-          </section>
-        )}
-
-        {/* 7. Agents */}
-        <section id="agents" className="w-full">
-          <h2 className="text-2xl font-black text-center text-foreground mb-8">الوكلاء المعتمدون</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {agentsList.map((a) => (
-              <div
-                key={a.country}
-                className="border border-primary/30 rounded-2xl p-6 bg-card flex flex-col gap-3"
-                data-testid={`card-agent-${a.country}`}
-              >
-                <div className="flex items-center gap-2" dir="ltr">
-                  <span style={{ fontSize: "24px", lineHeight: 1 }}>{a.flag}</span>
-                  <div dir="rtl">
-                    <h3 className="font-bold text-foreground leading-tight">{a.country}</h3>
-                    <span className="text-xs bg-green-400/10 text-green-400 border border-green-400/20 rounded-full px-2 py-0.5">نشط</span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{a.company}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{a.address}</p>
-                </div>
-                <a
-                  href={`https://wa.me/${a.wa}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                  data-testid={`link-agent-wa-${a.country}`}
-                >
-                  <span>واتساب:</span>
-                  <span dir="ltr">+{a.wa}</span>
-                </a>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* 8. FAQ */}
-        <section id="faq" className="w-full max-w-2xl mx-auto">
-          <h2 className="text-2xl font-black text-center text-foreground mb-8">الأسئلة الشائعة</h2>
-          <div className="space-y-2">
-            {faqs.map((f, i) => (
-              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card" data-testid={`faq-item-${i}`}>
-                <button
-                  className="w-full text-right px-5 py-4 flex justify-between items-center text-foreground font-semibold hover:bg-muted/50 transition-colors text-sm sm:text-base"
-                  onClick={() => setFaqOpen(faqOpen === i ? null : i)}
-                  data-testid={`button-faq-${i}`}
-                >
-                  {f.q}
-                  <span className="text-muted-foreground text-lg shrink-0 mr-2">{faqOpen === i ? "−" : "+"}</span>
-                </button>
-                {faqOpen === i && (
-                  <div className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed border-t border-border pt-3">
-                    {f.a}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* 9. Pricing Plans — LAST */}
+        {/* ── 5. Pricing ──────────────────────────────────────────────────── */}
         <section id="plans" className="w-full">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-black text-foreground mb-2">اختر خطتك</h2>
@@ -776,11 +862,6 @@ export default function Home() {
                 🔥 خصم 50% حصري — عرض مايو ويونيو 2026 فقط!
               </div>
             )}
-          </div>
-
-          {/* Hidden free tiers — logic kept, UI hidden */}
-          <div className="hidden">
-            <div data-testid="button-google-signin" />
           </div>
 
           {/* Paid plans */}
@@ -859,6 +940,120 @@ export default function Home() {
             })}
           </div>
           <p className="text-xs text-center text-muted-foreground mt-4">نقبل الدفع بالتحويل المصرفي</p>
+        </section>
+
+        {/* ── 6. Secondary: How it works ──────────────────────────────────── */}
+        <section id="how" className="w-full opacity-90">
+          <h2 className="text-xl font-bold text-center text-muted-foreground mb-2">كيف يعمل؟</h2>
+          <p className="text-center text-muted-foreground text-xs mb-8">ثلاث خطوات بسيطة — نتيجة في ثوانٍ</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
+            {[
+              { step: "01", emoji: "📤", title: "ارفع الإعلان", desc: "اسحب وأفلت صورتك أو فيديو MP4 مباشرةً في منطقة الرفع" },
+              { step: "02", emoji: "🤖", title: "الذكاء الاصطناعي يحلّل", desc: "يفحص النصوص والمرئيات فريم بفريم وفق سياسات Meta وTikTok" },
+              { step: "03", emoji: "📊", title: "نتائج فورية", desc: "تحصل على تقييم المخاطر، نقاط الامتثال، ونصائح التحسين" },
+            ].map((s) => (
+              <div key={s.step} className="bg-card border border-border rounded-2xl p-6 flex flex-col gap-3 relative">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{s.emoji}</span>
+                  <span className="text-xs font-black text-primary/40 bg-primary/5 border border-primary/10 px-2 py-0.5 rounded-full">خطوة {s.step}</span>
+                </div>
+                <h3 className="text-base font-bold text-foreground">{s.title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── 7. Secondary: Trust badges ──────────────────────────────────── */}
+        <section className="flex flex-wrap justify-center gap-3 opacity-80">
+          {[
+            { label: "آمن 100%", emoji: "🔒" },
+            { label: "لا نخزن إعلاناتك", emoji: "🗑️" },
+            { label: "متوافق مع Meta & TikTok", emoji: "✅" },
+            { label: "نتيجة خلال 8 ثوانٍ", emoji: "⚡" },
+            { label: "دعم متعدد اللهجات", emoji: "🗣️" },
+          ].map((b) => (
+            <div key={b.label} className="flex items-center gap-2 border border-border rounded-full px-4 py-1.5 bg-card text-xs text-muted-foreground hover:border-primary/30 transition-colors">
+              <span>{b.emoji}</span>
+              {b.label}
+            </div>
+          ))}
+        </section>
+
+        {/* ── 8. Secondary: Stats ─────────────────────────────────────────── */}
+        {stats && (
+          <section className="grid grid-cols-3 gap-3 sm:gap-4 opacity-80">
+            {[
+              { label: "إجمالي الفحوصات", value: stats.total_checks ?? 0 },
+              { label: "المستخدمون", value: stats.total_users ?? 0 },
+              { label: "فحوصات اليوم", value: stats.checks_today ?? 0 },
+            ].map((s) => (
+              <div key={s.label} className="bg-card border border-border rounded-2xl p-4 sm:p-5 text-center">
+                <p className="text-2xl sm:text-3xl font-black text-primary">{s.value.toLocaleString("ar")}</p>
+                <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* ── 9. Secondary: Agents ────────────────────────────────────────── */}
+        <section id="agents" className="w-full opacity-90">
+          <h2 className="text-xl font-bold text-center text-muted-foreground mb-8">الوكلاء المعتمدون</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {agentsList.map((a) => (
+              <div
+                key={a.country}
+                className="border border-primary/30 rounded-2xl p-6 bg-card flex flex-col gap-3"
+                data-testid={`card-agent-${a.country}`}
+              >
+                <div className="flex items-center gap-2" dir="ltr">
+                  <span style={{ fontSize: "24px", lineHeight: 1 }}>{a.flag}</span>
+                  <div dir="rtl">
+                    <h3 className="font-bold text-foreground leading-tight">{a.country}</h3>
+                    <span className="text-xs bg-green-400/10 text-green-400 border border-green-400/20 rounded-full px-2 py-0.5">نشط</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{a.company}</p>
+                  <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{a.address}</p>
+                </div>
+                <a
+                  href={`https://wa.me/${a.wa}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+                  data-testid={`link-agent-wa-${a.country}`}
+                >
+                  <span>واتساب:</span>
+                  <span dir="ltr">+{a.wa}</span>
+                </a>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ── 10. Secondary: FAQ ──────────────────────────────────────────── */}
+        <section id="faq" className="w-full max-w-2xl mx-auto opacity-90">
+          <h2 className="text-xl font-bold text-center text-muted-foreground mb-8">الأسئلة الشائعة</h2>
+          <div className="space-y-2">
+            {faqs.map((f, i) => (
+              <div key={i} className="border border-border rounded-xl overflow-hidden bg-card" data-testid={`faq-item-${i}`}>
+                <button
+                  className="w-full text-right px-5 py-4 flex justify-between items-center text-foreground font-semibold hover:bg-muted/50 transition-colors text-sm sm:text-base"
+                  onClick={() => setFaqOpen(faqOpen === i ? null : i)}
+                  data-testid={`button-faq-${i}`}
+                >
+                  {f.q}
+                  <span className="text-muted-foreground text-lg shrink-0 mr-2">{faqOpen === i ? "−" : "+"}</span>
+                </button>
+                {faqOpen === i && (
+                  <div className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed border-t border-border pt-3">
+                    {f.a}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </section>
 
       </main>
@@ -996,18 +1191,6 @@ export default function Home() {
           </button>
         </div>
       )}
-
-      {/* Hamzawi Chat — floating; hero-aware for smooth inline→floating transition */}
-      <HamzawiChat
-        gender={gender}
-        checkResult={checkResult}
-        whatsapp={whatsapp}
-        userPlan={user?.plan}
-        onFileCheck={handleFile}
-        checking={checking}
-        heroVisible={heroVisible}
-        forceOpen={chatForceOpen}
-      />
     </div>
   );
 }

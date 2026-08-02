@@ -35,6 +35,7 @@ const i18n = {
     logoLabel: "شعار النشاط",
     uploadLogo: "رفع الشعار",
     save: "حفظ",
+    saving: "جاري الحفظ...",
     cancel: "إلغاء",
     upgradeMsg: "حفظ هوية النشاط متاح للمستخدمين المسجّلين فأعلى",
     newPost: "✦ منشور جديد",
@@ -74,6 +75,7 @@ const i18n = {
     logoLabel: "Business logo",
     uploadLogo: "Upload logo",
     save: "Save",
+    saving: "Saving...",
     cancel: "Cancel",
     upgradeMsg: "Brand identity is available for registered users and above",
     newPost: "✦ New Post",
@@ -111,6 +113,7 @@ interface HamzawiChatProps {
   checking?: boolean;
   heroVisible?: boolean;
   forceOpen?: number;
+  embedded?: boolean;
 }
 
 interface Message {
@@ -143,8 +146,8 @@ function planLevel(plan?: string): number {
   return levels[plan ?? "visitor"] ?? 1;
 }
 
-export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen }: HamzawiChatProps) {
-  const [open, setOpen] = useState(false);
+export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen, embedded }: HamzawiChatProps) {
+  const [open, setOpen] = useState(!!embedded);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [initialized, setInitialized] = useState(false);
@@ -178,6 +181,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
   // Upload state
   const [uploadingAsset, setUploadingAsset] = useState(false);
+  const [savingBrand, setSavingBrand] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const postImageInputRef = useRef<HTMLInputElement>(null);
@@ -226,6 +230,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
   // Auto-open: only fire immediately when there is no inline hero; otherwise wait for hero to scroll away
   useEffect(() => {
+    if (embedded) return;
     const hasOpened = sessionStorage.getItem(SESSION_OPENED_KEY);
     if (hasOpened) return;
     // If a hero section is present (heroVisible defined), let the heroVisible effect handle opening
@@ -242,7 +247,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   // When hero scrolls out of view for the first time → auto-open floating chat
   const prevHeroVisibleRef = useRef<boolean | undefined>(undefined);
   useEffect(() => {
-    if (heroVisible === undefined) return;
+    if (embedded || heroVisible === undefined) return;
     const justScrolledPast = prevHeroVisibleRef.current === true && heroVisible === false;
     prevHeroVisibleRef.current = heroVisible;
     if (!justScrolledPast) return;
@@ -256,7 +261,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   // forceOpen: increment counter from parent to open chat on demand
   const prevForceOpenRef = useRef<number>(0);
   useEffect(() => {
-    if (!forceOpen || forceOpen === prevForceOpenRef.current) return;
+    if (embedded || !forceOpen || forceOpen === prevForceOpenRef.current) return;
     prevForceOpenRef.current = forceOpen;
     setOpen(true);
     setUnread(false);
@@ -386,6 +391,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   async function saveBrandMemory() {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) return;
+    setSavingBrand(true);
     try {
       await fetch("/api/hamzawi/memory", {
         method: "PUT",
@@ -399,6 +405,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       );
     } catch {
       addHamzawi(lang === "ar" ? "حدث خطأ أثناء الحفظ." : "Error saving brand identity.");
+    } finally {
+      setSavingBrand(false);
     }
   }
 
@@ -669,9 +677,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   const dirAttr = isRTL ? "rtl" : "ltr";
 
   return (
-    <div className={`fixed bottom-20 ${isRTL ? "left-4" : "right-4"} z-40 flex flex-col items-end gap-2`} dir={dirAttr}>
-      {open && (
-        <div className="bg-card border border-border rounded-2xl shadow-2xl w-80 sm:w-96 flex flex-col overflow-hidden" style={{ height: "520px" }}>
+    <div className={`${embedded ? "w-full" : `fixed bottom-20 ${isRTL ? "left-4" : "right-4"} z-40 flex flex-col items-end gap-2`}`} dir={dirAttr}>
+      {(open || embedded) && (
+        <div className={`bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden ${embedded ? "w-full" : "w-80 sm:w-96"}`} style={{ height: embedded ? "640px" : "520px" }}>
           {/* Header */}
           <div className="bg-primary px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
@@ -839,9 +847,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                   <div className="flex gap-2">
                     <button
                       onClick={saveBrandMemory}
-                      className="flex-1 bg-primary text-primary-foreground text-xs font-bold py-1.5 rounded-lg hover:opacity-90 transition-opacity"
+                      disabled={savingBrand}
+                      className="flex-1 bg-primary text-primary-foreground text-xs font-bold py-1.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1"
                     >
-                      {t.save}
+                      {savingBrand ? <><Loader2 className="w-3 h-3 animate-spin" />{t.saving ?? "..."}</> : t.save}
                     </button>
                     <button
                       onClick={() => setShowBrandForm(false)}
@@ -960,7 +969,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                 </div>
               </div>
             )}
-            {(checkResult?.status === "مرفوض" || checkResult?.status === "جيد" || checkResult?.status === "rejected" || checkResult?.status === "good") && messages.length > 0 && !loading && !checking && (
+            {(checkResult?.status === "مرفوض" || checkResult?.status === "جيد" || checkResult?.status === "rejected" || checkResult?.status === "good") && messages.length > 0 && !loading && !checking && level < 4 && (
               <a
                 href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(lang === "ar" ? "أريد الاشتراك في Smart Fix" : "I want to subscribe to Smart Fix")}`}
                 target="_blank"
@@ -1022,6 +1031,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       )}
 
       {/* Toggle bubble — hidden while the inline hero chat is visible so the two don't overlap */}
+      {!embedded && (
       <button
         onClick={() => { setOpen(!open); setUnread(false); }}
         className={`w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:scale-105 transition-all duration-300 relative ${heroVisible ? "opacity-0 pointer-events-none scale-75" : "opacity-100 scale-100"}`}
@@ -1039,6 +1049,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
           </>
         )}
       </button>
+      )}
     </div>
   );
 }
