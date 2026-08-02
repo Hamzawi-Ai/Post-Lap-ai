@@ -12,7 +12,7 @@ version = "1.0.0"
 [[services]]
 name = "web"
 paths = [ "/" ]
-localPort = 18161
+localPort = 8080
 
 [services.development]
 run = "pnpm --filter @workspace/postlap-ai run dev"
@@ -27,5 +27,6 @@ from = "/*"
 to = "/index.html"
 
 [services.env]
-PORT = "18161"
+PORT = "8080"
 BASE_PATH = "/"
+API_TARGET = "http://127.0.0.1:5000"
