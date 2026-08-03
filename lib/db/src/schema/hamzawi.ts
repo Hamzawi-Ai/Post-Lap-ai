@@ -40,6 +40,10 @@ export const userBrandMemoryTable = pgTable("user_brand_memory", {
   preferred_style: text("preferred_style"),
   liked_posts: jsonb("liked_posts"),
   notes: text("notes"),
+  // Internal description Hamzawi writes about the client (not user-facing).
+  hamzawi_notes: text("hamzawi_notes"),
+  // Client's permanent marketing/ad preferences (saved only with consent).
+  marketing_notes: text("marketing_notes"),
   design_samples: text("design_samples"),
   brand_onboarded: boolean("brand_onboarded").notNull().default(false),
   updated_at: timestamp("updated_at").defaultNow().notNull(),

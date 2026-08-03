@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Download, RefreshCw, Image as ImageIcon, ScanLine } from "lucide-react";
+import { brandProfileCompletion, type BrandProfileData } from "@/lib/onboarding";
 
 const LANG_KEY = "postlap_lang";
 const SESSION_OPENED_KEY = "hamzawi_opened";
@@ -56,6 +57,15 @@ const i18n = {
     checkAdTip: "ارفع صورة إعلانك للفحص",
     analyzingAd: "جاري تحليل إعلانك... ⏳",
     welcome: "أهلاً! 👋 ارفع لي صورة إعلانك وأقولك هل يعدي سياسات ميتا أو لا. أو اسألني أي سؤال إعلاني.",
+    profileChip: "اكتمال هوية النشاط",
+    quickStart: "ابدأ بسرعة",
+    quickActions: [
+      { label: "صمم منشور عرض", prompt: "صمم لي منشور عرض جذاب لنشاطي" },
+      { label: "صمم Story", prompt: "صمم لي قصة (Story) للإعلان عن نشاطي" },
+      { label: "اكتب إعلان ممول", prompt: "اكتب لي إعلاناً ممولاً جاهزاً للنشر عن نشاطي" },
+      { label: "اقترح أفكار محتوى", prompt: "اقترح لي أفكار محتوى إعلاني لنشاطي" },
+      { label: "صمم منشور ترحيبي", prompt: "صمم لي منشور ترحيبي لنشاطي" },
+    ],
   },
   en: {
     title: "Hamzawi",
@@ -96,6 +106,15 @@ const i18n = {
     checkAdTip: "Upload your ad image to check it",
     analyzingAd: "Analyzing your ad... ⏳",
     welcome: "Hello! 👋 Upload your ad image and I'll tell you if it passes Meta's policies. Or ask me anything about advertising.",
+    profileChip: "Brand profile completion",
+    quickStart: "Quick start",
+    quickActions: [
+      { label: "Design offer post", prompt: "Design an attractive offer post for my business" },
+      { label: "Design a Story", prompt: "Design a Story to advertise my business" },
+      { label: "Write sponsored ad", prompt: "Write a ready-to-publish sponsored ad for my business" },
+      { label: "Content ideas", prompt: "Suggest advertising content ideas for my business" },
+      { label: "Design welcome post", prompt: "Design a welcome post for my business" },
+    ],
   },
 };
 
@@ -168,6 +187,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   });
   const [lang, setLang] = useState<"ar" | "en">("ar");
   const [unread, setUnread] = useState(false);
+  const [brandMemory, setBrandMemory] = useState<BrandProfileData | null>(null);
 
   // New Post panel state
   const [showNewPost, setShowNewPost] = useState(false);
@@ -200,6 +220,33 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     const urls = objectUrlsRef.current;
     return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
   }, []);
+
+  // Load brand profile once for authenticated users → completion badge + quick actions
+  useEffect(() => {
+    if (level < 2) return;
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/hamzawi/memory", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { memory?: BrandProfileData | null };
+          if (data.memory) setBrandMemory(data.memory);
+        }
+      } catch {
+        // non-critical — badge just stays hidden
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const completion = brandProfileCompletion(brandMemory);
+  const hasUserMessage = messages.some((m) => m.from === "user");
+  const showQuickActions = level >= 4 && !hasUserMessage && messages.length > 0 && !loading;
 
   function addHamzawi(text: string, extra?: Partial<Message>) {
     setMessages((prev) => [...prev, { from: "hamzawi", text, time: now(), ...extra }]);
@@ -711,6 +758,15 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                   <BookmarkPlus className="w-4 h-4" />
                 </button>
               )}
+              {level >= 2 && brandMemory !== null && completion.percent < 100 && (
+                <a
+                  href="/brand"
+                  title={t.profileChip}
+                  className="text-white/90 hover:text-white transition-colors text-[10px] font-bold px-2 py-1 rounded-lg border border-white/25 bg-white/10 flex items-center gap-1"
+                >
+                  {t.profileChip}: {completion.percent}%
+                </a>
+              )}
               <button onClick={() => setOpen(false)} className="text-white/80 hover:text-white transition-colors">
                 <X className="w-4 h-4" />
               </button>
@@ -981,6 +1037,27 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
             )}
             <div ref={bottomRef} />
           </div>
+
+          {/* Quick actions — shortcuts to start a conversation (shortcuts only) */}
+          {showQuickActions && (
+            <div className="border-t border-border px-3 py-2 shrink-0 space-y-1.5 bg-muted/40">
+              <p className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-primary" />
+                {t.quickStart}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {t.quickActions.map((qa) => (
+                  <button
+                    key={qa.label}
+                    onClick={() => sendMessage(qa.prompt)}
+                    className="text-xs bg-background border border-border text-foreground px-2.5 py-1.5 rounded-lg hover:border-primary/50 hover:text-primary transition-colors"
+                  >
+                    {qa.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Input bar */}
           <div className="border-t border-border p-2 shrink-0 flex gap-2 items-center">

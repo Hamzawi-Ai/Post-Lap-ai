@@ -542,13 +542,13 @@ export default function Home() {
                   {user.plan === "agency" ? "وكالة" : user.plan === "content" ? "Professional" : user.plan === "smart_fix" || user.plan === "professional" ? "Smart Fix" : user.plan === "registered" ? "مسجل" : "زائر"}
                 </span>
                 <a
-                  href="/company"
-                  title="إعدادات الشركة"
+                  href="/brand"
+                  title="هوية النشاط التجاري"
                   className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
-                  data-testid="link-company-settings"
+                  data-testid="link-brand-settings"
                 >
                   <Store className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">الشركة</span>
+                  <span className="hidden sm:inline">هوية النشاط</span>
                 </a>
                 <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">{t.nav.signOut}</button>
               </div>

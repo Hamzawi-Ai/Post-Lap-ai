@@ -5,6 +5,7 @@ import {
   upsertBrandMemory,
   updateBrandMemory,
   appendDesignSample,
+  appendMarketingNote,
   createBrandMemory,
   findCompanyByUserId,
   createCompany,
@@ -113,6 +114,8 @@ export interface BrandMemoryData {
   primary_colors?: string | null;
   preferred_style?: string | null;
   notes?: string | null;
+  hamzawi_notes?: string | null;
+  marketing_notes?: string | null;
   design_samples?: string | null;
   brand_onboarded?: boolean;
 }
@@ -137,7 +140,9 @@ export function buildBrandMemoryBlock(memory: BrandMemoryData | null): string {
   if (memory.phone?.trim()) lines.push(`- الهاتف: ${memory.phone.trim()}`);
   if (memory.primary_colors?.trim()) lines.push(`- الألوان: ${memory.primary_colors.trim()}`);
   if (memory.preferred_style?.trim()) lines.push(`- الأسلوب المفضل: ${memory.preferred_style.trim()}`);
-  if (memory.notes?.trim()) lines.push(`- ملاحظات: ${memory.notes.trim()}`);
+  if (memory.notes?.trim()) lines.push(`- النبذة: ${memory.notes.trim()}`);
+  if (memory.hamzawi_notes?.trim()) lines.push(`- وصفك الداخلي للعميل: ${memory.hamzawi_notes.trim()}`);
+  if (memory.marketing_notes?.trim()) lines.push(`- ملاحظات العميل الدائمة (التسويق): ${memory.marketing_notes.trim()}`);
   if (memory.logo_url?.trim()) lines.push("- الشعار: محفوظ ✓");
   if (sampleCount > 0) lines.push(`- نماذج تصاميم سابقة: ${sampleCount} مرفوعة ✓`);
 
@@ -183,6 +188,7 @@ export {
   upsertBrandMemory,
   updateBrandMemory,
   appendDesignSample,
+  appendMarketingNote,
   createBrandMemory,
   findCompanyByUserId,
   createCompany,

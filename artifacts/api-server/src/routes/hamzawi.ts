@@ -16,6 +16,7 @@ import {
   buildBrandMemoryBlock,
   upsertBrandMemory,
   appendDesignSample,
+  appendMarketingNote,
   isBrandProfileComplete,
 } from "../services/brand/brain";
 
@@ -161,6 +162,42 @@ function getOnboardingInstruction(): string {
 %%PARTIAL_SAVE%%{"skipped": "true"}%%END%%`;
 }
 
+/**
+ * First-entry welcome after brand setup is complete.
+ * Personalized from the profile — greets by name, confirms data is saved,
+ * and (only if no logo) suggests uploading one later to improve results.
+ */
+function getWelcomeInstruction(hasLogo: boolean): string {
+  const logoLine = hasLogo
+    ? ""
+    : "\n- لاحظ أن شعار النشاط غير مرفوع بعد: اقترح بلطف على المستخدم رفعه لاحقاً من زر المشبك 📎 لتحسين جودة نتائج التصميم.";
+  return `
+المستخدم أكمل للتو إعداد هوية نشاطه التجاري ويدخل إليك لأول مرة. أرسل له رسالة ترحيب قصيرة وودّية (٣-٥ جمل) بهذا الشكل:
+- ابدأ بتحية وارحب باسّم نشاطه التجاري مع ذكر مجال نشاطه (إن كانا محفوظين).
+- أخبره أن معلومات نشاطه أصبحت محفوظة وأنك تذكّره دائماً.
+- وضّح أنك ستستخدم هذه المعلومات تلقائياً في جميع طلبات التصميم وكتابة المنشورات (الاسم، المجال، الألوان، الأسلوب...).
+- يمكنك اقتراح خيارات سريعة مثل: تصميم منشور عرض، أو كتابة إعلان ممول.
+- لا تعرض ترقية ولا تذكر أسعاراً ولا تذكر أي تعليمات برمجية.${logoLine}`;
+}
+
+/**
+ * Permissions + marketing-notes rules applied once brand setup is done.
+ * Hamzawi reads the full profile but may ONLY auto-save the two notes fields.
+ */
+function getPermissionsInstruction(): string {
+  return `
+صلاحياتك على بيانات النشاط التجاري:
+- أنت تقرأ بيانات النشاط بالكامل (أعلاه) وتستخدمها في كل رد وتصميم.
+- الحقلان الوحيدان اللذان يمكنك حفظهما تلقائياً هما:
+  1. hamzawi_notes — وصف داخلي تكتبه أنت عن العميل أو نشاطك (معلومات مفيدة عن احتياجاته وسلوكه).
+  2. marketing_notes — ملاحظات تسويقية دائمة طلبها العميل نفسه (مثل: "أفضل استخدام اللهجة الليبية" أو "لا أحب التصاميم المزدحمة").
+- لحفظ أحدهما ضع في نهاية ردك: %%NOTES_SAVE%%{"hamzawi_notes": "..."} أو %%NOTES_SAVE%%{"marketing_notes": "..."} بدون أي نص حولها.
+- لا تحفظ ولا تعدّل أبداً بيانات النشاط الأساسية (اسم النشاط، نوع النشاط، العنوان، الهاتف، الألوان، الأسلوب، النبذة، الشعار) — تعديلها يتم فقط من صفحة "هوية النشاط التجاري". إذا طلب المستخدم تعديلها، وجّهه إلى صفحة إعدادات النشاط.
+- عند إبداء المستخدم تفضيلاً دائماً مفيداً للتسويق (مثل اللهجة المفضلة، أو عدم حبّه لأسلوب معين)، اقترح بلطف: "هل تريد أن أحفظ هذه الملاحظة لاستخدامها في المستقبل؟" واحفظها عبر %%NOTES_SAVE%% فقط بعد موافقته الصريحة. لا تحوّل كل رسالة إلى ذاكرة، ولا تحفظ إلا المعلومات القيّمة على المدى الطويل.
+- إذا احتاج المستخدم رفع شعار أو تصاميم مرجعية لتحسين التصميم، اطلب منه رفعها من زر المشبك 📎 في المحادثة وستُضاف تلقائياً إلى ملف نشاطه.
+- ابقَ متخصصاً في التسويق والإعلان وكتابة المحتوى وتصميم المنشورات والهوية البصرية فقط — لا تتوسع إلى مجالات أخرى.`;
+}
+
 function buildSystemPrompt(
   plan: Plan | string,
   memory: BrandMemoryData | null,
@@ -181,13 +218,10 @@ function buildSystemPrompt(
   const funnelInstruction = isOnboarding ? "" : getFunnelInstruction(level);
   const onboardingInstruction = isOnboarding ? getOnboardingInstruction() : "";
 
-  const updateInstruction = (!isOnboarding && level >= 2 && memory?.brand_onboarded)
-    ? `
-تحديث بيانات النشاط التجاري:
-إذا قال المستخدم "حدّث بياناتي" أو "عدّل معلوماتي" أو طلب تغيير أي معلومة في هويته البصرية، اسأله عن الحقل الذي يريد تعديله ثم احفظ التحديث في نهاية ردك بهذا الشكل (بدون نص حوله):
-%%PARTIAL_SAVE%%{"field_name": "new_value"}%%END%%
-الحقول المتاحة: business_name, business_type, address, phone, primary_colors, preferred_style, notes`
-    : "";
+  const permissionsInstruction =
+    (!isOnboarding && level >= 2 && memory?.brand_onboarded)
+      ? getPermissionsInstruction()
+      : "";
 
   return `أنت حمزاوي، مساعد تسويقي ذكي متخصص في سياسات إعلانات Meta وTikTok. شخصيتك ودية، محترفة، عملية.
 
@@ -203,7 +237,7 @@ ${memoryBlock}
 - خطط الترقية المتاحة: مسجّل (مجاني)، Smart Fix (400 د.ل/شهر)، Content (800 د.ل/شهر)، Agency (1000 د.ل/شهر)
 ${funnelInstruction}
 ${onboardingInstruction}
-${updateInstruction}`;
+${permissionsInstruction}`;
 }
 
 /**
@@ -232,6 +266,35 @@ function parsePartialSaves(reply: string): {
   cleanedReply = cleanedReply.replace(/%%ONBOARDING_COMPLETE%%/g, "").trim();
 
   return { cleanedReply, partialData, isOnboardingComplete };
+}
+
+/**
+ * Parse %%NOTES_SAVE%%{...}%% markers from AI reply.
+ * Only the two editable fields are accepted: hamzawi_notes, marketing_notes.
+ */
+function parseNotesSaves(reply: string): {
+  cleanedReply: string;
+  notes: { hamzawi_notes?: string; marketing_notes?: string };
+} {
+  const notes: { hamzawi_notes?: string; marketing_notes?: string } = {};
+  const regex = /%%NOTES_SAVE%%(\{[\s\S]*?\})%%END%%/g;
+  let cleanedReply = reply;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(reply)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]) as Record<string, unknown>;
+      if (typeof parsed.hamzawi_notes === "string" && parsed.hamzawi_notes.trim()) {
+        notes.hamzawi_notes = parsed.hamzawi_notes.trim();
+      }
+      if (typeof parsed.marketing_notes === "string" && parsed.marketing_notes.trim()) {
+        notes.marketing_notes = parsed.marketing_notes.trim();
+      }
+    } catch {}
+  }
+  cleanedReply = cleanedReply.replace(/%%NOTES_SAVE%%[\s\S]*?%%END%%/g, "").trim();
+
+  return { cleanedReply, notes };
 }
 
 // POST /api/hamzawi/chat
@@ -293,14 +356,6 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // Uses brand_onboarded AND core-data check so a lost flag never re-triggers onboarding.
     const isOnboarding = level >= 4 && !isBrandProfileComplete(memory);
 
-    // isInit but no onboarding needed — nothing to proactively say; return null
-    if (isInit && !isOnboarding) {
-      res.json({ reply: null, sessionId: sessionRawId, onboardingComplete: false });
-      return;
-    }
-
-    const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding);
-
     const recentMessages = await db
       .select()
       .from(hamzawiMessagesTable)
@@ -312,14 +367,27 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       .orderBy(desc(hamzawiMessagesTable.created_at))
       .limit(10);
 
+    // isInit: proactive first message.
+    // - Brand setup not done → start guided onboarding.
+    // - Brand setup done but no chat history → personalized welcome.
+    // - History already exists → nothing new to say (avoid re-welcoming on reload).
+    let triggerMessage: string | undefined;
+    if (isInit) {
+      if (isOnboarding) {
+        triggerMessage = "ابدأ الآن بتحية المستخدم وأول سؤال في جلسة إعداد هوية النشاط التجاري.";
+      } else if (user && memory && isBrandProfileComplete(memory) && recentMessages.length === 0) {
+        triggerMessage = `أرسل رسالة الترحيب الأولى للمستخدم.\n${getWelcomeInstruction(!!memory.logo_url)}`;
+      } else {
+        res.json({ reply: null, sessionId: sessionRawId, onboardingComplete: false });
+        return;
+      }
+    }
+
+    const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding);
+
     const historyForAI = recentMessages
       .reverse()
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
-
-    // For isInit onboarding: use a hidden trigger prompt (not stored, not shown)
-    const triggerMessage = isInit
-      ? "ابدأ الآن بتحية المستخدم وأول سؤال في جلسة إعداد هوية النشاط التجاري."
-      : undefined;
 
     let userContent = message ?? "";
     if (!isInit && checkReport && message) {
@@ -347,11 +415,27 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
     const rawReply = response.choices[0]?.message?.content ?? "عذراً، حدث خطأ. حاول مرة أخرى.";
 
-    // Parse partial saves and onboarding completion markers
+    // Parse partial saves, onboarding completion, and notes-save markers
     const { cleanedReply, partialData, isOnboardingComplete } = parsePartialSaves(rawReply);
+    const { cleanedReply: notesReply, notes } = parseNotesSaves(cleanedReply);
 
-    // Apply partial field saves incrementally — both during onboarding AND post-onboarding
-    if (user && partialData.length > 0) {
+    // Save the two editable notes fields (only with explicit AI consent markers)
+    if (user && (notes.hamzawi_notes || notes.marketing_notes)) {
+      try {
+        if (notes.hamzawi_notes) {
+          await upsertBrandMemory(user.id, { hamzawi_notes: notes.hamzawi_notes });
+        }
+        if (notes.marketing_notes) {
+          await appendMarketingNote(user.id, notes.marketing_notes);
+        }
+      } catch (e) {
+        logger.error({ e }, "Failed to save Hamzawi notes");
+      }
+    }
+
+    // Apply partial business-field saves ONLY during guided onboarding.
+    // Post-onboarding Hamzawi is restricted to the two notes fields above.
+    if (user && isOnboarding && partialData.length > 0) {
       try {
         await applyPartialBrandSave(user.id, partialData);
       } catch (e) {
@@ -368,7 +452,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    const reply = cleanedReply;
+    const reply = notesReply;
 
     // For isInit: only store the assistant message (no user message shown/stored)
     if (!isInit && message?.trim()) {
@@ -469,6 +553,8 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
     primary_colors,
     preferred_style,
     notes,
+    hamzawi_notes,
+    marketing_notes,
     brand_onboarded,
     append_design_sample,
     design_samples,
@@ -481,6 +567,8 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
     primary_colors?: string;
     preferred_style?: string;
     notes?: string;
+    hamzawi_notes?: string;
+    marketing_notes?: string;
     brand_onboarded?: boolean;
     append_design_sample?: string;
     design_samples?: string[];
@@ -496,6 +584,8 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
       primary_colors,
       preferred_style,
       notes,
+      hamzawi_notes,
+      marketing_notes,
       ...(Array.isArray(design_samples)
         ? { design_samples: JSON.stringify(design_samples.filter(Boolean)) }
         : {}),

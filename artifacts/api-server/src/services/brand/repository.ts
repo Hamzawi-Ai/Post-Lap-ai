@@ -14,6 +14,8 @@ export interface BrandMemoryRow {
   preferred_style: string | null;
   liked_posts: unknown;
   notes: string | null;
+  hamzawi_notes: string | null;
+  marketing_notes: string | null;
   design_samples: string | null;
   brand_onboarded: boolean;
   updated_at: Date;
@@ -140,6 +142,34 @@ export async function appendDesignSample(userId: number, dataUrl: string) {
     .update(userBrandMemoryTable)
     .set({ design_samples: JSON.stringify(arr), updated_at: new Date() })
     .where(eq(userBrandMemoryTable.user_id, userId));
+}
+
+/**
+ * Append a marketing note (client's permanent ad/marketing preference).
+ * The same note is never duplicated as an identical line.
+ */
+export async function appendMarketingNote(userId: number, note: string) {
+  const clean = note.trim();
+  if (!clean) return;
+
+  const existing = await db
+    .select({ marketing_notes: userBrandMemoryTable.marketing_notes })
+    .from(userBrandMemoryTable)
+    .where(eq(userBrandMemoryTable.user_id, userId))
+    .limit(1)
+    .then((r) => r[0]?.marketing_notes ?? null);
+
+  const lines = existing
+    ? existing.split("\n").map((l) => l.trim()).filter(Boolean)
+    : [];
+
+  if (lines.includes(clean)) {
+    await upsertBrandMemory(userId, { marketing_notes: lines.join("\n") });
+    return;
+  }
+
+  lines.push(clean);
+  await upsertBrandMemory(userId, { marketing_notes: lines.join("\n") });
 }
 
 // ── Business Profiles (Agency / Level 5) ────────────────────────────────────

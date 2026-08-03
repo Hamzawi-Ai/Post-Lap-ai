@@ -9,6 +9,7 @@ import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import Onboarding from "@/pages/onboarding";
 import CompanySettings from "@/pages/company";
+import BrandIdentity from "@/pages/brand";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/company" component={CompanySettings} />
+      <Route path="/brand" component={BrandIdentity} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/khtfa-secure-portal" component={Admin} />

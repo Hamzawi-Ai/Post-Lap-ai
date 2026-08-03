@@ -71,14 +71,24 @@ export default function CompanySettings() {
               <p className="text-xs text-muted-foreground">تعديل بيانات النشاط وهويته البصرية</p>
             </div>
           </div>
-          <a
-            href="/"
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-            data-testid="company-back-home"
-          >
-            الرئيسية
-            <ArrowRight className="w-4 h-4" />
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              href="/brand"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+              data-testid="company-view-brand"
+            >
+              عرض الهوية
+              <ArrowRight className="w-4 h-4" />
+            </a>
+            <a
+              href="/"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
+              data-testid="company-back-home"
+            >
+              الرئيسية
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 sm:p-8">
