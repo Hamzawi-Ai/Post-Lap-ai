@@ -15,6 +15,8 @@ import {
   markBrandOnboardingComplete,
   buildBrandMemoryBlock,
   upsertBrandMemory,
+  appendDesignSample,
+  isBrandProfileComplete,
 } from "../services/brand/brain";
 
 const router: IRouter = Router();
@@ -287,8 +289,9 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           .then((r) => r[0] ?? null)
       : null;
 
-    // Onboarding mode: level 4+ users who haven't completed brand setup
-    const isOnboarding = level >= 4 && !memory?.brand_onboarded;
+    // Onboarding mode: level 4+ users whose brand profile is not complete.
+    // Uses brand_onboarded AND core-data check so a lost flag never re-triggers onboarding.
+    const isOnboarding = level >= 4 && !isBrandProfileComplete(memory);
 
     // isInit but no onboarding needed — nothing to proactively say; return null
     if (isInit && !isOnboarding) {
@@ -468,6 +471,7 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
     notes,
     brand_onboarded,
     append_design_sample,
+    design_samples,
   } = req.body as {
     business_name?: string;
     business_type?: string;
@@ -479,6 +483,7 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
     notes?: string;
     brand_onboarded?: boolean;
     append_design_sample?: string;
+    design_samples?: string[];
   };
 
   try {
@@ -491,6 +496,9 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
       primary_colors,
       preferred_style,
       notes,
+      ...(Array.isArray(design_samples)
+        ? { design_samples: JSON.stringify(design_samples.filter(Boolean)) }
+        : {}),
       ...(brand_onboarded !== undefined ? { brand_onboarded } : {}),
     };
 
@@ -500,6 +508,12 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
     }
 
     await upsertBrandMemory(user.id, payload as Parameters<typeof upsertBrandMemory>[1]);
+
+    // Append a single design sample (legacy chat paperclip path) after upsert
+    if (append_design_sample) {
+      await appendDesignSample(user.id, append_design_sample);
+    }
+
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "Hamzawi update memory error");

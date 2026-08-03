@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine, Image as ImageIcon, Download } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine, Image as ImageIcon, Download, Store } from "lucide-react";
 import { useGetConfig, useGetStats, getGetConfigQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
@@ -25,6 +25,8 @@ interface LocalUser {
   is_active: boolean;
   trials_remaining: number;
   total_checks: number;
+  brand_onboarded?: boolean;
+  brand_profile_complete?: boolean;
 }
 
 function getTrials(): number {
@@ -84,6 +86,9 @@ export default function Home() {
   const [imageGenLoading, setImageGenLoading] = useState(false);
   const [imageGenResult, setImageGenResult] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [subscribeModal, setSubscribeModal] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [userRefreshed, setUserRefreshed] = useState(false);
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleBtnModalRef = useRef<HTMLDivElement>(null);
   const googleBtnLoginModalRef = useRef<HTMLDivElement>(null);
@@ -200,6 +205,83 @@ export default function Home() {
     localStorage.removeItem(USER_KEY);
     setUser(null);
     toast({ title: "تم تسجيل الخروج" });
+  }
+
+  // First-time onboarding gate: users on Professional (content, level 4+) whose
+  // brand profile is not complete are sent to /onboarding. Uses the server-computed
+  // brand_profile_complete (flag + core-data check) so a lost flag never forces re-onboarding.
+  // Runs only AFTER the mount refresh completes so a stale localStorage user (with the old
+  // brand_profile_complete=false) never re-redirects back to /onboarding after setup is done.
+  useEffect(() => {
+    if (!user || !userRefreshed) return;
+    if (planLevelFrontend(user.plan) >= 4 && user.brand_profile_complete === false) {
+      if (window.location.pathname !== "/onboarding") {
+        window.location.href = "/onboarding";
+      }
+    }
+  }, [user, userRefreshed]);
+
+  // Refresh user from server on mount so brand_profile_complete is always current
+  // (even if localStorage is stale from an older session). The gate effect above only
+  // runs after this settles, so a stale flag never causes a redirect loop.
+  useEffect(() => {
+    const token = getToken();
+    if (!token || !user) {
+      setUserRefreshed(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/users/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        if (res.status === 401) {
+          logout();
+          return;
+        }
+        if (res.ok) {
+          const fresh = await res.json();
+          localStorage.setItem(USER_KEY, JSON.stringify(fresh));
+          setUser(fresh);
+        }
+      } catch {
+        // ignore network errors — keep local state
+      } finally {
+        if (!cancelled) setUserRefreshed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleSubscribe() {
+    setSubscribing(true);
+    try {
+      const token = getToken();
+      if (!token) {
+        setSubscribeModal(false);
+        setShowLoginModal(true);
+        return;
+      }
+      const res = await fetch("/api/auth/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { logout(); toast({ title: "انتهت الجلسة", variant: "destructive" }); return; }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "فشل الاشتراك");
+      localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+      setUser(data.user);
+      setSubscribeModal(false);
+      toast({ title: "تم الاشتراك في Professional 🎉", description: "فعّلنا خطة Professional (800 د.ل/شهر) — جهّز نشاطك التجاري الآن" });
+      window.location.href = "/onboarding";
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setSubscribing(false);
+    }
   }
 
   function startCountdown() {
@@ -457,8 +539,17 @@ export default function Home() {
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground hidden sm:inline">{user.name}</span>
                 <span className={`text-xs px-2 py-0.5 rounded-full border ${["professional","smart_fix","content","agency"].includes(user.plan) ? "border-primary/50 text-primary bg-primary/10" : "border-border text-muted-foreground"}`}>
-                  {user.plan === "agency" ? "وكالة" : user.plan === "content" ? "إدارة محتوى" : user.plan === "smart_fix" || user.plan === "professional" ? "Smart Fix" : user.plan === "registered" ? "مسجل" : "زائر"}
+                  {user.plan === "agency" ? "وكالة" : user.plan === "content" ? "Professional" : user.plan === "smart_fix" || user.plan === "professional" ? "Smart Fix" : user.plan === "registered" ? "مسجل" : "زائر"}
                 </span>
+                <a
+                  href="/company"
+                  title="إعدادات الشركة"
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1"
+                  data-testid="link-company-settings"
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">الشركة</span>
+                </a>
                 <button onClick={logout} className="text-xs text-muted-foreground hover:text-foreground transition-colors">{t.nav.signOut}</button>
               </div>
             ) : (
@@ -575,13 +666,13 @@ export default function Home() {
                       </>
                     ) : (
                       <>
-                        <a
-                          href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
-                          target="_blank" rel="noopener noreferrer"
+                        <button
+                          onClick={() => setSubscribeModal(true)}
                           className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                          data-testid="button-subscribe-start"
                         >
                           اشترك وابدأ التوليد
-                        </a>
+                        </button>
                         <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
                           عرض الخطط
                         </a>
@@ -696,13 +787,13 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    <a
-                      href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في إدارة المحتوى - PostLapAI`}
-                      target="_blank" rel="noopener noreferrer"
+                    <button
+                      onClick={() => setSubscribeModal(true)}
                       className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
+                      data-testid="button-subscribe-start-image"
                     >
                       اشترك وابدأ التوليد
-                    </a>
+                    </button>
                     <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
                       عرض الخطط
                     </a>
@@ -1105,6 +1196,63 @@ export default function Home() {
                 إغلاق
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subscribe modal — in-platform Professional subscription */}
+      {subscribeModal && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          data-testid="modal-subscribe"
+          onClick={() => setSubscribeModal(false)}
+        >
+          <div
+            className="bg-card border border-border rounded-2xl p-8 max-w-md w-full text-center space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div />
+              <p className="text-lg font-black text-foreground">اشترك في Professional</p>
+              <button
+                onClick={() => setSubscribeModal(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="button-subscribe-modal-close"
+                aria-label="إغلاق"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+              <Shield className="w-8 h-8 text-primary" />
+            </div>
+            <div>
+              <p className="text-3xl font-black text-primary">800 <span className="text-lg">د.ل</span></p>
+              <p className="text-xs text-muted-foreground mt-1">شهرياً — تفعيل فوري</p>
+            </div>
+            <ul className="space-y-2 text-sm text-foreground text-right max-w-xs mx-auto">
+              {["توليد نصوص إعلانية باللهجة الليبية", "تصميم منشورات بشعار نشاطك وهويته", "ذاكرة دائمة لنشاطك — حمزاوي يتذكره دائماً", "فحوصات غير محدودة"].map((f) => (
+                <li key={f} className="flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              بعد الاشتراك سنجهّز ملف نشاطك التجاري في خطوة واحدة، ثم يبدأ حمزاوي بالعمل مباشرة.
+            </p>
+            <button
+              onClick={handleSubscribe}
+              disabled={subscribing}
+              className="w-full bg-primary text-primary-foreground py-3 rounded-xl font-black text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              data-testid="button-subscribe-confirm"
+            >
+              {subscribing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {subscribing ? "جاري التفعيل..." : "فعّل الاشتراك والمتابعة"}
+            </button>
+            <p className="text-[11px] text-muted-foreground">
+              الدفع بالتحويل البنكي — سنتواصل معك لإتمامه، وتستطيع البدء فوراً.
+            </p>
           </div>
         </div>
       )}

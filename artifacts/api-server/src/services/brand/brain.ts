@@ -85,6 +85,25 @@ export async function markBrandOnboardingComplete(userId: number) {
   await upsertBrandMemory(userId, { brand_onboarded: true });
 }
 
+/**
+ * Determine whether a brand profile is complete enough that onboarding is done.
+ * Uses the `brand_onboarded` flag BUT also verifies core data actually exists,
+ * so a lost flag during a migration never forces re-onboarding.
+ */
+export function isBrandProfileComplete(memory: BrandMemoryData | null | undefined): boolean {
+  if (!memory) return false;
+  const hasCoreData = Boolean(
+    memory.business_name?.trim() && memory.business_type?.trim(),
+  );
+  return memory.brand_onboarded === true || hasCoreData;
+}
+
+/** Core fields required for the first-time onboarding to be considered done. */
+export function hasCoreBrandData(memory: BrandMemoryData | null | undefined): boolean {
+  if (!memory) return false;
+  return Boolean(memory.business_name?.trim() && memory.business_type?.trim());
+}
+
 export interface BrandMemoryData {
   business_name?: string | null;
   business_type?: string | null;
@@ -100,9 +119,10 @@ export interface BrandMemoryData {
 
 /**
  * Build a human-readable brand memory block for AI system prompts.
+ * Only fields with actual (non-empty) values are included.
  */
 export function buildBrandMemoryBlock(memory: BrandMemoryData | null): string {
-  if (!memory?.business_name) return "";
+  if (!memory?.business_name?.trim()) return "";
 
   const sampleCount = memory.design_samples
     ? (() => {
@@ -111,28 +131,36 @@ export function buildBrandMemoryBlock(memory: BrandMemoryData | null): string {
       })()
     : 0;
 
+  const lines: string[] = [`- اسم النشاط: ${memory.business_name.trim()}`];
+  if (memory.business_type?.trim()) lines.push(`- نوع النشاط: ${memory.business_type.trim()}`);
+  if (memory.address?.trim()) lines.push(`- العنوان: ${memory.address.trim()}`);
+  if (memory.phone?.trim()) lines.push(`- الهاتف: ${memory.phone.trim()}`);
+  if (memory.primary_colors?.trim()) lines.push(`- الألوان: ${memory.primary_colors.trim()}`);
+  if (memory.preferred_style?.trim()) lines.push(`- الأسلوب المفضل: ${memory.preferred_style.trim()}`);
+  if (memory.notes?.trim()) lines.push(`- ملاحظات: ${memory.notes.trim()}`);
+  if (memory.logo_url?.trim()) lines.push("- الشعار: محفوظ ✓");
+  if (sampleCount > 0) lines.push(`- نماذج تصاميم سابقة: ${sampleCount} مرفوعة ✓`);
+
   return `
 معلومات النشاط التجاري المحفوظة لهذا المستخدم:
-- اسم النشاط: ${memory.business_name}
-- نوع النشاط: ${memory.business_type ?? "غير محدد"}
-- العنوان: ${memory.address ?? "غير محدد"}
-- الهاتف: ${memory.phone ?? "غير محدد"}
-- الألوان: ${memory.primary_colors ?? "غير محدد"}
-- الأسلوب المفضل: ${memory.preferred_style ?? "غير محدد"}
-- ملاحظات: ${memory.notes ?? "لا يوجد"}
-${memory.logo_url ? "- الشعار: محفوظ ✓" : "- الشعار: لم يُرفع بعد"}
-${sampleCount > 0 ? `- نماذج تصاميم سابقة: ${sampleCount} مرفوعة ✓` : "- نماذج تصاميم سابقة: لا يوجد"}
+${lines.join("\n")}
 `;
 }
 
 /**
  * Build Gemini brand context string for image generation prompts.
+ * Only fields with actual (non-empty) values are included.
  */
 export function buildGeminiBrandContext(memory: BrandMemoryData | null): string {
-  if (!memory?.business_name) {
+  if (!memory?.business_name?.trim()) {
     return "No brand identity saved — use professional defaults with a clean modern style.";
   }
-  return `Brand identity:\n- Business name: ${memory.business_name}\n- Business type: ${memory.business_type ?? "unspecified"}\n- Brand colors: ${memory.primary_colors ?? "professional defaults"}\n- Design style: ${memory.preferred_style ?? "professional and clean"}\n- Notes: ${memory.notes ?? "none"}`;
+  const lines: string[] = [`- Business name: ${memory.business_name.trim()}`];
+  if (memory.business_type?.trim()) lines.push(`- Business type: ${memory.business_type.trim()}`);
+  if (memory.primary_colors?.trim()) lines.push(`- Brand colors: ${memory.primary_colors.trim()}`);
+  if (memory.preferred_style?.trim()) lines.push(`- Design style: ${memory.preferred_style.trim()}`);
+  if (memory.notes?.trim()) lines.push(`- Notes: ${memory.notes.trim()}`);
+  return `Brand identity:\n${lines.join("\n")}`;
 }
 
 // ── Company Helpers ─────────────────────────────────────────────────────────

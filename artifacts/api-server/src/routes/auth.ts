@@ -1,12 +1,35 @@
 import { Router, type IRouter } from "express";
 import { OAuth2Client } from "google-auth-library";
 import jwt from "jsonwebtoken";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, userBrandMemoryTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import { autoCreateCompanyForUser } from "../services/brand/brain";
+import { getUserFromToken } from "../middleware/auth";
+import { autoCreateCompanyForUser, isBrandProfileComplete } from "../services/brand/brain";
 
 const router: IRouter = Router();
+
+async function getUserPayload(user: typeof usersTable.$inferSelect) {
+  const [memory] = await db
+    .select()
+    .from(userBrandMemoryTable)
+    .where(eq(userBrandMemoryTable.user_id, user.id))
+    .limit(1);
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    plan: user.plan,
+    gender: user.gender ?? null,
+    is_active: user.is_active,
+    trials_remaining: user.trials_remaining,
+    total_checks: user.total_checks,
+    last_check_at: user.last_check_at?.toISOString() ?? null,
+    brand_onboarded: memory?.brand_onboarded ?? false,
+    brand_profile_complete: isBrandProfileComplete(memory ?? null),
+  };
+}
 
 import { SESSION_SECRET } from "../lib/secrets";
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
@@ -75,20 +98,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
       expiresIn: "7d",
     });
 
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        plan: user.plan,
-        gender: user.gender ?? null,
-        is_active: user.is_active,
-        trials_remaining: user.trials_remaining,
-        total_checks: user.total_checks,
-        last_check_at: user.last_check_at?.toISOString() ?? null,
-      },
-      token,
-    });
+    res.json({ user: await getUserPayload(user), token });
   } catch (err) {
     logger.error({ err }, "Google auth error");
     res.status(401).json({ error: "فشل تسجيل الدخول" });
@@ -131,20 +141,7 @@ router.post("/dev/login", async (_req, res): Promise<void> => {
       expiresIn: "7d",
     });
 
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        plan: user.plan,
-        gender: user.gender ?? null,
-        is_active: user.is_active,
-        trials_remaining: user.trials_remaining,
-        total_checks: user.total_checks,
-        last_check_at: user.last_check_at?.toISOString() ?? null,
-      },
-      token,
-    });
+    res.json({ user: await getUserPayload(user), token });
   } catch (err) {
     logger.error({ err }, "Dev login error");
     res.status(500).json({ error: "حدث خطأ" });
@@ -173,17 +170,7 @@ router.get("/users/me", async (req, res): Promise<void> => {
       return;
     }
 
-    res.json({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      plan: user.plan,
-      gender: user.gender ?? null,
-      is_active: user.is_active,
-      trials_remaining: user.trials_remaining,
-      total_checks: user.total_checks,
-      last_check_at: user.last_check_at?.toISOString() ?? null,
-    });
+    res.json(await getUserPayload(user));
   } catch {
     res.status(401).json({ error: "رمز الدخول غير صالح" });
   }
@@ -219,6 +206,39 @@ router.patch("/users/me/gender", async (req, res): Promise<void> => {
     res.json({ gender: user.gender });
   } catch {
     res.status(401).json({ error: "رمز الدخول غير صالح" });
+  }
+});
+
+// POST /auth/subscribe — self-service upgrade to the Professional (content) plan.
+// Payment is settled out-of-band (bank transfer via admin); access is granted immediately.
+router.post("/auth/subscribe", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول للاشتراك" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(usersTable)
+      .set({
+        plan: "content",
+        subscription_label: "Professional — 800 د.ل/شهر",
+        trials_remaining: 9999,
+        is_active: true,
+      })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "المستخدم غير موجود" });
+      return;
+    }
+
+    res.json({ user: await getUserPayload(updated), ok: true });
+  } catch (err) {
+    logger.error({ err }, "Subscribe error");
+    res.status(500).json({ error: "حدث خطأ أثناء الاشتراك" });
   }
 });
 
