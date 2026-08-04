@@ -92,17 +92,11 @@ export default function CompanySettings() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 sm:p-8">
-          {memory ? (
-            <BrandSetupForm
-              mode="edit"
-              initial={memory}
-              onSubmit={() => toast({ title: "تم حفظ التعديلات ✓" })}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              لا توجد بيانات نشاط محفوظة بعد. يمكنك إضافتها الآن.
-            </p>
-          )}
+          <BrandSetupForm
+            mode="edit"
+            initial={memory}
+            onSubmit={() => toast({ title: "تم حفظ التعديلات ✓" })}
+          />
         </div>
       </div>
     </div>

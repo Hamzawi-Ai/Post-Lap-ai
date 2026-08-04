@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { unlinkSync, existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
+import { join, dirname, resolve, sep } from "path";
 import { fileURLToPath } from "url";
 import { tmpdir } from "os";
-import { db, usersTable, checksTable, userBrandMemoryTable } from "@workspace/db";
+import { db, usersTable, checksTable, userBrandMemoryTable, mediaAssetsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
@@ -13,8 +13,11 @@ import { getUserFromToken } from "../middleware/auth";
 import { getOpenAI, getGemini, isGeminiAvailable } from "../services/ai/client";
 import type OpenAI from "openai";
 import { buildGeminiBrandContext } from "../services/brand/brain";
+import { MediaService } from "../services/media/MediaService";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+// Files written by MediaService land in <api-server-root>/storage/
+const STORAGE_ROOT = resolve(__dirname, "../storage");
 const router: IRouter = Router();
 
 // Rate limiter: 10 requests per minute per IP
@@ -109,6 +112,80 @@ async function cleanupDir(dir: string) {
     for (const f of files) cleanup(join(dir, f));
     rmdirSync(dir);
   } catch {}
+}
+
+/**
+ * Convert a /uploads/… public URL to base64 inline data for Gemini.
+ * Supports the /uploads/ path format written by MediaService.
+ * Returns null if the file is missing or the path escapes the storage root.
+ */
+async function uploadsUrlToBase64(
+  publicUrl: string,
+): Promise<{ mimeType: string; data: string } | null> {
+  if (!publicUrl.startsWith("/uploads/")) return null;
+  const relativePath = publicUrl.slice("/uploads/".length);
+  const absolutePath = resolve(STORAGE_ROOT, relativePath);
+  // Containment check — prevent path-traversal
+  const normalRoot = STORAGE_ROOT + sep;
+  if (!absolutePath.startsWith(normalRoot) && absolutePath !== STORAGE_ROOT) return null;
+  try {
+    const { readFile } = await import("fs/promises");
+    const buffer = await readFile(absolutePath);
+    const ext = (absolutePath.split(".").pop() ?? "").toLowerCase();
+    const mimeMap: Record<string, string> = {
+      png: "image/png",
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      webp: "image/webp",
+    };
+    const mimeType = mimeMap[ext] ?? "image/jpeg";
+    return { mimeType, data: buffer.toString("base64") };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Save an AI-generated image buffer via MediaService and insert a media_assets
+ * row.  Returns the public /uploads/… URL on success, or null on failure
+ * (the caller should fall back to a data: URL so the user is never left empty).
+ */
+async function saveGeneratedImage(
+  userId: number,
+  companyId: number | null,
+  imageBuffer: Buffer,
+  mimeType: string,
+): Promise<string | null> {
+  const effectiveCompanyId = companyId ?? userId;
+  try {
+    const saved = await MediaService.saveFile(
+      effectiveCompanyId,
+      "generated",
+      "generated.png",
+      imageBuffer,
+      mimeType,
+    );
+    try {
+      await db.insert(mediaAssetsTable).values({
+        user_id: userId,
+        company_id: companyId,
+        category: "generated",
+        filename: saved.filename,
+        relative_path: saved.relativePath,
+        mime_type: mimeType,
+        size: imageBuffer.byteLength,
+      });
+    } catch (dbErr) {
+      // DB insert failed — clean up the orphaned file so storage stays consistent
+      logger.error({ dbErr }, "Failed to record generated asset in DB; removing orphaned file");
+      await MediaService.deleteFile(saved.relativePath).catch(() => {});
+      return null;
+    }
+    return saved.publicUrl;
+  } catch (err) {
+    logger.error({ err }, "Failed to save generated image to disk");
+    return null;
+  }
 }
 
 interface CheckResult {
@@ -387,29 +464,42 @@ router.post("/image-gen", async (req, res): Promise<void> => {
         { text: basePrompt },
       ];
 
-      const hasLogo = memory?.logo_url?.startsWith("data:");
-      if (hasLogo) {
-        const logoMatch = memory!.logo_url!.match(/^data:(image\/[a-z]+);base64,(.+)$/);
-        if (logoMatch) {
-          parts.push({ inlineData: { mimeType: logoMatch[1], data: logoMatch[2] } });
+      // Resolve logo: support both legacy data: URIs and modern /uploads/ paths
+      let logoInlineData: { mimeType: string; data: string } | null = null;
+      if (memory?.logo_url) {
+        if (memory.logo_url.startsWith("data:")) {
+          const logoMatch = memory.logo_url.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+          if (logoMatch) logoInlineData = { mimeType: logoMatch[1], data: logoMatch[2] };
+        } else if (memory.logo_url.startsWith("/uploads/")) {
+          logoInlineData = await uploadsUrlToBase64(memory.logo_url);
         }
+      }
+      if (logoInlineData) {
+        parts.push({ inlineData: logoInlineData });
       }
 
       // Include previous design samples (up to 3) as visual style references
+      // Support both legacy data: URIs and modern /uploads/ paths
       const designSamples: string[] = (() => {
         if (!memory?.design_samples) return [];
         try { return JSON.parse(memory.design_samples) as string[]; } catch { return []; }
       })();
-      const samplesAdded = designSamples.slice(0, 3).filter((s) => s.startsWith("data:")).map((s) => {
-        const m = s.match(/^data:(image\/[a-z]+);base64,(.+)$/);
-        return m ? { mimeType: m[1], data: m[2] } : null;
-      }).filter(Boolean) as Array<{ mimeType: string; data: string }>;
+      const samplesAdded: Array<{ mimeType: string; data: string }> = [];
+      for (const s of designSamples.slice(0, 3)) {
+        if (s.startsWith("data:")) {
+          const m = s.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+          if (m) samplesAdded.push({ mimeType: m[1], data: m[2] });
+        } else if (s.startsWith("/uploads/")) {
+          const r = await uploadsUrlToBase64(s);
+          if (r) samplesAdded.push(r);
+        }
+      }
       for (const sample of samplesAdded) {
         parts.push({ inlineData: sample });
       }
 
       const contextDesc = [
-        hasLogo ? "brand logo" : "",
+        logoInlineData ? "brand logo" : "",
         samplesAdded.length > 0 ? `${samplesAdded.length} design sample(s)` : "",
       ].filter(Boolean).join(" and ");
       if (contextDesc) {
@@ -439,7 +529,24 @@ router.post("/image-gen", async (req, res): Promise<void> => {
       );
 
       if (imagePart?.inlineData?.data) {
-        res.json({ url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}` });
+        // Persist the generated image via MediaService so it survives page refresh
+        const genBuffer = Buffer.from(imagePart.inlineData.data, "base64");
+        const [userRow] = await db
+          .select({ company_id: usersTable.company_id })
+          .from(usersTable)
+          .where(eq(usersTable.id, user.id))
+          .limit(1);
+        const publicUrl = await saveGeneratedImage(
+          user.id,
+          userRow?.company_id ?? null,
+          genBuffer,
+          imagePart.inlineData.mimeType,
+        );
+        // Fall back to a data: URL only if storage fails, so the user always
+        // receives an image even on transient disk/DB issues.
+        res.json({
+          url: publicUrl ?? `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+        });
       } else {
         res.status(500).json({ error: "لم يتم توليد صورة. حاول مرة أخرى." });
       }
@@ -494,7 +601,25 @@ router.post("/image-gen", async (req, res): Promise<void> => {
     );
 
     if (imagePart?.inlineData?.data) {
-      res.json({ url: `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}` });
+      const genBuffer = Buffer.from(imagePart.inlineData.data, "base64");
+      // Save fixed image for authenticated users so refresh doesn't lose it
+      let publicUrl: string | null = null;
+      if (user) {
+        const [userRow] = await db
+          .select({ company_id: usersTable.company_id })
+          .from(usersTable)
+          .where(eq(usersTable.id, user.id))
+          .limit(1);
+        publicUrl = await saveGeneratedImage(
+          user.id,
+          userRow?.company_id ?? null,
+          genBuffer,
+          imagePart.inlineData.mimeType,
+        );
+      }
+      res.json({
+        url: publicUrl ?? `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`,
+      });
     } else {
       res.status(500).json({ error: "لم يتم توليد صورة" });
     }

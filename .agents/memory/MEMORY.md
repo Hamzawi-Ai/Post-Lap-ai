@@ -1,0 +1,1 @@
+- [Media pipeline architecture](media-pipeline.md) — all uploaded/generated images route through MediaService; /uploads/ static route served from api-server/storage/
