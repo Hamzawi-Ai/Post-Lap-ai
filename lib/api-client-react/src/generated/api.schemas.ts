@@ -13,6 +13,25 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface PricingPlan {
+  id: string;
+  name: string;
+  nameAr: string;
+  price: number;
+  desc: string;
+  features: string[];
+  /** @nullable */
+  badge: string | null;
+  cta: string;
+  highlight: boolean;
+}
+
+export interface AppPricing {
+  currency: string;
+  plans: PricingPlan[];
+  agencyExtraProjectPrice: number;
+}
+
 export type AppConfigAgents = {
   libya: string;
   jordan: string;
@@ -20,7 +39,7 @@ export type AppConfigAgents = {
 };
 
 export interface AppConfig {
-  pro_price: string;
+  pricing: AppPricing;
   whatsapp: string;
   agents: AppConfigAgents;
   accuracy_text: string;
@@ -58,13 +77,17 @@ export const AdCheckResultStatus = {
 } as const;
 
 export interface AdCheckResult {
+  id?: number;
   status: AdCheckResultStatus;
+  /** Empty string for guests (redacted) */
   reason: string;
   score: number;
   message: string;
   /** @nullable */
   frames_checked?: number | null;
+  /** Empty array for guests (redacted) */
   violations?: AdViolation[];
+  /** Empty array for guests (redacted) */
   suggestions?: string[];
 }
 

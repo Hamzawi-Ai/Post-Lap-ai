@@ -9,12 +9,16 @@ import type { AdCheckResultStatus } from "./adCheckResultStatus";
 import type { AdViolation } from "./adViolation";
 
 export interface AdCheckResult {
+  id?: number;
   status: AdCheckResultStatus;
+  /** Empty string for guests (redacted) */
   reason: string;
   score: number;
   message: string;
   /** @nullable */
   frames_checked?: number | null;
+  /** Empty array for guests (redacted) */
   violations?: AdViolation[];
+  /** Empty array for guests (redacted) */
   suggestions?: string[];
 }

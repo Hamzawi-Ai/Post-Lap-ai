@@ -58,7 +58,7 @@ Chronological record of important product and technical decisions.
     professional/smart_fix=3, content=4, agency=5. Text generation = level 3+;
     image generation + image-aware text = level 4+.
 
-## 2026-08-02 — Integration audit (uncommitted)
+## 2026-08-02 — Integration audit (`a27777a`)
 
 15. **Frontend must be able to reach a separately-hosted API.** Added
     `setBaseUrl(import.meta.env.VITE_API_BASE_URL)` in `main.tsx`; same-origin
@@ -89,3 +89,34 @@ Chronological record of important product and technical decisions.
 21. **DB migrations are `drizzle-kit push`** (applied automatically on merge via
     `scripts/post-merge.sh`). Decision: acceptable for MVP; switch to versioned
     SQL migrations (`drizzle-kit generate`) for production.
+
+## 2026-08-03 — In-app Professional plan + brand identity (`241945f`, `eeab99b`)
+
+22. **In-app Professional plan replaces the WhatsApp-only upgrade path.**
+    New `POST /api/auth/subscribe` self-upgrades any logged-in user to the
+    `content` plan (Professional — 800 د.ل/شهر, `trials_remaining: 9999`,
+    `is_active: true`). Payment remains out-of-band (bank transfer); access is
+    granted immediately. **Known risk:** nothing verifies payment server-side and
+    the route has no rate limit (audit R4).
+23. **Plan levels** (server `planLevel`): visitor=1, registered=2,
+    professional/smart_fix=3, content=4, agency=5. Matches frontend
+    `planLevelFrontend`.
+24. **Brand identity page (`/brand`) added in-app** — dedicated brand-management
+    page (previously deferred to V2), smart welcome flow, Hamzawi
+    profile-permission notes, and a brand completion score. Brand partial saves
+    (`hamzawi_notes`/`marketing_notes`) are consent-gated.
+25. **Image generation moved to `gemini-2.5-flash-image`** via GoogleGenAI
+    (requires `GEMINI_API_KEY` at runtime).
+
+## 2026-08-03 — Launch Readiness Audit (`docs/LAUNCH_READINESS_AUDIT.md`)
+
+26. **All Phase-4 high-priority UX fixes (H1, H2, H4, H5) now confirmed fixed**
+    in `main`; H6 (bilingual compliance badge) and L1–L3 remain open.
+27. **Server-side enforcement gaps identified (not yet fixed):** guest cap is
+    client-only (R1); `trials_remaining` decrements but never gates (R2);
+    `is_active`/`subscription_expires_at` written but never enforced (R3);
+    `/auth/subscribe` self-grants paid access without verification or rate limit
+    (R4). Decision pending user review.
+28. **Go-live is blocked on production secrets** — `.env` holds only dev
+    placeholder values, and `lib/secrets.ts` does not reject placeholders in prod.
+

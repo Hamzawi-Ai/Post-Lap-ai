@@ -1,67 +1,65 @@
 # NEXT_SESSION.md
 
-**Date:** 2026-08-02 · **Branch:** `feature/mvp-launch` · **Repo:** `github.com/Hamzawi-Ai/Post-Lap-ai.git`
+**Date:** 2026-08-03 · **Branch:** `main` @ `eeab99b` · **Repo:** `github.com/Hamzawi-Ai/Post-Lap-ai.git`
 
 ---
 
-## Completed today
+## Completed since the last session (2026-08-02)
 
-1. **Homepage redesign** — committed `2314303` ("Redesign homepage: AI Post
-   Generation as primary hero with embedded Hamzawi assistant").
-   - New fixed section order: AI Post Generation (hero) → AI Image Generation →
-     Existing Post Check → Features → Pricing → secondary (How-it-works, trust,
-     stats, Agents, FAQ).
-   - Floating Hamzawi widget **removed**; `HamzawiChat` gained an `embedded` prop
-     (always-open inline, 640px, sticky in hero).
-   - `/api/image-gen` UI (level-4 gated), inline Arabic-only check results,
-     header nav updated, secondary sections demoted (muted/`opacity-90`).
-   - `pnpm run typecheck` + `pnpm run build` pass; homepage verified via headless
-     Chromium (section order, embedded chat, no console errors).
-2. **Integration audit fixes (NOT yet committed):**
-   - `src/main.tsx` — `VITE_API_BASE_URL` wiring via `setBaseUrl`.
-   - `vite.config.ts` — dev `/api` proxy → `127.0.0.1:5000`.
-   - `auth.ts` — dev-only `/api/dev/login` (404 in production).
-   - `services/ai/client.ts` — dev-only OpenAI stub (only when not production and
-     no `OPENAI_API_KEY`).
-   - `admin.tsx` / `secret-admin.tsx` — `window.confirm` on destructive actions.
-   - Created `.env.example` and `INTEGRATION_REPORT.md` at repo root.
-3. **Documentation (committed separately):** this `/docs` set — `PROJECT_STATUS.md`,
-   `DECISIONS.md`, `HOMEPAGE_SPEC.md`, `MVP_SCOPE.md`, `NEXT_SESSION.md`.
+1. **Integration audit work committed** (`a27777a`, merged into `main`): dev-only
+   `/api/dev/login`, dev OpenAI stub, `VITE_API_BASE_URL` wiring, vite dev proxy,
+   admin/secret-admin `window.confirm`, `.env.example`, `INTEGRATION_REPORT.md`.
+2. **Replit Postgres** (`4557c48`) — Replit PostgreSQL service wired; drizzle schema
+   pushed via post-merge `db push`. No versioned migrations (push-only).
+3. **Gemini image model** (`e21574b`) — `/api/image-gen` on `gemini-2.5-flash-image`.
+4. **In-app Professional plan** (`241945f`) — pricing/content gates in UI,
+   `/api/auth/subscribe`, onboarding for new users. WhatsApp sub removed in favor of
+   in-app plan.
+5. **Brand identity page** (`eeab99b`) — `/brand` route, smart welcome, Hamzawi
+   profile-permission notes, brand completion score, consent-gated partial brand saves.
+6. **Launch Readiness Audit finished** — `docs/LAUNCH_READINESS_AUDIT.md`. Re-verified
+   all Phase-4 items (H1/H2/H4/H5/M1/M2/M3/M5 fixed; H6/L1/L2/L3 open), audited new
+   features, and produced a prioritized fix list (§7). **No fixes applied.**
 
-## Environment state (dev, still active)
+## Environment state (dev)
 
-- Postgres 16 on `127.0.0.1:5432` (db `postlapai`, user `postgres`).
-- API server running on port `5000` (PID 6221, log `/tmp/api.log`). Do not kill.
-- No `OPENAI_API_KEY` — dev AI stub is the active AI path in dev.
-- Headless Chromium available under `~/.cache/ms-playwright/`.
+- Postgres **down** locally (`ECONNREFUSED 127.0.0.1:5432`). Schema lives on Replit
+  Postgres (unreachable from here). Start `pg_ctl`/service before running the API.
+- API server not running locally (start with `pnpm --filter api-server dev`, needs DB).
+- `.env` is dev-only (untracked): `NODE_ENV=development`, `SESSION_SECRET=dev-secret`,
+  `ADMIN_PASSWORD=admin123`, `GOOGLE_CLIENT_ID=dev-client-id`, empty `OPENAI_API_KEY`.
+- Headless Chromium under `~/.cache/ms-playwright/` (chromium-1223). E2E suite
+  (`e2e/tests/login-modal.spec.ts`) is runnable once the API + DB are up.
 
-## Remaining (uncommitted work)
+## Remaining work — in priority order
 
-Staged-in-workbench, not committed:
+Follow `docs/LAUNCH_READINESS_AUDIT.md` §7. **User has NOT yet reviewed/approved fixes.**
 
-```
- M artifacts/api-server/src/routes/auth.ts          (dev login)
- M artifacts/api-server/src/services/ai/client.ts   (dev AI stub)
- M artifacts/postlap-ai/src/main.tsx                (VITE_API_BASE_URL)
- M artifacts/postlap-ai/src/pages/admin.tsx         (delete confirm)
- M artifacts/postlap-ai/src/pages/secret-admin.tsx  (unlimited/reset confirm)
- M artifacts/postlap-ai/vite.config.ts              (dev /api proxy)
-?? .env.example
-?? INTEGRATION_REPORT.md
-```
+### Must-fix before go-live
+1. **Production secrets** on Replit (`DATABASE_URL`, `OPENAI_API_KEY`, `GEMINI_API_KEY`,
+   `GOOGLE_CLIENT_ID`, `SESSION_SECRET`, `ADMIN_PASSWORD`) + reject dev placeholder
+   secrets in prod (`lib/secrets.ts`).
+2. **Server-side enforcement** in the check route:
+   - block registered users when `trials_remaining` reaches 0 (R2);
+   - enforce `is_active` / `subscription_expires_at` (R3).
+3. **Visitor cap server-side** (R1) or document client-only as accepted MVP tradeoff.
+4. **Rate-limit `/api/auth/subscribe`** (R4).
+5. **H6** — unify bilingual compliance badge (home.tsx:631 vs 752).
 
-Plus open Phase-4 audit items not yet done: **H1** (render countdown in hero),
-**H2** (sign-in inside trial-block modal), **H4** (brand-memory save loading
-state), **H5** (upgrade nudge only for `level < 4`), **H6** (conditional
-compliance badge), **M1/M4/M5**, **L1–L3**.
+### Should-fix
+6. `config.json` vs `DEFAULT_CONFIG` pro_price drift (400 vs 200).
+7. Refresh OpenAPI spec (`/users/me/gender`, `/auth/subscribe`, `dev/login`, admin routes).
+8. Decide www-redirect for Replit interim host.
+9. Re-run e2e suite once DB/API are up.
+
+### Nice-to-have
+10. Versioned DB migrations (`drizzle-kit generate`).
+11. TOS automated-decision clause (L2); privacy link in cookie banner (L3).
+12. Verify R5 guest reason leak.
 
 ## Exact next task
 
-1. **Commit the uncommitted integration/verification work** as one clean commit
-   (message style: imperative, matching history, e.g. "Add dev-only login/AI stub,
-   API base URL wiring, admin confirmations"). Include `.env.example` and
-   `INTEGRATION_REPORT.md`. Run `pnpm run typecheck` first.
-2. Then pick up the Phase-4 high-priority UX fixes (H1, H2, H4, H5, H6) on
-   `feature/mvp-launch`, each verified with `pnpm run typecheck` + `pnpm run build`.
-
-Note: this `/docs` commit must land **separately** from any code commit.
+Wait for the user to review `docs/LAUNCH_READINESS_AUDIT.md` and pick which §7 items to
+fix before deploying. Then implement each fix on `main` (or a `feature/` branch), verifying
+with `pnpm run typecheck` + `pnpm run build` after every change. Do not deploy to Replit
+until §7.1 (production secrets) is resolved.

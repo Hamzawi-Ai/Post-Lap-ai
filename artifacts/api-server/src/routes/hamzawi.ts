@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { tmpdir } from "os";
-import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable, mediaAssetsTable } from "@workspace/db";
+import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable, mediaAssetsTable, type MediaAssetCategory } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
@@ -10,7 +10,10 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
 import { getUserFromToken } from "../middleware/auth";
 import { MediaService } from "../services/media/MediaService";
+import { collectBrandAssets } from "../services/media/assetReader";
 import { getOpenAI } from "../services/ai/client";
+import { generateBrandedPost } from "../services/image-gen/brandedPost";
+import { getConfig } from "../lib/config";
 import {
   applyPartialBrandSave,
   markBrandOnboardingComplete,
@@ -20,6 +23,50 @@ import {
   appendMarketingNote,
   isBrandProfileComplete,
 } from "../services/brand/brain";
+
+const VISION_MODEL = "gpt-4o";
+const TEXT_MODEL = "gpt-4o-mini";
+
+/**
+ * Intent-based detection of whether the current request needs image
+ * understanding (logo/product recognition, design analysis, brand-asset
+ * reasoning). The decision is driven by the user's intent (phrases that
+ * express a visual/design purpose); a small keyword list is used only as a
+ * fallback when no intent phrase is recognised. Normal text conversations
+ * stay on the cheaper text model.
+ */
+function detectImageIntent(message: string): boolean {
+  const m = message.trim();
+  if (!m) return false;
+
+  // Intent phrases — high-precision patterns that express a visual/design purpose.
+  const intentPatterns = [
+    /(صمم|صمّم|اصمم|تصميم|تصاميم)\b/i,
+    /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|إعلان مرئي)/i,
+    /(منشور|بوست|ستوري|بانر|فلاير|ملصق|بوستر)\b/i,
+    /شعار|لوجو|logo/i,
+    /ألوان|الوان|color/i,
+    /هوية (بصرية|النشاط|نشاطي)/i,
+    /(في|على) (الصورة|المنشور|التصميم|الشعار)/i,
+    /ما رأيك (في|ب)/i,
+    /(حلل|راجع|قيّم|قييم|شوف|بصّ|انظر|أنظر).*(منشور|صورة|تصميم|إعلان|شعار)/i,
+    /صورة (المنتج|نشاطي|المنشور|الإعلان)|صور (المنتج|نشاطي)/i,
+    /design|poster|banner|flyer|thumbnail|logo|post|image|photo|picture|visual/i,
+    /brand (colors|identity|logo)/i,
+  ];
+
+  for (const re of intentPatterns) {
+    if (re.test(m)) return true;
+  }
+
+  // Fallback: individual design/visual keywords when no intent phrase matched.
+  const fallbackKeywords = [
+    "صمم", "تصميم", "منشور", "بوست", "ستوري", "شعار", "صورة", "بانر",
+    "فلاير", "بوستر", "ألوان", "هوية", "تصاميم", "انشئ", "اعمل",
+    "design", "post", "story", "banner", "logo", "image", "photo", "picture", "poster",
+  ];
+  return fallbackKeywords.some((k) => m.includes(k));
+}
 
 const router: IRouter = Router();
 
@@ -212,7 +259,8 @@ function getPermissionsInstruction(): string {
 function buildSystemPrompt(
   plan: Plan | string,
   memory: BrandMemoryData | null,
-  isOnboarding: boolean
+  isOnboarding: boolean,
+  assetContext?: string
 ): string {
   const level = planLevel(plan);
 
@@ -225,30 +273,63 @@ function buildSystemPrompt(
   };
 
   const memoryBlock = buildBrandMemoryBlock(memory);
+  const assetsBlock = assetContext
+    ? `\nالأصول البصرية المحفوظة للمستخدم (مُرفقة كصور عند الحاجة — استخدمها تلقائياً):
+${assetContext}
+`
+    : "";
 
   const funnelInstruction = isOnboarding ? "" : getFunnelInstruction(level);
   const onboardingInstruction = isOnboarding ? getOnboardingInstruction() : "";
+  const designGenInstruction = getDesignGenerationInstruction(level);
 
   const permissionsInstruction =
     (!isOnboarding && level >= 2 && memory?.brand_onboarded)
       ? getPermissionsInstruction()
       : "";
 
+  // Pricing line derived from config.json — single source of truth.
+  const cfg = getConfig();
+  const pricingLine = cfg.pricing.plans
+    .map((p) => `${p.name} (${p.price} ${cfg.pricing.currency}/شهر)`)
+    .join("، ");
+
   return `أنت حمزاوي، مساعد تسويقي ذكي متخصص في سياسات إعلانات Meta وTikTok. شخصيتك ودية، محترفة، عملية.
 
 مستوى خطة المستخدم: ${planCapabilities[level] ?? planCapabilities[1]}
 
-${memoryBlock}
+${memoryBlock}${assetsBlock}
 
 تعليمات:
 - رد دائماً بلغة المستخدم (عربي أو إنجليزي حسب رسالته)
 - كن مباشراً وعملياً — لا تعيد شرح ما يعرفه المستخدم
 - عند تلقّي تقرير فحص، حلّله وقدم توصيات واضحة حسب مستوى الخطة
 - إذا طلب خدمة تتجاوز مستواه، اذكر الخطة المناسبة مرة واحدة فقط بدون ضغط
-- خطط الترقية المتاحة: مسجّل (مجاني)، Smart Fix (400 د.ل/شهر)، Content (800 د.ل/شهر)، Agency (1000 د.ل/شهر)
+- خطط الترقية المتاحة: مسجّل (مجاني)، ${pricingLine}
+- تملك تلقائياً جميع أصول النشاط المحفوظة (الشعار، التصاميم المرجعية، صور المنتجات، مكتبة الوسائط) وتستخدمها تلقائياً عند ملاءمتها للمهمة (التعرف على الشعار، تحليل التصميم، التصميم، وصف المنتج...).
+- لا تطلب أبداً من المستخدم رفع شعار أو أصول أو تصاميم موجودة أصلاً في ملف نشاطه — استخدم ما هو محفوظ مباشرة.
 ${funnelInstruction}
 ${onboardingInstruction}
+${designGenInstruction}
 ${permissionsInstruction}`;
+}
+
+/**
+ * Design generation behaviour (Content plan and above, level 4+).
+ * Hamzawi generates the requested design directly through the shared image
+ * pipeline by emitting a GENERATE_POST marker; the server renders the image
+ * and returns it in the chat. Lower plans get a normal capability reply only.
+ */
+function getDesignGenerationInstruction(level: number): string {
+  if (level < 4) return "";
+  return `
+توليد التصاميم (متاح من خطتك):
+- عندما يطلب المستخدم تصميماً (منشور، بوست، ستوري، بانر، فلاير، بوستر، صورة إعلان، صورة ترويجية...) — قم بتوليده مباشرة.
+- لا تقترح أبداً Canva أو Photoshop أو أي أدوات تصميم يدوية أو خارجية، إلا إذا طلب المستخدم صراحةً نصيحة للتصميم اليدوي.
+- استخرج من الطلب والمعلومات المحفوظة: اسم النشاط، مجاله، العرض/المنتج المعروض، الألوان، والأسلوب المفضل. اكتب وصف التصميم بالإنجليزية، موجزاً ودقيقاً (يتضمن اسم النشاط، النص الأساسي للمنشور إن ذُكر، ألوان الهوية، الحجم إن ذُكر مثل 1080x1350، والأسلوب).
+- إذا كانت تفاصيل العرض ناقصة بشكل جوهري (ما الذي سيعرضه؟) اسأل سؤالاً واحداً قصيراً قبل التوليد — وإلا ولّد مباشرة دون إطالة.
+- بعد ردك القصير أضف في نهاية الرد دون أي نص بعده:
+%%GENERATE_POST%%{"description": "وصف التصميم بالإنجليزية هنا"}%%END%%`;
 }
 
 /**
@@ -306,6 +387,33 @@ function parseNotesSaves(reply: string): {
   cleanedReply = cleanedReply.replace(/%%NOTES_SAVE%%[\s\S]*?%%END%%/g, "").trim();
 
   return { cleanedReply, notes };
+}
+
+/**
+ * Parse %%GENERATE_POST%%{"description":"..."}%%END%% markers from AI reply.
+ * Emitted by Hamzawi (level 4+) when the user requests a design — the server
+ * then runs the shared image pipeline and attaches the generated image.
+ */
+function parseGeneratePost(reply: string): {
+  cleanedReply: string;
+  description: string | null;
+} {
+  const regex = /%%GENERATE_POST%%(\{[\s\S]*?\})%%END%%/g;
+  let description: string | null = null;
+  let cleanedReply = reply;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(reply)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1]) as { description?: string };
+      if (parsed.description && parsed.description.trim()) {
+        description = parsed.description.trim();
+      }
+    } catch {}
+  }
+  cleanedReply = cleanedReply.replace(/%%GENERATE_POST%%[\s\S]*?%%END%%/g, "").trim();
+
+  return { cleanedReply, description };
 }
 
 // POST /api/hamzawi/chat
@@ -394,11 +502,19 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding);
+    const brandAssets = user
+      ? await collectBrandAssets({ userId: user.id, companyId: user.company_id ?? null, memory })
+      : null;
+    const assetContext = brandAssets && brandAssets.images.length > 0 ? brandAssets.summary : undefined;
+
+    const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding, assetContext);
 
     const historyForAI = recentMessages
       .reverse()
-      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content.replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "").trim(),
+      }));
 
     let userContent = message ?? "";
     if (!isInit && checkReport && message) {
@@ -414,21 +530,45 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       userContent = `${reportSummary}\n\n${message}`;
     }
 
+    // Intent-based vision routing: use the vision model + attach the company's
+    // brand images ONLY when the request actually needs image understanding.
+    // Normal text conversations stay on the cheaper text model.
+    const needsVision = !isInit && !!message && detectImageIntent(message);
+    const hasBrandImages = !!(brandAssets && brandAssets.images.length > 0);
+
+    let userContentParts:
+      | string
+      | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+    let model = TEXT_MODEL;
+    if (needsVision && hasBrandImages) {
+      model = VISION_MODEL;
+      userContentParts = [
+        { type: "text", text: userContent },
+        ...brandAssets!.images.map((img) => ({
+          type: "image_url" as const,
+          image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+        })),
+      ];
+    } else {
+      userContentParts = userContent;
+    }
+
     const response = await getOpenAI().chat.completions.create({
-      model: "gpt-4o-mini",
+      model,
       max_tokens: 600,
       messages: [
         { role: "system", content: systemPrompt },
         ...historyForAI,
-        { role: "user", content: triggerMessage ?? userContent },
+        { role: "user", content: triggerMessage ?? userContentParts },
       ],
     });
 
     const rawReply = response.choices[0]?.message?.content ?? "عذراً، حدث خطأ. حاول مرة أخرى.";
 
-    // Parse partial saves, onboarding completion, and notes-save markers
+    // Parse partial saves, onboarding completion, notes-save, and generate-post markers
     const { cleanedReply, partialData, isOnboardingComplete } = parsePartialSaves(rawReply);
     const { cleanedReply: notesReply, notes } = parseNotesSaves(cleanedReply);
+    const { cleanedReply: generateReply, description: generateDescription } = parseGeneratePost(notesReply);
 
     // Save the two editable notes fields (only with explicit AI consent markers)
     if (user && (notes.hamzawi_notes || notes.marketing_notes)) {
@@ -463,7 +603,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    const reply = notesReply;
+    const reply = generateReply;
 
     // For isInit: only store the assistant message (no user message shown/stored)
     if (!isInit && message?.trim()) {
@@ -475,17 +615,44 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       });
     }
 
+    // When Hamzawi emitted a GENERATE_POST marker (level 4+ design request),
+    // run the shared image pipeline and return the generated image.
+    let storedContent = reply;
+    let generatedImageUrl: string | undefined;
+    let generatedDescription: string | undefined;
+    if (user && generateDescription && level >= 4) {
+      try {
+        const generated = await generateBrandedPost({
+          userId: user.id,
+          description: generateDescription,
+        });
+        if (generated) {
+          generatedImageUrl = generated.url;
+          generatedDescription = generateDescription;
+          // Persist the image reference inside the stored content so it survives
+          // page reload via the existing messages endpoint (no schema change).
+          storedContent = `${reply}\n%%GENERATED_IMAGE%%${JSON.stringify({
+            url: generated.url,
+            description: generateDescription,
+          })}%%END%%`;
+        }
+      } catch (e) {
+        logger.error({ e }, "Failed to generate post from Hamzawi marker");
+      }
+    }
+
     await db.insert(hamzawiMessagesTable).values({
       user_id: user?.id ?? null,
       session_id: sessionRawId,
       role: "assistant",
-      content: reply,
+      content: storedContent,
     });
 
     res.json({
       reply,
       sessionId: sessionRawId,
       onboardingComplete: isOnboardingComplete,
+      ...(generatedImageUrl ? { imageUrl: generatedImageUrl, generatedDescription } : {}),
     });
   } catch (err) {
     logger.error({ err }, "Hamzawi chat error");
@@ -667,7 +834,7 @@ router.post(
     const rawCategory = (req.body as { category?: string }).category ?? "portfolio";
 
     // Validate category against the allowlist before any filesystem operation
-    let category: string;
+    let category: MediaAssetCategory;
     try {
       category = MediaService.validateCategory(rawCategory);
     } catch {

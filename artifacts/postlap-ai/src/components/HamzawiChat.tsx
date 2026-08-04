@@ -141,6 +141,24 @@ interface Message {
   time: string;
   imageUrl?: string;
   isGeneratedPost?: boolean;
+  generatedDescription?: string;
+}
+
+/**
+ * Parse persisted Hamzawi assistant content. Generated-design images are
+ * stored as a %%GENERATED_IMAGE%%{...}%%END%% marker appended to the reply so
+ * they survive a page reload without any DB schema change.
+ */
+function parseStoredContent(content: string): { text: string; imageUrl?: string; generatedDescription?: string } {
+  const match = content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
+  const text = content.replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "").trim();
+  if (!match) return { text };
+  try {
+    const parsed = JSON.parse(match[1]) as { url?: string; description?: string };
+    return { text, imageUrl: parsed.url, generatedDescription: parsed.description };
+  } catch {
+    return { text };
+  }
 }
 
 // Payload kept for regeneration — never cleared when form resets
@@ -263,11 +281,15 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       });
       if (res.ok) {
         const data = await res.json();
-        const msgs: Message[] = (data.messages ?? []).map((m: any) => ({
-          from: m.role === "assistant" ? "hamzawi" : "user",
-          text: m.content,
-          time: new Date(m.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }),
-        }));
+        const msgs: Message[] = (data.messages ?? []).map((m: any) => {
+          const parsed = parseStoredContent(m.content);
+          return {
+            from: m.role === "assistant" ? "hamzawi" : "user",
+            text: parsed.text,
+            time: new Date(m.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }),
+            ...(parsed.imageUrl ? { imageUrl: parsed.imageUrl, isGeneratedPost: true, generatedDescription: parsed.generatedDescription } : {}),
+          };
+        });
         if (msgs.length > 0) setMessages(msgs);
       }
     } catch {
@@ -424,7 +446,11 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         addHamzawi(lang === "ar" ? "انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى." : "Session expired. Please log in again.");
       } else if (res.ok) {
         const data = await res.json();
-        addHamzawi(data.reply);
+        if (data.imageUrl) {
+          addHamzawi(data.reply, { imageUrl: data.imageUrl, isGeneratedPost: true, generatedDescription: data.generatedDescription });
+        } else {
+          addHamzawi(data.reply);
+        }
       } else {
         addHamzawi(lang === "ar" ? "عذراً، حدث خطأ. حاول مرة أخرى." : "Sorry, an error occurred. Please try again.");
       }
@@ -742,8 +768,19 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   }
 
   function handleRegenerateClick() {
+    if (lastGenPayloadRef.current) {
+      handleGeneratePost(true);
+      return;
+    }
+    // Chat-generated design — ask Hamzawi to regenerate it in a new turn.
+    const lastGenMsg = [...messages].reverse().find((m) => m.isGeneratedPost && m.generatedDescription);
+    if (!lastGenMsg?.generatedDescription) return;
     const note = prompt(t.regeneratePrompt) ?? "";
-    handleGeneratePost(true, note);
+    sendMessage(
+      lang === "ar"
+        ? `أعد توليد التصميم السابق: ${lastGenMsg.generatedDescription}${note ? ` (ملاحظة: ${note})` : ""}`
+        : `Regenerate the previous design: ${lastGenMsg.generatedDescription}${note ? ` (Note: ${note})` : ""}`
+    );
   }
 
   const isRTL = lang === "ar";

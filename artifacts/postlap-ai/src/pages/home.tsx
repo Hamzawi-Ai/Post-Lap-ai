@@ -275,7 +275,7 @@ export default function Home() {
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       setUser(data.user);
       setSubscribeModal(false);
-      toast({ title: "تم الاشتراك في Professional 🎉", description: "فعّلنا خطة Professional (800 د.ل/شهر) — جهّز نشاطك التجاري الآن" });
+      toast({ title: `تم الاشتراك في ${contentPlan?.name ?? "إدارة المحتوى"} 🎉`, description: `فعّلنا خطة ${contentPlan?.name ?? "إدارة المحتوى"} (${contentPlan?.price ?? 400} ${currency}/شهر) — جهّز نشاطك التجاري الآن` });
       window.location.href = "/onboarding";
     } catch (e: any) {
       toast({ title: "خطأ", description: e.message, variant: "destructive" });
@@ -461,13 +461,14 @@ export default function Home() {
 
   const whatsapp = config?.whatsapp ?? "218915811115";
 
-  // Pricing with optional 50% discount
-  const plans = [
+  // Pricing — single source of truth is config.json (served by /api/config).
+  const currency = config?.pricing?.currency ?? "د.ل";
+  const fallbackPlans = [
     {
       id: "smart_fix",
       name: "Smart Fix",
       nameAr: "الإصلاح الذكي",
-      price: 400,
+      price: 100,
       desc: "للمعلنين الأفراد",
       features: ["تصحيح الإعلانات المرفوضة", "فحوصات غير محدودة", "فيديو حتى 60 ثانية", "دعم أولوية"],
       badge: null,
@@ -475,10 +476,10 @@ export default function Home() {
       highlight: false,
     },
     {
-      id: "content_mgmt",
+      id: "content",
       name: "إدارة المحتوى",
       nameAr: "للشركات والمتاجر",
-      price: 800,
+      price: 400,
       desc: "للشركات والمتاجر",
       features: ["كل مميزات Smart Fix", "لوحة إدارة المحتوى", "توليد نصوص بالليبي الأصيل", "تصميم منشورات مع الشعار"],
       badge: "الأكثر طلباً",
@@ -497,6 +498,8 @@ export default function Home() {
       highlight: false,
     },
   ];
+  const plans = config?.pricing?.plans?.length ? config.pricing.plans : fallbackPlans;
+  const contentPlan = plans.find((p) => p.id === "content") ?? plans.find((p) => p.highlight) ?? plans[1];
 
   const agentsList = [
     {
@@ -959,7 +962,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
             {plans.map((plan) => {
               const discountedPrice = discountActive ? plan.price * 0.5 : null;
-              const isContentMgmt = plan.id === "content_mgmt";
+              const isContentMgmt = !!plan.highlight;
               return (
                 <div
                   key={plan.id}
@@ -991,16 +994,16 @@ export default function Home() {
                     <div className="flex items-baseline gap-2">
                       {discountActive ? (
                         <>
-                          <span className={`font-black ${isContentMgmt ? "text-4xl text-primary" : "text-3xl text-foreground"}`}>{discountedPrice} <span className="text-lg">د.ل</span></span>
+                          <span className={`font-black ${isContentMgmt ? "text-4xl text-primary" : "text-3xl text-foreground"}`}>{discountedPrice} <span className="text-lg">{currency}</span></span>
                           <span className="text-base text-muted-foreground line-through">{plan.price}</span>
                         </>
                       ) : (
-                        <span className={`font-black ${isContentMgmt ? "text-4xl text-primary" : "text-3xl text-foreground"}`}>{plan.price} <span className="text-lg">د.ل</span></span>
+                        <span className={`font-black ${isContentMgmt ? "text-4xl text-primary" : "text-3xl text-foreground"}`}>{plan.price} <span className="text-lg">{currency}</span></span>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">شهرياً — {plan.desc}</p>
                     {discountActive && (
-                      <p className="text-xs text-yellow-400 font-semibold mt-1">🔥 خصم 50% — ادفع {discountedPrice} د.ل فقط</p>
+                      <p className="text-xs text-yellow-400 font-semibold mt-1">🔥 خصم 50% — ادفع {discountedPrice} {currency} فقط</p>
                     )}
                   </div>
 
@@ -1211,25 +1214,25 @@ export default function Home() {
             className="bg-card border border-border rounded-2xl p-8 max-w-md w-full text-center space-y-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between">
-              <div />
-              <p className="text-lg font-black text-foreground">اشترك في Professional</p>
-              <button
-                onClick={() => setSubscribeModal(false)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                data-testid="button-subscribe-modal-close"
-                aria-label="إغلاق"
-              >
-                <XCircle className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-              <Shield className="w-8 h-8 text-primary" />
-            </div>
-            <div>
-              <p className="text-3xl font-black text-primary">800 <span className="text-lg">د.ل</span></p>
-              <p className="text-xs text-muted-foreground mt-1">شهرياً — تفعيل فوري</p>
-            </div>
+              <div className="flex items-center justify-between">
+                <div />
+                <p className="text-lg font-black text-foreground">اشترك في {contentPlan?.name ?? "إدارة المحتوى"}</p>
+                <button
+                  onClick={() => setSubscribeModal(false)}
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="button-subscribe-modal-close"
+                  aria-label="إغلاق"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+                <Shield className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <p className="text-3xl font-black text-primary">{contentPlan?.price ?? 400} <span className="text-lg">{currency}</span></p>
+                <p className="text-xs text-muted-foreground mt-1">شهرياً — تفعيل فوري</p>
+              </div>
             <ul className="space-y-2 text-sm text-foreground text-right max-w-xs mx-auto">
               {["توليد نصوص إعلانية باللهجة الليبية", "تصميم منشورات بشعار نشاطك وهويته", "ذاكرة دائمة لنشاطك — حمزاوي يتذكره دائماً", "فحوصات غير محدودة"].map((f) => (
                 <li key={f} className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 # HOMEPAGE_SPEC.md
 
-Source of truth: `artifacts/postlap-ai/src/pages/home.tsx` (current at commit `2314303`).
+Source of truth: `artifacts/postlap-ai/src/pages/home.tsx` (current at commit `eeab99b`).
 This is a behavioral spec — when the layout changes, update this file.
 
 ---
@@ -67,10 +67,12 @@ funnel for Smart Fix.
 ### `#plans` — Pricing
 3 paid plans (Smart Fix 400, إدارة المحتوى 800 highlighted, Agency 1000 LYD/mo).
 Optional 50% discount banner (currently off). Each card: WhatsApp CTA with
-pre-filled subscription message. Footer note: "نقبل الدفع بالتحويل المصرفي".
+pre-filled subscription message; the إدارة المحتوى (Professional) card also opens
+the in-app subscribe modal (`/api/auth/subscribe`, logged-in only) granting
+immediate level-4 access. Footer note: "نقبل الدفع بالتحويل المصرفي".
 
-**Purpose:** monetize. This is the only conversion point for upgrades; all paid
-CTAs across the page point here or to WhatsApp.
+**Purpose:** monetize. This is the main conversion point for upgrades; paid CTAs
+across the page point here, to WhatsApp, or to the in-app subscribe modal.
 
 ### Secondary: `#how`, trust badges, stats, `#agents`, `#faq`
 Demoted styling: `text-xl font-bold` muted headings, smaller body text,
@@ -91,9 +93,11 @@ primary CTA sections for attention.
 
 Rules:
 - Every gated feature resolves to a CTA: guest → sign-in / register;
-  level <3 → Smart Fix WhatsApp; level <4 → إدارة المحتوى WhatsApp.
-- All subscription CTAs go through WhatsApp (`wa.me`) with a pre-filled plan name —
-  there is no in-app payment.
+  level <3 → Smart Fix WhatsApp; level <4 → إدارة المحتوى WhatsApp or in-app
+  subscribe.
+- Subscription CTAs go through WhatsApp (`wa.me`) with a pre-filled plan name, or
+  through the in-app subscribe modal (logged-in users) — there is no full in-app
+  payment; access is granted immediately and payment is settled out-of-band.
 - Secondary sections never contain primary CTAs.
 
 ## 4. UX rules
@@ -111,8 +115,8 @@ Rules:
 - **Session expiry:** 401 on check/generate paths must log out and show an Arabic
   "session expired" toast (`handleAuthError` utility).
 - **Cookie consent banner** (bottom, accept-only) must not overlap primary CTAs.
-- **Modals:** trial-block modal (guest at 0 scans) offers a registration path;
-  login modal hosts the Google button.
+- **Modals:** trial-block modal (guest at 0 scans) offers a Google sign-in path
+  directly in the modal; login modal also hosts the Google button.
 
 ## 5. Verification contract
 

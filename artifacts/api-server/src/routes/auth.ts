@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getUserFromToken } from "../middleware/auth";
 import { autoCreateCompanyForUser, isBrandProfileComplete } from "../services/brand/brain";
+import { getConfig } from "../lib/config";
 
 const router: IRouter = Router();
 
@@ -219,11 +220,13 @@ router.post("/auth/subscribe", async (req, res): Promise<void> => {
   }
 
   try {
+    const cfg = getConfig();
+    const contentPlan = cfg.pricing.plans.find((p) => p.id === "content") ?? cfg.pricing.plans[1];
     const [updated] = await db
       .update(usersTable)
       .set({
         plan: "content",
-        subscription_label: "Professional — 800 د.ل/شهر",
+        subscription_label: `${contentPlan?.name ?? "إدارة المحتوى"} — ${contentPlan?.price ?? 400} ${cfg.pricing.currency}/شهر`,
         trials_remaining: 9999,
         is_active: true,
       })

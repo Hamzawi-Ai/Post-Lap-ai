@@ -403,12 +403,50 @@ components:
         error:
           type: string
 
+    PricingPlan:
+      type: object
+      required: [id, name, nameAr, price, desc, features, badge, cta, highlight]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        nameAr:
+          type: string
+        price:
+          type: number
+        desc:
+          type: string
+        features:
+          type: array
+          items:
+            type: string
+        badge:
+          type: ["string", "null"]
+        cta:
+          type: string
+        highlight:
+          type: boolean
+
+    AppPricing:
+      type: object
+      required: [currency, plans, agencyExtraProjectPrice]
+      properties:
+        currency:
+          type: string
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/PricingPlan"
+        agencyExtraProjectPrice:
+          type: number
+
     AppConfig:
       type: object
-      required: [pro_price, whatsapp, agents, accuracy_text]
+      required: [pricing, whatsapp, agents, accuracy_text]
       properties:
-        pro_price:
-          type: string
+        pricing:
+          $ref: "#/components/schemas/AppPricing"
         whatsapp:
           type: string
         agents:

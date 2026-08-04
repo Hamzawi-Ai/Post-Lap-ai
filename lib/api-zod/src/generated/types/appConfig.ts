@@ -6,9 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AppConfigAgents } from "./appConfigAgents";
+import type { AppPricing } from "./appPricing";
 
 export interface AppConfig {
-  pro_price: string;
+  pricing: AppPricing;
   whatsapp: string;
   agents: AppConfigAgents;
   accuracy_text: string;

@@ -18,7 +18,23 @@ export const HealthCheckResponse = zod.object({
  * @summary Get public configuration
  */
 export const GetConfigResponse = zod.object({
-  pro_price: zod.string(),
+  pricing: zod.object({
+    currency: zod.string(),
+    plans: zod.array(
+      zod.object({
+        id: zod.string(),
+        name: zod.string(),
+        nameAr: zod.string(),
+        price: zod.number(),
+        desc: zod.string(),
+        features: zod.array(zod.string()),
+        badge: zod.string().nullable(),
+        cta: zod.string(),
+        highlight: zod.boolean(),
+      }),
+    ),
+    agencyExtraProjectPrice: zod.number(),
+  }),
   whatsapp: zod.string(),
   agents: zod.object({
     libya: zod.string(),
@@ -38,8 +54,9 @@ export const CheckAdBody = zod.object({
 });
 
 export const CheckAdResponse = zod.object({
+  id: zod.number().optional(),
   status: zod.enum(["ممتاز", "جيد", "مرفوض"]),
-  reason: zod.string(),
+  reason: zod.string().describe("Empty string for guests (redacted)"),
   score: zod.number(),
   message: zod.string(),
   frames_checked: zod.number().nullish(),
@@ -51,8 +68,12 @@ export const CheckAdResponse = zod.object({
         severity: zod.enum(["high", "medium", "low"]),
       }),
     )
-    .optional(),
-  suggestions: zod.array(zod.string()).optional(),
+    .optional()
+    .describe("Empty array for guests (redacted)"),
+  suggestions: zod
+    .array(zod.string())
+    .optional()
+    .describe("Empty array for guests (redacted)"),
 });
 
 /**

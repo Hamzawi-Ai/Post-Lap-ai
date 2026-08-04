@@ -7,9 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const ADMIN_TOKEN_KEY = "postlap_admin_token";
 
-const PLAN_OPTIONS = [
-  { label: "Smart Fix — 400 د.ل", value: "smart_fix", plan: "smart_fix" },
-  { label: "إدارة المحتوى — 800 د.ل", value: "content", plan: "content" },
+// Fallback until /api/config loads — single source of truth is config.json.
+const DEFAULT_PLAN_OPTIONS = [
+  { label: "Smart Fix — 100 د.ل", value: "smart_fix", plan: "smart_fix" },
+  { label: "إدارة المحتوى — 400 د.ل", value: "content", plan: "content" },
   { label: "خطة الوكالة — 1000 د.ل", value: "agency", plan: "agency" },
 ];
 
@@ -68,6 +69,8 @@ export default function Admin() {
   const [password, setPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
+  const [planOptions, setPlanOptions] = useState(DEFAULT_PLAN_OPTIONS);
+
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -75,12 +78,12 @@ export default function Admin() {
 
   const [addEmail, setAddEmail] = useState("");
   const [addName, setAddName] = useState("");
-  const [addPlanOption, setAddPlanOption] = useState(PLAN_OPTIONS[0].value);
+  const [addPlanOption, setAddPlanOption] = useState(DEFAULT_PLAN_OPTIONS[0].value);
   const [addDuration, setAddDuration] = useState(DURATION_OPTIONS[0].days);
   const [addLoading, setAddLoading] = useState(false);
 
   const [editUser, setEditUser] = useState<AdminUser | null>(null);
-  const [editPlanOption, setEditPlanOption] = useState(PLAN_OPTIONS[0].value);
+  const [editPlanOption, setEditPlanOption] = useState(DEFAULT_PLAN_OPTIONS[0].value);
   const [editDuration, setEditDuration] = useState(DURATION_OPTIONS[0].days);
   const [editLoading, setEditLoading] = useState(false);
 
@@ -133,15 +136,40 @@ export default function Admin() {
     if (token) { loadUsers(token); loadStats(token); }
   }, [token]);
 
+  // Plan options derive from /api/config (single source of truth = config.json)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/config");
+        if (!res.ok) return;
+        const cfg = await res.json();
+        const plans = cfg?.pricing?.plans as Array<{ id: string; name: string; price: number }> | undefined;
+        const currency = (cfg?.pricing?.currency as string | undefined) ?? "د.ل";
+        if (Array.isArray(plans) && plans.length > 0) {
+          const opts = plans.map((p) => ({
+            label: `${p.name} — ${p.price} ${currency}`,
+            value: p.id,
+            plan: p.id,
+          }));
+          if (!cancelled) setPlanOptions(opts);
+        }
+      } catch {
+        // keep defaults
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   function planOptionForPlan(plan: string): string {
-    const match = PLAN_OPTIONS.find((p) => p.plan === plan);
-    return match?.value ?? PLAN_OPTIONS[0].value;
+    const match = planOptions.find((p) => p.plan === plan);
+    return match?.value ?? planOptions[0].value;
   }
 
   async function addUser() {
     if (!addEmail.trim() || !token) return;
     setAddLoading(true);
-    const planOpt = PLAN_OPTIONS.find((p) => p.value === addPlanOption)!;
+    const planOpt = planOptions.find((p) => p.value === addPlanOption)!;
     try {
       const res = await fetch("/api/admin/users", {
         method: "POST",
@@ -169,7 +197,7 @@ export default function Admin() {
   async function saveEdit() {
     if (!editUser || !token) return;
     setEditLoading(true);
-    const planOpt = PLAN_OPTIONS.find((p) => p.value === editPlanOption)!;
+    const planOpt = planOptions.find((p) => p.value === editPlanOption)!;
     try {
       const res = await fetch(`/api/admin/users/${editUser.id}/upgrade`, {
         method: "PATCH",
@@ -307,7 +335,7 @@ export default function Admin() {
                   onChange={(e) => setEditPlanOption(e.target.value)}
                   className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                 >
-                  {PLAN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  {planOptions.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </select>
               </div>
               <div>
@@ -404,7 +432,7 @@ export default function Admin() {
               onChange={(e) => setAddPlanOption(e.target.value)}
               className="bg-background border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
             >
-              {PLAN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              {planOptions.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
             <select
               value={addDuration}
