@@ -29,7 +29,17 @@ interface FormFields {
   notes: string;
 }
 
-async function uploadAsset(file: File, category: "logo" | "portfolio" = "portfolio"): Promise<string | null> {
+interface AssetMetadata {
+  id: string;
+  category: string;
+  filename: string;
+  relativePath: string;
+  publicUrl: string;
+  size: number;
+  mimeType: string;
+}
+
+async function uploadAsset(file: File, category: "logo" | "portfolio" = "portfolio"): Promise<AssetMetadata | null> {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return null;
   try {
@@ -42,8 +52,8 @@ async function uploadAsset(file: File, category: "logo" | "portfolio" = "portfol
       body: formData,
     });
     if (res.ok) {
-      const data = await res.json();
-      return (data as { url: string }).url ?? null;
+      const data = await res.json() as AssetMetadata;
+      return data ?? null;
     }
     return null;
   } catch {
@@ -104,10 +114,10 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
     if (!file) return;
     e.target.value = "";
     setUploading(true);
-    const url = await uploadAsset(file, "logo");
+    const result = await uploadAsset(file, "logo");
     setUploading(false);
-    if (url) {
-      setLogoUrl(url);
+    if (result) {
+      setLogoUrl(result.publicUrl);
       toast({ title: "تم رفع الشعار ✓" });
     } else {
       toast({ title: "خطأ", description: "فشل رفع الشعار", variant: "destructive" });
@@ -121,8 +131,8 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
     setUploading(true);
     const urls: string[] = [];
     for (const file of files) {
-      const url = await uploadAsset(file, "portfolio");
-      if (url) urls.push(url);
+      const result = await uploadAsset(file, "portfolio");
+      if (result) urls.push(result.publicUrl);
     }
     setUploading(false);
     if (urls.length > 0) {
