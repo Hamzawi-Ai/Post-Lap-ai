@@ -1,0 +1,363 @@
+We are changing the architecture, not just fixing a bug.
+
+
+
+Current problem:
+
+Uploaded assets are returned as Base64 data URLs and later embedded inside the PUT /api/hamzawi/memory payload, causing oversized JSON requests.
+
+
+
+If increasing express.json() is still required for compatibility during the transition, do it, but the final architecture must not depend on sending Base64 images in JSON payloads.
+
+
+
+==========================================================
+
+GOAL
+
+==========================================================
+
+
+
+Build the first version of a Media Library for the PostLap AI MVP.
+
+
+
+This Media Library will run on Replit during the beta period, but it must be designed so migrating later to Supabase Storage requires minimal changes.
+
+
+
+==========================================================
+
+REQUIREMENTS
+
+==========================================================
+
+
+
+1. Create a storage structure inside the project.
+
+
+
+Example:
+
+
+
+storage/
+
+    companies/
+
+        {companyId}/
+
+            logo/
+
+            portfolio/
+
+            generated/
+
+            products/
+
+            documents/
+
+
+
+Create folders automatically when needed.
+
+
+
+==========================================================
+
+
+
+2. Build a Media Library layer.
+
+
+
+Create a reusable media service responsible for:
+
+
+
+- creating directories
+
+- saving uploaded files
+
+- generating safe filenames
+
+- returning relative paths
+
+- deleting/replacing assets
+
+- future compatibility with external storage
+
+
+
+Avoid scattering filesystem logic across routes.
+
+
+
+==========================================================
+
+
+
+3. Remove Base64 from the architecture.
+
+
+
+The upload endpoint must:
+
+
+
+- receive multipart upload
+
+- save the file
+
+- return metadata such as:
+
+
+
+{
+
+    id,
+
+    type,
+
+    filename,
+
+    relativePath,
+
+    publicUrl,
+
+    size,
+
+    mimeType
+
+}
+
+
+
+Never return Base64 data.
+
+
+
+==========================================================
+
+
+
+4. Company profile
+
+
+
+When saving company information:
+
+
+
+DO NOT send image data.
+
+
+
+Only send references such as:
+
+
+
+logoPath
+
+
+
+portfolioPaths[]
+
+
+
+or equivalent.
+
+
+
+==========================================================
+
+
+
+5. Database
+
+
+
+Create a proper media_assets table.
+
+
+
+Suggested fields:
+
+
+
+id
+
+company_id
+
+category
+
+filename
+
+relative_path
+
+mime_type
+
+size
+
+created_at
+
+created_by
+
+
+
+Use this as the single source of truth for uploaded assets.
+
+
+
+==========================================================
+
+
+
+6. Existing onboarding
+
+
+
+Update the onboarding flow so it works with the new Media Library.
+
+
+
+Expected flow:
+
+
+
+Upload Logo
+
+↓
+
+
+
+File stored
+
+
+
+↓
+
+
+
+media_assets record created
+
+
+
+↓
+
+
+
+Frontend receives only metadata
+
+
+
+↓
+
+
+
+User clicks Save
+
+
+
+↓
+
+
+
+Company stores only logo reference
+
+
+
+NOT the image itself.
+
+
+
+The same applies to portfolio images.
+
+
+
+==========================================================
+
+
+
+7. Generated AI images
+
+
+
+Prepare the architecture for future AI-generated images.
+
+
+
+Support categories such as:
+
+
+
+logo
+
+portfolio
+
+generated
+
+products
+
+documents
+
+
+
+Even if generated images are not used yet, the architecture should already support them.
+
+
+
+==========================================================
+
+
+
+8. Migration readiness
+
+
+
+Keep all filesystem operations isolated inside the Media Service.
+
+
+
+The future migration to Supabase Storage should only require replacing the Media Service implementation without changing business logic.
+
+
+
+==========================================================
+
+
+
+9. Deliverables
+
+
+
+After implementation provide:
+
+
+
+- Architecture summary
+
+- Files created
+
+- Files modified
+
+- Database changes
+
+- API changes
+
+- Frontend changes
+
+- Migration notes
+
+- Confirmation that onboarding now stores references instead of Base64.
+
+
+
+Do not implement shortcuts.
+
+
+
+Build this as the foundation of PostLap AI's Media Library.
