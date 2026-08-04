@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "path";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -74,8 +75,19 @@ app.use((req, res, next) => {
     },
   })(req, res, next);
 });
-app.use(express.json());
+app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded media files from the storage/ directory.
+// Files are stored at storage/companies/{companyId}/{category}/{filename}
+// and are publicly accessible at /uploads/companies/...
+// Security headers prevent MIME-sniffing and script execution in the browser.
+const storageRoot = path.resolve(__dirname, "../storage");
+app.use("/uploads", (_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Security-Policy", "default-src 'none'");
+  next();
+}, express.static(storageRoot));
 
 app.use("/api", router);
 

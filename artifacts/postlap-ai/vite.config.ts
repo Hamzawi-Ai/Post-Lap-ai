@@ -65,6 +65,11 @@ export default defineConfig({
         target: process.env.API_TARGET ?? "http://127.0.0.1:5000",
         changeOrigin: true,
       },
+      // Forward uploaded media files to the API server's static handler.
+      "/uploads": {
+        target: process.env.API_TARGET ?? "http://127.0.0.1:5000",
+        changeOrigin: true,
+      },
     },
   },
   preview: {

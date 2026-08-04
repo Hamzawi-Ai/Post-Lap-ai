@@ -29,12 +29,13 @@ interface FormFields {
   notes: string;
 }
 
-async function uploadAsset(file: File): Promise<string | null> {
+async function uploadAsset(file: File, category: "logo" | "portfolio" = "portfolio"): Promise<string | null> {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return null;
   try {
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("category", category);
     const res = await fetch("/api/hamzawi/upload-asset", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
@@ -103,7 +104,7 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
     if (!file) return;
     e.target.value = "";
     setUploading(true);
-    const url = await uploadAsset(file);
+    const url = await uploadAsset(file, "logo");
     setUploading(false);
     if (url) {
       setLogoUrl(url);
@@ -120,7 +121,7 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
     setUploading(true);
     const urls: string[] = [];
     for (const file of files) {
-      const url = await uploadAsset(file);
+      const url = await uploadAsset(file, "portfolio");
       if (url) urls.push(url);
     }
     setUploading(false);

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { tmpdir } from "os";
-import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable } from "@workspace/db";
+import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable, mediaAssetsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
@@ -9,6 +9,7 @@ import { planLevel, type Plan } from "@workspace/db";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
 import { getUserFromToken } from "../middleware/auth";
+import { MediaService } from "../services/media/MediaService";
 import { getOpenAI } from "../services/ai/client";
 import {
   applyPartialBrandSave,
@@ -26,6 +27,16 @@ const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
   message: { error: "تجاوزت الحد المسموح به للمحادثة. حاول بعد دقيقة." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Dedicated rate limiter for upload endpoint — tighter window to prevent
+// repeated unauthenticated multipart allocations exhausting /tmp disk.
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: "تجاوزت حد رفع الملفات. حاول بعد دقيقة." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -611,41 +622,118 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/hamzawi/upload-asset
-// Accepts an image upload, converts to base64 data URL, returns it.
-// The client is responsible for persisting the URL to memory (logo_url, etc.)
-router.post("/hamzawi/upload-asset", uploadMulter.single("file"), async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+// Pre-auth middleware for upload — runs BEFORE Multer writes any temp file,
+// preventing unauthenticated requests from touching the disk at all.
+async function requireUploadAuth(
+  req: Parameters<typeof getUserFromToken>[0] extends infer R ? { headers: { authorization?: string } } : never,
+  res: import("express").Response,
+  next: import("express").NextFunction,
+): Promise<void> {
+  const user = await getUserFromToken((req as import("express").Request).headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
   }
-
   const level = planLevel(user.plan);
   if (level < 2) {
     res.status(403).json({ error: "رفع الأصول متاح من خطة مسجّل فأعلى" });
     return;
   }
+  // Attach to request so the handler doesn't need to re-query
+  (req as import("express").Request & { uploadUser: typeof user }).uploadUser = user;
+  next();
+}
 
-  if (!req.file) {
-    res.status(400).json({ error: "الرجاء رفع صورة" });
-    return;
-  }
+// POST /api/hamzawi/upload-asset
+// Accepts an image upload, saves it to disk, inserts a media_assets row,
+// and returns file metadata (never Base64).
+// Middleware order: rate-limit → pre-auth (before disk) → multer → handler.
+// Optional multipart field: category (default "portfolio"; use "logo" for brand logos).
+router.post(
+  "/hamzawi/upload-asset",
+  uploadLimiter,
+  requireUploadAuth,
+  uploadMulter.single("file"),
+  async (req, res): Promise<void> => {
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
 
-  const filePath = req.file.path;
-  const mimeType = req.file.mimetype;
+    if (!req.file) {
+      res.status(400).json({ error: "الرجاء رفع صورة" });
+      return;
+    }
 
-  try {
-    const buffer = readFileSync(filePath);
-    const base64 = buffer.toString("base64");
-    const dataUrl = `data:${mimeType};base64,${base64}`;
-    res.json({ url: dataUrl });
-  } catch (err) {
-    logger.error({ err }, "Asset upload error");
-    res.status(500).json({ error: "حدث خطأ أثناء رفع الملف" });
-  } finally {
-    cleanup(filePath);
-  }
-});
+    const tmpPath = req.file.path;
+    const mimeType = req.file.mimetype;
+    const rawCategory = (req.body as { category?: string }).category ?? "portfolio";
+
+    // Validate category against the allowlist before any filesystem operation
+    let category: string;
+    try {
+      category = MediaService.validateCategory(rawCategory);
+    } catch {
+      cleanup(tmpPath);
+      res.status(400).json({ error: "فئة الملف غير مدعومة. الفئات المسموحة: logo, portfolio, generated, products, documents" });
+      return;
+    }
+
+    try {
+      // Look up the user's company_id; fall back to user.id for solo users
+      const [userRow] = await db
+        .select({ company_id: usersTable.company_id })
+        .from(usersTable)
+        .where(eq(usersTable.id, user.id))
+        .limit(1);
+
+      const companyId = userRow?.company_id ?? user.id;
+
+      // Read from temp file and delete it — all fs I/O owned by MediaService
+      const buffer = await MediaService.consumeTempFile(tmpPath);
+
+      const { filename, relativePath, publicUrl } = await MediaService.saveFile(
+        companyId,
+        category,
+        req.file.originalname ?? "upload",
+        buffer,
+        mimeType,
+      );
+
+      let inserted: typeof mediaAssetsTable.$inferSelect;
+      try {
+        [inserted] = await db
+          .insert(mediaAssetsTable)
+          .values({
+            user_id: user.id,
+            company_id: userRow?.company_id ?? null,
+            category,
+            filename,
+            relative_path: relativePath,
+            mime_type: mimeType,
+            size: buffer.byteLength,
+          })
+          .returning();
+      } catch (dbErr) {
+        // DB insert failed — remove the orphaned file to maintain consistency
+        await MediaService.deleteFile(relativePath).catch(() => {});
+        throw dbErr;
+      }
+
+      res.json({
+        // `url` kept for backward compatibility with existing frontend callers
+        url: publicUrl,
+        id: inserted.id,
+        category: inserted.category,
+        filename: inserted.filename,
+        relativePath: inserted.relative_path,
+        publicUrl,
+        size: inserted.size,
+        mimeType: inserted.mime_type,
+      });
+    } catch (err) {
+      logger.error({ err }, "Asset upload error");
+      cleanup(tmpPath);
+      res.status(500).json({ error: "حدث خطأ أثناء رفع الملف" });
+    }
+  },
+);
 
 export default router;

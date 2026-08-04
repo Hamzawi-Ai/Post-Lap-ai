@@ -459,15 +459,16 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
   /**
    * Upload a file to the backend upload-asset endpoint.
-   * Returns the data URL or null on failure.
+   * Returns the public URL or null on failure.
    */
-  async function uploadAsset(file: File): Promise<string | null> {
+  async function uploadAsset(file: File, category: "logo" | "portfolio" | "generated" | "products" | "documents" = "portfolio"): Promise<string | null> {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) return null;
     setUploadingAsset(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("category", category);
       const res = await fetch("/api/hamzawi/upload-asset", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -493,7 +494,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    const url = await uploadAsset(file);
+    const url = await uploadAsset(file, "logo");
     if (url) {
       setBrandForm((f) => ({ ...f, logo_url: url }));
     } else {
@@ -568,7 +569,32 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = "";
-    const url = await uploadAsset(file);
+
+    // Determine category before uploading.
+    // If the brand form is open or we're in onboarding with no logo yet → "logo".
+    // Otherwise → "portfolio" (design samples and general attachments).
+    let attachCategory: "logo" | "portfolio" = "portfolio";
+    if (showBrandForm) {
+      attachCategory = "logo";
+    } else if (level >= 4) {
+      // Check if user already has a logo to decide category ahead of upload
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (token) {
+        try {
+          const memRes = await fetch("/api/hamzawi/memory", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const memData = memRes.ok
+            ? (await memRes.json() as { memory?: { logo_url?: string | null } | null })
+            : {};
+          if (!memData.memory?.logo_url) attachCategory = "logo";
+        } catch {
+          // If check fails, default to portfolio
+        }
+      }
+    }
+
+    const url = await uploadAsset(file, attachCategory);
     if (!url) {
       addHamzawi(lang === "ar" ? "حدث خطأ أثناء رفع الصورة." : "Error uploading image.");
       return;
