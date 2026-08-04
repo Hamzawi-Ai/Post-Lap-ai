@@ -1,0 +1,203 @@
+Fix Login Failure (No Refactor, Root Cause Only)
+
+You are working on the PostLap AI production repository.
+
+Current issue:
+
+The Login page always fails.
+The frontend shows:
+
+خطأ
+فشل تسجيل الدخول
+
+The toast appears immediately after attempting login.
+
+Your mission
+
+Do NOT redesign anything.
+Do NOT refactor authentication.
+Do NOT replace libraries.
+Do NOT change architecture.
+
+Your only goal is to identify the exact root cause and fix it with the smallest possible change.
+
+Investigation checklist
+
+Work in this exact order.
+
+1. Frontend
+
+Inspect:
+
+login page
+auth hooks
+auth context
+login API call
+fetch wrapper
+axios wrapper (if exists)
+error handling
+request payload
+
+Verify:
+
+endpoint URL
+HTTP method
+headers
+credentials
+cookies
+JWT handling
+CSRF (if used)
+2. Network
+
+Run the app.
+
+Attempt login.
+
+Capture:
+
+request URL
+request body
+response status
+response body
+response headers
+
+Answer:
+
+Does the request even reach the backend?
+
+3. Backend
+
+Inspect:
+
+login route
+auth middleware
+validation
+password verification
+JWT generation
+session creation
+cookie creation
+
+Check whether:
+
+route exists
+route is mounted
+validation rejects payload
+bcrypt comparison fails
+JWT secret missing
+environment variables missing
+4. Database
+
+Verify:
+
+user exists
+password hash exists
+company relation isn't blocking login
+plan isn't blocking login
+deleted flag isn't blocking login
+5. Environment
+
+Verify every required variable:
+
+JWT_SECRET
+
+DATABASE_URL
+
+SESSION_SECRET
+
+COOKIE settings
+
+CORS settings
+
+FRONTEND URL
+
+API URL
+
+6. CORS
+
+Verify:
+
+origin
+
+credentials
+
+allowed headers
+
+allowed methods
+
+cookies
+
+7. Final diagnosis
+
+Do NOT say
+
+"I think..."
+
+Do NOT guess.
+
+Identify exactly which line causes the failure.
+
+Example:
+
+Frontend sends email while backend expects username.
+
+OR
+
+Backend returns 500 because JWT_SECRET is undefined.
+
+OR
+
+Cookie isn't sent because credentials:true is missing.
+
+Fix
+
+Apply ONLY the minimum code changes required.
+
+No cleanup.
+
+No formatting.
+
+No unrelated edits.
+
+Output format
+
+Return:
+
+Root Cause
+
+(one paragraph)
+
+Files Changed
+
+(list)
+
+Exact Changes
+
+(bullets)
+
+Why Login Failed
+
+(short explanation)
+
+Verification
+
+Show:
+
+Login before
+
+Login after
+
+Expected HTTP status
+
+Expected response
+
+Very Important
+
+If another issue is discovered during debugging:
+
+DO NOT FIX IT.
+
+Mention it under:
+
+"Other Issues Found"
+
+and continue focusing ONLY on login.
