@@ -1,0 +1,173 @@
+The Media Library implementation is not finished yet.
+
+The backend and frontend have been refactored to stop using Base64, but the feature is still incomplete from a user perspective.
+
+Treat this as a production-quality completion task, not a quick bug fix.
+
+=========================================================
+GOAL
+=========================================================
+
+Finish the Media Library implementation so uploaded assets behave exactly like a finished product.
+
+=========================================================
+CURRENT ISSUES
+=========================================================
+
+From testing:
+
+1. Logo upload succeeds, but the UI displays the filename ("logo") instead of rendering the actual image.
+
+2. Portfolio uploads succeed, but only filenames ("sample", etc.) are shown instead of image thumbnails.
+
+3. The company profile saves successfully, but uploaded assets are not being rendered correctly after save or refresh.
+
+This indicates that storage works, but serving or resolving public URLs is still incorrect.
+
+=========================================================
+YOUR TASK
+=========================================================
+
+Perform a complete end-to-end audit of the Media Library.
+
+Verify every step:
+
+Upload
+↓
+
+Storage
+
+↓
+
+Database
+
+↓
+
+Public URL generation
+
+↓
+
+Express static serving
+
+↓
+
+Frontend rendering
+
+↓
+
+Persistence after refresh
+
+Do not assume anything.
+
+Trace the complete pipeline.
+
+=========================================================
+VERIFY
+=========================================================
+
+1. Files are physically written to storage/.
+
+2. Files exist in the expected company/category folders.
+
+3. media_assets contains correct records.
+
+4. relative_path is correct.
+
+5. publicUrl is generated correctly.
+
+6. express.static exposes the storage directory correctly.
+
+7. Opening a publicUrl directly in the browser returns the image.
+
+8. The frontend receives a valid image URL.
+
+9. <img src={publicUrl}> renders correctly.
+
+10. Refreshing the page still displays the same assets.
+
+=========================================================
+FIX
+=========================================================
+
+Fix any broken step.
+
+Do NOT work around the issue.
+
+Identify the root cause and correct it.
+
+Possible causes include:
+
+- incorrect express.static path
+- wrong storage root
+- incorrect relativePath
+- malformed publicUrl
+- wrong frontend mapping
+- broken company loading
+- missing asset lookup
+
+=========================================================
+EXPECTED RESULT
+=========================================================
+
+After completion:
+
+✅ Upload logo
+
+↓
+
+Logo preview appears immediately.
+
+↓
+
+Save company.
+
+↓
+
+Refresh.
+
+↓
+
+Logo still appears.
+
+
+---------------------------------------------------------
+
+Upload multiple portfolio images.
+
+↓
+
+Thumbnails appear immediately.
+
+↓
+
+Save.
+
+↓
+
+Refresh.
+
+↓
+
+All thumbnails still appear.
+
+---------------------------------------------------------
+
+Opening any publicUrl directly in the browser displays the image.
+
+---------------------------------------------------------
+
+No filenames should ever appear in place of images.
+
+=========================================================
+DELIVERABLE
+=========================================================
+
+Provide:
+
+1. Root cause.
+2. Files modified.
+3. What was broken.
+4. What was fixed.
+5. End-to-end verification report.
+
+Do not mark this task complete until every verification passes.
