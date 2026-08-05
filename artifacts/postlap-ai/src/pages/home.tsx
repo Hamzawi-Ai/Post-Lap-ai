@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Eye, Lock, ScanLine, Image as ImageIcon, Download, Store } from "lucide-react";
-import { useGetConfig, useGetStats, getGetConfigQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
+import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Lock, ScanLine, Image as ImageIcon, Download, Store, Sparkles, PenLine, Palette, BrainCircuit } from "lucide-react";
+import { useGetConfig, getGetConfigQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
 import { useLanguage } from "@/lib/useLanguage";
@@ -60,7 +60,6 @@ function isDiscountActive(): boolean {
 export default function Home() {
   const { toast } = useToast();
   const { data: config } = useGetConfig({ query: { queryKey: getGetConfigQueryKey() } });
-  const { data: stats } = useGetStats({ query: { queryKey: getGetStatsQueryKey() } });
   const { lang } = useLanguage();
   const t = ui[lang];
 
@@ -451,12 +450,12 @@ export default function Home() {
 
 
   const faqs = [
-    { q: "كيف يعمل PostLapAI؟", a: "ارفع صورة أو فيديو إعلانك، يحللها الذكاء الاصطناعي مقارنةً بسياسات Meta وTikTok ويعطيك نتيجة فورية." },
+    { q: "كيف يعمل PostLapAI؟", a: "عرّف حمزاوي على نشاطك مرة واحدة، ثم اطلب منه توليد منشوراتك ونصوصك الإعلانية بالليبي الأصيل وتصميم صورها بهوية نشاطك — وكل منشور يُفحص تلقائياً لضمان توافقه مع سياسات Meta قبل النشر." },
     { q: "هل نتائج الفحص دقيقة 100%؟", a: "الدقة 90% لأن سياسات المنصات تتحدث باستمرار. النتيجة مساعدة لكنها لا تضمن قبول المنصة." },
-    { q: "هل تخزنون إعلاناتنا؟", a: "لا، نحذف جميع الملفات فور انتهاء التحليل. لا نخزن محتواك أبداً." },
-    { q: "ما الفرق بين الخطط؟", a: "Smart Fix للإصلاح الفوري، إدارة المحتوى للشركات، وخطة الوكالة للمكاتب والمشاريع المتعددة." },
+    { q: "هل تخزنون محتواي؟", a: "لا، نحذف جميع الملفات فور انتهاء التحليل. لا نخزن محتواك أبداً." },
+    { q: "ما الفرق بين الخطط؟", a: "Smart Fix للمحتوى النصي والفحص، إدارة المحتوى للشركات التي تريد منشورات مصممة بهويتها وتوليد صور، وخطة الوكالة للمكاتب والمشاريع المتعددة." },
     { q: "كيف أشترك؟", a: "تواصل معنا عبر واتساب وأرسل اسم الخطة التي تريدها. نقبل الدفع بالتحويل المصرفي." },
-    { q: "هل يدعم فيديوهات تيك توك؟", a: "نعم، نقبل ملفات MP4. يُرفع الفيديو ويُحلل فريم بفريم وفق سياسات Meta وTikTok." },
+    { q: "هل يدعم فيديوهات تيك توك؟", a: "نعم، نقبل ملفات MP4 في فحص الإعلانات. يُرفع الفيديو ويُحلل فريم بفريم وفق سياسات Meta وTikTok." },
   ];
 
   const whatsapp = config?.whatsapp ?? "218915811115";
@@ -470,7 +469,7 @@ export default function Home() {
       nameAr: "الإصلاح الذكي",
       price: 100,
       desc: "للمعلنين الأفراد",
-      features: ["تصحيح الإعلانات المرفوضة", "فحوصات غير محدودة", "فيديو حتى 60 ثانية", "دعم أولوية"],
+      features: ["توليد نصوص إعلانية بالليبي الأصيل", "فحوصات إعلانية غير محدودة", "مقاطع فيديو حتى 60 ثانية", "دعم أولوية"],
       badge: null,
       cta: "اشترك في Smart Fix",
       highlight: false,
@@ -481,7 +480,7 @@ export default function Home() {
       nameAr: "للشركات والمتاجر",
       price: 400,
       desc: "للشركات والمتاجر",
-      features: ["كل مميزات Smart Fix", "لوحة إدارة المحتوى", "توليد نصوص بالليبي الأصيل", "تصميم منشورات مع الشعار"],
+      features: ["كل مميزات Smart Fix", "تصميم منشورات بشعار نشاطك وألوانه", "توليد نصوص بالليبي الأصيل", "توليد صور المنشورات بالذكاء الاصطناعي", "ذاكرة دائمة — حمزاوي يتذكر نشاطك"],
       badge: "الأكثر طلباً",
       cta: "اشترك في إدارة المحتوى",
       highlight: true,
@@ -492,7 +491,7 @@ export default function Home() {
       nameAr: "للمكاتب الإعلانية",
       price: 1000,
       desc: "+ 400 د.ل لكل مشروع إضافي",
-      features: ["كل مميزات إدارة المحتوى", "مشاريع متعددة", "بيانات وهوية مستقلة لكل مشروع", "مدير حساب مخصص"],
+      features: ["كل مميزات إدارة المحتوى", "مشاريع متعددة", "هوية مستقلة لكل مشروع", "مدير حساب مخصص"],
       badge: null,
       cta: "اشترك في خطة الوكالة",
       highlight: false,
@@ -529,12 +528,12 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-2xl font-black text-primary tracking-tight">PostLap<span className="text-foreground">AI</span></span>
-            <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">فحص الإعلانات</span>
+            <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">{lang === "ar" ? "مساعدك التسويقي" : "AI Marketing Assistant"}</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#generate" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد المنشورات" : "Post Generation"}</a>
             <a href="#image-gen" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد الصور" : "Image Generation"}</a>
-            <a href="#check" className="hover:text-foreground transition-colors">{lang === "ar" ? "فحص الإعلانات" : "Ad Check"}</a>
+            <a href="#check" className="hover:text-foreground transition-colors">{lang === "ar" ? "افحص إعلانك" : "Check My Ad"}</a>
             <a href="#plans" className="hover:text-foreground transition-colors">{lang === "ar" ? "الخطط" : "Plans"}</a>
           </nav>
           <div className="flex items-center gap-2">
@@ -574,7 +573,7 @@ export default function Home() {
               <div className="text-center lg:text-right space-y-3">
                 <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  {lang === "ar" ? "توليد المنشورات بالذكاء الاصطناعي" : "AI Post Generation"}
+                  {lang === "ar" ? "مساعدك التسويقي بالذكاء الاصطناعي" : "Your AI Marketing Assistant"}
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-black text-foreground leading-tight">
                   {lang === "ar" ? (
@@ -585,8 +584,8 @@ export default function Home() {
                 </h1>
                 <p className="text-sm text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed">
                   {lang === "ar"
-                    ? "نصوص ليبية أصيلة متوافقة مع سياسات Meta — وصف المنتج، السعر، والعرض. وارفق صورة المنتج لنتيجة أدق"
-                    : "Authentic Libyan ad copy that complies with Meta's policies. Describe your product and attach an image for sharper results"}
+                    ? "حمزاوي يكتب منشوراتك ونصوصك الإعلانية بالليبي الأصيل، ويصمّم صورها بهوية نشاطك — مع ضمان التوافق مع سياسات Meta. اكتب وصف المنتج والسعر والعرض، وارفق صورة لنتيجة أدق."
+                    : "Hamzawi writes your posts and ad copy in authentic Libyan, designs visuals with your brand identity — all while staying Meta-compliant. Describe your product, price and offer, and attach an image for sharper results"}
                 </p>
               </div>
 
@@ -655,7 +654,7 @@ export default function Home() {
                     </p>
                     <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                       {!user
-                        ? "سجل دخولك مجاناً وشوف تحليل الرفض التفصيلي — توليد النصوص الإعلانية يتطلب خطة مدفوعة."
+                        ? "سجّل دخولك مجاناً وابدأ توليد منشوراتك الإعلانية مع حمزاوي — وافحص إعلاناتك بالتفصيل."
                         : <>توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.</>}
                     </p>
                   </div>
@@ -807,16 +806,16 @@ export default function Home() {
           )}
         </section>
 
-        {/* ── 3. Existing Post Check ──────────────────────────────────────── */}
+        {/* ── 3. Existing Post Check (supporting tool) ─────────────────────── */}
         <section id="check" className="w-full">
           <div className="text-center mb-8">
             <h2 className="text-2xl font-black text-foreground mb-2">
-              {lang === "ar" ? "افحص إعلانك الحالي" : "Check Your Existing Ad"}
+              {lang === "ar" ? "افحص إعلانك — أداة مساندة" : "Check Your Ad — Supporting Tool"}
             </h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
               {lang === "ar"
-                ? "ارفع صورة أو فيديو إعلانك واحصل على تقييم المخاطر ونقاط الامتثال فوراً"
-                : "Upload your ad image or video and get a risk assessment and compliance score instantly"}
+                ? "أداة مساندة من حمزاوي — ارفع إعلانك (صورة أو فيديو) ليفحص توافقه مع سياسات Meta وتظهر النتيجة في محادثتك مباشرةً"
+                : "A supporting tool from Hamzawi — upload your ad (image or video) to check Meta compliance and see the result right in your chat"}
             </p>
           </div>
 
@@ -831,12 +830,12 @@ export default function Home() {
             <button
               onClick={() => heroFileInputRef.current?.click()}
               disabled={checking}
-              className="w-full bg-card border-2 border-dashed border-border rounded-2xl p-10 text-center hover:border-primary/50 transition-colors disabled:opacity-70"
+              className="w-full bg-card border-2 border-dashed border-border rounded-2xl p-6 text-center hover:border-primary/50 transition-colors disabled:opacity-70"
               data-testid="dropzone-check"
             >
               {checking ? (
                 <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
                   <p className="text-sm text-muted-foreground animate-pulse">
                     {lang === "ar" ? "جاري تحليل إعلانك..." : "Analyzing your ad..."}
                     {countdown !== null && <span className="ml-2">{countdown}s</span>}
@@ -844,12 +843,12 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                    <ScanLine className="w-7 h-7 text-primary" />
+                  <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <ScanLine className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <p className="text-lg font-black text-foreground">
-                      {lang === "ar" ? "ارفع إعلانك للفحص" : "Upload your ad to check"}
+                    <p className="text-base font-black text-foreground">
+                      {lang === "ar" ? "افحص إعلانك" : "Check your ad"}
                     </p>
                     <p className="text-sm text-muted-foreground mt-1">
                       {lang === "ar" ? "صورة PNG / JPG أو فيديو MP4 — حتى 50 ميجابايت" : "PNG / JPG image or MP4 video — up to 50 MB"}
@@ -925,15 +924,15 @@ export default function Home() {
         {/* ── 4. Features ─────────────────────────────────────────────────── */}
         <section id="why" className="w-full">
           <h2 className="text-2xl font-black text-center text-foreground mb-2">لماذا PostLapAI؟</h2>
-          <p className="text-center text-muted-foreground text-sm mb-10">كل ما تحتاجه لإعلانات أذكى وأأمن</p>
+          <p className="text-center text-muted-foreground text-sm mb-10">مساعدك التسويقي الواحد — من الفكرة إلى النشر</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { icon: <Shield className="w-5 h-5 text-primary" />, title: "تحليل فوري", desc: "نتيجة خلال 8 ثوانٍ بدون انتظار" },
-              { icon: <Eye className="w-5 h-5 text-primary" />, title: "كشف بالذكاء الاصطناعي", desc: "يفحص النص والمرئيات معاً بدقة عالية" },
-              { icon: <CheckCircle className="w-5 h-5 text-primary" />, title: "نقاط الامتثال الإعلاني", desc: "تقرير واضح بنقاط القوة والضعف في إعلانك" },
-              { icon: <AlertCircle className="w-5 h-5 text-primary" />, title: "تقييم المخاطر", desc: "اعرف احتمالية رفض إعلانك قبل ما تصرف فلوساً" },
-              { icon: <Lock className="w-5 h-5 text-primary" />, title: "خصوصية تامة", desc: "ملفاتك تُحذف فور التحليل — لا تخزين أبداً" },
-              { icon: <CheckCircle className="w-5 h-5 text-primary" />, title: "دعم متعدد اللهجات", desc: "نصوص ليبية أصيلة — شرقية، غربية، وجنوبية" },
+              { icon: <Sparkles className="w-5 h-5 text-primary" />, title: "مساعد تسويقي ذكي", desc: "حمزاوي يفهم نشاطك ويولّد محتوى يناسب هويتك وأسلوبك" },
+              { icon: <PenLine className="w-5 h-5 text-primary" />, title: "نصوص ليبية أصيلة", desc: "توليد إعلاني باللهجات الغربية والشرقية والجنوبية" },
+              { icon: <Palette className="w-5 h-5 text-primary" />, title: "تصميم بهوية نشاطك", desc: "شعارك وألوانك وأسلوبك المفضل في كل منشور" },
+              { icon: <BrainCircuit className="w-5 h-5 text-primary" />, title: "ذاكرة دائمة لنشاطك", desc: "حمزاوي يتذكر اسم نشاطك ومجاله وتفضيلاتك في كل مرة" },
+              { icon: <Shield className="w-5 h-5 text-primary" />, title: "متوافق مع Meta", desc: "كل منشور يُفحص لضمان التوافق قبل النشر — بدون مفاجآت" },
+              { icon: <Lock className="w-5 h-5 text-primary" />, title: "خصوصية تامة", desc: "محتواك لا يُخزن أبداً — يُحذف فور الانتهاء من التحليل" },
             ].map((f) => (
               <div key={f.title} className="bg-card border border-border rounded-2xl p-5 flex gap-3 hover:border-primary/30 transition-colors">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">{f.icon}</div>
@@ -1039,12 +1038,12 @@ export default function Home() {
         {/* ── 6. Secondary: How it works ──────────────────────────────────── */}
         <section id="how" className="w-full opacity-90">
           <h2 className="text-xl font-bold text-center text-muted-foreground mb-2">كيف يعمل؟</h2>
-          <p className="text-center text-muted-foreground text-xs mb-8">ثلاث خطوات بسيطة — نتيجة في ثوانٍ</p>
+          <p className="text-center text-muted-foreground text-xs mb-8">ثلاث خطوات من الفكرة إلى المنشور الجاهز</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
             {[
-              { step: "01", emoji: "📤", title: "ارفع الإعلان", desc: "اسحب وأفلت صورتك أو فيديو MP4 مباشرةً في منطقة الرفع" },
-              { step: "02", emoji: "🤖", title: "الذكاء الاصطناعي يحلّل", desc: "يفحص النصوص والمرئيات فريم بفريم وفق سياسات Meta وTikTok" },
-              { step: "03", emoji: "📊", title: "نتائج فورية", desc: "تحصل على تقييم المخاطر، نقاط الامتثال، ونصائح التحسين" },
+              { step: "01", emoji: "🏪", title: "عرّف حمزاوي على نشاطك", desc: "سجّل وأخبره باسم نشاطك ومجاله وأسلوبك المفضل مرة واحدة" },
+              { step: "02", emoji: "✨", title: "اطلب منشورك", desc: "اكتب وصف منتجك وعرضك — نصاً أو تصميماً — بالطريقة التي تحبها" },
+              { step: "03", emoji: "🚀", title: "انشر بثقة", desc: "نص ليبي أصيل وتصميم بهوية نشاطك، متوافق مع سياسات Meta" },
             ].map((s) => (
               <div key={s.step} className="bg-card border border-border rounded-2xl p-6 flex flex-col gap-3 relative">
                 <div className="flex items-center gap-3">
@@ -1062,10 +1061,11 @@ export default function Home() {
         <section className="flex flex-wrap justify-center gap-3 opacity-80">
           {[
             { label: "آمن 100%", emoji: "🔒" },
-            { label: "لا نخزن إعلاناتك", emoji: "🗑️" },
-            { label: "متوافق مع Meta & TikTok", emoji: "✅" },
-            { label: "نتيجة خلال 8 ثوانٍ", emoji: "⚡" },
-            { label: "دعم متعدد اللهجات", emoji: "🗣️" },
+            { label: "لا نخزن محتواك", emoji: "🗑️" },
+            { label: "متوافق مع Meta", emoji: "✅" },
+            { label: "توليد فوري", emoji: "⚡" },
+            { label: "تصميم بهوية نشاطك", emoji: "🎨" },
+            { label: "اللهجة الليبية الأصيلة", emoji: "🗣️" },
           ].map((b) => (
             <div key={b.label} className="flex items-center gap-2 border border-border rounded-full px-4 py-1.5 bg-card text-xs text-muted-foreground hover:border-primary/30 transition-colors">
               <span>{b.emoji}</span>
@@ -1073,22 +1073,6 @@ export default function Home() {
             </div>
           ))}
         </section>
-
-        {/* ── 8. Secondary: Stats ─────────────────────────────────────────── */}
-        {stats && (
-          <section className="grid grid-cols-3 gap-3 sm:gap-4 opacity-80">
-            {[
-              { label: "إجمالي الفحوصات", value: stats.total_checks ?? 0 },
-              { label: "المستخدمون", value: stats.total_users ?? 0 },
-              { label: "فحوصات اليوم", value: stats.checks_today ?? 0 },
-            ].map((s) => (
-              <div key={s.label} className="bg-card border border-border rounded-2xl p-4 sm:p-5 text-center">
-                <p className="text-2xl sm:text-3xl font-black text-primary">{s.value.toLocaleString("ar")}</p>
-                <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
-              </div>
-            ))}
-          </section>
-        )}
 
         {/* ── 9. Secondary: Agents ────────────────────────────────────────── */}
         <section id="agents" className="w-full opacity-90">
@@ -1158,7 +1142,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-between gap-6">
             <div>
               <p className="text-xl font-black text-primary">PostLapAI</p>
-              <p className="text-sm text-muted-foreground mt-1">أداة فحص الإعلانات بالذكاء الاصطناعي للمنصات الإعلانية</p>
+              <p className="text-sm text-muted-foreground mt-1">{lang === "ar" ? "مساعدك التسويقي بالذكاء الاصطناعي — ولّد منشوراتك، صمّم صورها، وتأكد من توافقها مع سياسات Meta" : "Your AI marketing assistant — generate posts, design visuals, and stay Meta-compliant"}</p>
             </div>
             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <a href="/privacy" className="hover:text-foreground transition-colors">سياسة الخصوصية</a>
@@ -1178,7 +1162,7 @@ export default function Home() {
               <Shield className="w-8 h-8 text-primary" />
             </div>
              <p className="text-lg font-bold text-foreground leading-relaxed">
-               سادك هكي يا غالي! جربت النظام وشفت الفلاحة.. لو تبي تكمل وتفحص كميات أكبر، سجّل الدخول مجاناً.
+               سادك هكي يا غالي! جربت حمزاوي وشفت الفلاحة.. لو تبي تكمل وتولّد منشوراتك وتصميماتك، سجّل الدخول مجاناً.
              </p>
              <div className="space-y-3">
                <div ref={googleBtnModalRef} className="flex justify-center" />
@@ -1189,8 +1173,8 @@ export default function Home() {
                  className="block w-full bg-primary text-primary-foreground py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
                  data-testid="button-modal-subscribe"
                >
-                 أنشئ حساباً مجانياً لمتابعة الفحص وكشف التحليل الكامل
-               </a>
+                  أنشئ حساباً مجانياً وابدأ توليد منشوراتك مع حمزاوي
+                </a>
               <button
                 onClick={() => setTrialBlockModal(false)}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -1284,7 +1268,7 @@ export default function Home() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground">
-              سجّل دخولك مجاناً للوصول إلى التحليل التفصيلي وميزات المنصة
+              سجّل دخولك مجاناً وابدأ توليد منشوراتك ونصوصك الإعلانية مع حمزاوي
             </p>
             <div className="flex justify-center" ref={googleBtnLoginModalRef} data-testid="button-google-signin-login-modal" />
           </div>

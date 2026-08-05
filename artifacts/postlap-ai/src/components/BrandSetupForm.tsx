@@ -155,6 +155,11 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
         logo_url: logoUrl || undefined,
         design_samples: designSamples,
         ...(isOnboarding ? { brand_onboarded: true } : {}),
+        // TEMPORARY beta compatibility marker: lets the server distinguish the
+        // Brand Settings form (allowed to set the logo) from chat uploads.
+        // The long-term fix enforces this server-side instead of trusting a
+        // client-supplied field.
+        source: "settings",
       };
       const res = await fetch("/api/hamzawi/memory", {
         method: "PUT",

@@ -30,7 +30,16 @@ function devStubOpenAI(): OpenAI {
         create: async (params: { messages: Array<{ content?: unknown }> }) => {
           const prompt = contentFrom(params.messages);
           let content: string;
-          if (prompt.includes("رد فقط بـ JSON")) {
+          if (prompt.includes("النوايا الممكنة")) {
+            // P1 Reasoner disambiguation — return the matching intent.
+            const msgMatch = prompt.match(/رسالة المستخدم:\s*(.+)/);
+            const userMsg = msgMatch?.[1] ?? "";
+            let intent = "check_ad";
+            if (/صمم|تصميم|منشور|بوست|اعمل|أنشئ/i.test(userMsg)) intent = "generate_image";
+            else if (/افحص|فحص|راجع|حلل|قيّم|شوف/i.test(userMsg)) intent = "check_ad";
+            else if (/اكتب|نص إعلاني/i.test(userMsg)) intent = "generate_text";
+            content = JSON.stringify({ intent });
+          } else if (prompt.includes("رد فقط بـ JSON")) {
             content = JSON.stringify({
               status: "جيد",
               score: 82,

@@ -10,8 +10,14 @@ import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
 import { getUserFromToken } from "../middleware/auth";
 import { MediaService } from "../services/media/MediaService";
-import { collectBrandAssets } from "../services/media/assetReader";
 import { getOpenAI } from "../services/ai/client";
+import { buildChatContext } from "../services/ai/contextBuilder";
+// Side-effect import: registers the beta tool metadata into the ToolRegistry
+// at server start. Registration is idempotent and required by the Reasoner (P1).
+import "../services/ai/tools";
+import { toolRegistry } from "../services/ai/tools";
+import { classifyIntent } from "../services/ai/reasoner";
+import { evaluateToolAccess } from "../services/ai/validator";
 import { generateBrandedPost } from "../services/image-gen/brandedPost";
 import { getConfig } from "../lib/config";
 import {
@@ -26,47 +32,6 @@ import {
 
 const VISION_MODEL = "gpt-4o";
 const TEXT_MODEL = "gpt-4o-mini";
-
-/**
- * Intent-based detection of whether the current request needs image
- * understanding (logo/product recognition, design analysis, brand-asset
- * reasoning). The decision is driven by the user's intent (phrases that
- * express a visual/design purpose); a small keyword list is used only as a
- * fallback when no intent phrase is recognised. Normal text conversations
- * stay on the cheaper text model.
- */
-function detectImageIntent(message: string): boolean {
-  const m = message.trim();
-  if (!m) return false;
-
-  // Intent phrases — high-precision patterns that express a visual/design purpose.
-  const intentPatterns = [
-    /(صمم|صمّم|اصمم|تصميم|تصاميم)\b/i,
-    /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|إعلان مرئي)/i,
-    /(منشور|بوست|ستوري|بانر|فلاير|ملصق|بوستر)\b/i,
-    /شعار|لوجو|logo/i,
-    /ألوان|الوان|color/i,
-    /هوية (بصرية|النشاط|نشاطي)/i,
-    /(في|على) (الصورة|المنشور|التصميم|الشعار)/i,
-    /ما رأيك (في|ب)/i,
-    /(حلل|راجع|قيّم|قييم|شوف|بصّ|انظر|أنظر).*(منشور|صورة|تصميم|إعلان|شعار)/i,
-    /صورة (المنتج|نشاطي|المنشور|الإعلان)|صور (المنتج|نشاطي)/i,
-    /design|poster|banner|flyer|thumbnail|logo|post|image|photo|picture|visual/i,
-    /brand (colors|identity|logo)/i,
-  ];
-
-  for (const re of intentPatterns) {
-    if (re.test(m)) return true;
-  }
-
-  // Fallback: individual design/visual keywords when no intent phrase matched.
-  const fallbackKeywords = [
-    "صمم", "تصميم", "منشور", "بوست", "ستوري", "شعار", "صورة", "بانر",
-    "فلاير", "بوستر", "ألوان", "هوية", "تصاميم", "انشئ", "اعمل",
-    "design", "post", "story", "banner", "logo", "image", "photo", "picture", "poster",
-  ];
-  return fallbackKeywords.some((k) => m.includes(k));
-}
 
 const router: IRouter = Router();
 
@@ -459,32 +424,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
   setSessionCookie(res, signedCookie);
 
   try {
-    const plan = (user?.plan ?? "visitor") as Plan;
-    const level = planLevel(plan);
-
-    const memory = user
-      ? await db
-          .select()
-          .from(userBrandMemoryTable)
-          .where(eq(userBrandMemoryTable.user_id, user.id))
-          .limit(1)
-          .then((r) => r[0] ?? null)
-      : null;
-
-    // Onboarding mode: level 4+ users whose brand profile is not complete.
-    // Uses brand_onboarded AND core-data check so a lost flag never re-triggers onboarding.
-    const isOnboarding = level >= 4 && !isBrandProfileComplete(memory);
-
-    const recentMessages = await db
-      .select()
-      .from(hamzawiMessagesTable)
-      .where(
-        user
-          ? eq(hamzawiMessagesTable.user_id, user.id)
-          : eq(hamzawiMessagesTable.session_id, sessionRawId)
-      )
-      .orderBy(desc(hamzawiMessagesTable.created_at))
-      .limit(10);
+    const ctx = await buildChatContext({ user, sessionId: sessionRawId });
+    const { plan, level, memory, isOnboarding, recentMessages, brandAssets, assetContext } = ctx;
 
     // isInit: proactive first message.
     // - Brand setup not done → start guided onboarding.
@@ -501,11 +442,6 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
         return;
       }
     }
-
-    const brandAssets = user
-      ? await collectBrandAssets({ userId: user.id, companyId: user.company_id ?? null, memory })
-      : null;
-    const assetContext = brandAssets && brandAssets.images.length > 0 ? brandAssets.summary : undefined;
 
     const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding, assetContext);
 
@@ -533,8 +469,50 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // Intent-based vision routing: use the vision model + attach the company's
     // brand images ONLY when the request actually needs image understanding.
     // Normal text conversations stay on the cheaper text model.
-    const needsVision = !isInit && !!message && detectImageIntent(message);
     const hasBrandImages = !!(brandAssets && brandAssets.images.length > 0);
+
+    // P1: Reasoner — rule-first intent classification (LLM only for
+    // ambiguous/compound requests). Routing-only: drives vision-model choice
+    // and upsell messaging. Tool execution is NOT migrated yet.
+    const intentDecision = await classifyIntent(message ?? "");
+    const needsVision = !isInit && !!message && intentDecision.needsVision;
+
+    // P1: Validator-backed upsell gate. Asking Hamzawi to generate a branded
+    // post requires level 4+ (content/agency). If the account can't do it,
+    // answer with a clear upsell instead of an LLM call whose marker would be
+    // ignored downstream (the pipeline below already guards level >= 4).
+    if (!isInit && message && intentDecision.intent === "generate_image") {
+      const imageTool = toolRegistry.get("generate_image");
+      if (imageTool) {
+        const access = evaluateToolAccess(imageTool, {
+          user: user
+            ? {
+                id: user.id,
+                is_active: user.is_active,
+                subscription_expires_at: user.subscription_expires_at,
+              }
+            : null,
+          level,
+        });
+        if (!access.allowed) {
+          const reply = access.message ?? "هذه الميزة غير متاحة حالياً.";
+          await db.insert(hamzawiMessagesTable).values({
+            user_id: user?.id ?? null,
+            session_id: sessionRawId,
+            role: "user",
+            content: message,
+          });
+          await db.insert(hamzawiMessagesTable).values({
+            user_id: user?.id ?? null,
+            session_id: sessionRawId,
+            role: "assistant",
+            content: reply,
+          });
+          res.json({ reply, sessionId: sessionRawId, onboardingComplete: false, upsell: true });
+          return;
+        }
+      }
+    }
 
     let userContentParts:
       | string
@@ -752,6 +730,41 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
     design_samples?: string[];
   };
 
+  // ── Brand identity write guard (TEMPORARY beta mechanism) ─────────────────
+  // Business rule: each account is one business with exactly one official logo,
+  // chosen only during onboarding or from Brand Settings. Hamzawi must never
+  // silently set/replace the logo or design references, and uploaded images
+  // must never become logos automatically.
+  //
+  // For the beta, the Brand Settings form marks itself with source:"settings".
+  // This trusts a client-supplied field and is a TEMPORARY compatibility
+  // mechanism only — the long-term implementation must enforce this entirely
+  // server-side (based on the authenticated request's origin/flow), not on a
+  // client-supplied flag.
+  const touchesBrandIdentity =
+    logo_url !== undefined ||
+    append_design_sample !== undefined ||
+    design_samples !== undefined;
+
+  if (touchesBrandIdentity) {
+    const [existingMemory] = await db
+      .select()
+      .from(userBrandMemoryTable)
+      .where(eq(userBrandMemoryTable.user_id, user.id))
+      .limit(1);
+    const profileComplete = isBrandProfileComplete(existingMemory ?? null);
+    const inGuidedOnboarding = level >= 4 && !profileComplete;
+    const isSettingsSource = (req.body as { source?: string }).source === "settings";
+
+    if (!isSettingsSource && !inGuidedOnboarding) {
+      res.status(403).json({
+        error:
+          "تغيير الشعار والتصاميم المرجعية يتم فقط من صفحة هوية النشاط التجاري أو أثناء إعداد النشاط",
+      });
+      return;
+    }
+  }
+
   try {
     const payload: Record<string, unknown> = {
       business_name,
@@ -777,7 +790,8 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
 
     await upsertBrandMemory(user.id, payload as Parameters<typeof upsertBrandMemory>[1]);
 
-    // Append a single design sample (legacy chat paperclip path) after upsert
+    // Append a single design sample (guarded: only allowed from Brand Settings
+    // source or during guided onboarding — see guard above)
     if (append_design_sample) {
       await appendDesignSample(user.id, append_design_sample);
     }

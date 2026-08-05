@@ -11,11 +11,11 @@ This is a behavioral spec — when the layout changes, update this file.
 Header (sticky)
 ├─ #generate    AI Post Generation (HERO)
 ├─ #image-gen   AI Image Generation
-├─ #check       Existing Post Check
+├─ #check       Ad Policy Check (supporting tool)
 ├─ #why         Features
 ├─ #plans       Pricing
 ├─ #how         How it works        (secondary)
-├─ (trust badges, stats inline)     (secondary)
+├─ (trust badges inline)            (secondary)
 ├─ #agents      Agents              (secondary)
 └─ #faq         FAQ                 (secondary)
 ```
@@ -26,13 +26,14 @@ Labels are lang-conditional (`lang === "ar" ? "…" : "…"`).
 ## 2. Sections and purpose
 
 ### Header
-Sticky, `z-50`, dark blurred bar. Left: `PostLapAI` wordmark + "فحص الإعلانات" tag.
-Center: section nav (desktop only). Right: logged-in user (name + plan badge +
-sign-out) or a "sign in" button that opens the Google login modal.
+Sticky, `z-50`, dark blurred bar. Left: `PostLapAI` wordmark + "مساعدك التسويقي" tag
+(identity is creation-first, NOT "فحص الإعلانات"). Center: section nav (desktop only).
+Right: logged-in user (name + plan badge + sign-out) or a "sign in" button that opens
+the Google login modal.
 
 ### `#generate` — HERO: AI Post Generation (primary CTA area)
 Two-column grid (`lg:grid-cols-2`, right column `lg:sticky lg:top-24`).
-- **Left:** badge "توليد المنشورات بالذكاء الاصطناعي", H1 "ولّد منشورك الإعلاني مع حمزاوي",
+- **Left:** badge "مساعدك التسويقي بالذكاء الاصطناعي", H1 "ولّد منشورك الإعلاني مع حمزاوي",
   Arabic-only value prop: authentic Libyan copy compliant with Meta policies, with
   optional product image.
 - **Left body (level 3+, logged in):** textarea for product details →
@@ -45,7 +46,8 @@ Two-column grid (`lg:grid-cols-2`, right column `lg:sticky lg:top-24`).
   no floating bubble).
 
 **Purpose:** make generation the first thing visitors experience; the assistant sits
-beside the generator as the interactive entry point.
+beside the generator as the interactive entry point. Guests see Hamzawi's creation
+quick-actions as a product teaser.
 
 ### `#image-gen` — AI Image Generation
 Level-4+ gated `/api/image-gen` UI: product textarea, optional product-image input,
@@ -54,15 +56,18 @@ gated card with a WhatsApp subscribe CTA to إدارة المحتوى.
 
 **Purpose:** upsell the content-management tier; produce branded post designs.
 
-### `#check` — Existing Post Check
-Upload dropzone (image/video) + inline Arabic-only result card (status
-`ممتاز` / `جيد` / `مرفوض`). Non-paid users get a Smart Fix WhatsApp upsell.
+### `#check` — Ad Policy Check (supporting tool)
+Compact upload dropzone (image/video) + inline Arabic-only result card (status
+`ممتاز` / `جيد` / `مرفوض`). Visually demoted (smaller dropzone/icon) and framed as
+"أداة مساندة من حمزاوي". The same result feeds the embedded Hamzawi chat. Non-paid
+users get a Smart Fix WhatsApp upsell.
 
-**Purpose:** the compliance-check value prop, converted into a retention/upgrade
-funnel for Smart Fix.
+**Purpose:** the compliance-check value prop as a **supporting capability**, converted
+into a retention/upgrade funnel — not the product's primary identity.
 
 ### `#why` — Features
-3-column feature grid communicating trust + differentiation.
+3-column feature grid communicating the assistant/creation value props (مساعد تسويقي
+ذكي، نصوص ليبية أصيلة، تصميم بهوية نشاطك، ذاكرة دائمة، متوافق مع Meta، خصوصية تامة).
 
 ### `#plans` — Pricing
 3 paid plans (Smart Fix 400, إدارة المحتوى 800 highlighted, Agency 1000 LYD/mo).
@@ -74,10 +79,13 @@ immediate level-4 access. Footer note: "نقبل الدفع بالتحويل ا�
 **Purpose:** monetize. This is the main conversion point for upgrades; paid CTAs
 across the page point here, to WhatsApp, or to the in-app subscribe modal.
 
-### Secondary: `#how`, trust badges, stats, `#agents`, `#faq`
+### Secondary: `#how`, trust badges, `#agents`, `#faq`
 Demoted styling: `text-xl font-bold` muted headings, smaller body text,
-`opacity-90`. Agents list is a static list of WhatsApp-sales partners
-(Libya, Jordan, Saudi Arabia). FAQ is the trust/objection-handling block.
+`opacity-90`. `#how` describes the creation loop (عرّف حمزاوي → اطلب منشورك →
+انشر بثقة). Trust badges are creation/compliance value props. The stats block
+was **removed** (check-only data reinforced the wrong identity). Agents list is a
+static list of WhatsApp-sales partners (Libya, Jordan, Saudi Arabia). FAQ is the
+trust/objection-handling block (first answer is creation-first).
 
 **Purpose:** answer objections and show credibility **without** competing with the
 primary CTA sections for attention.
@@ -122,7 +130,9 @@ Rules:
 
 A homepage change is complete only when:
 - Section order is exactly: generate → image-gen → check → why → plans → how →
-  agents → faq.
+  trust badges → agents → faq.
+- Header tagline is "مساعدك التسويقي" (creation-first identity), not "فحص الإعلانات".
+- The stats section is absent (no check-count social proof).
 - The floating Hamzawi widget is absent; the embedded chat renders in the hero.
 - Guest view shows gated cards (no dead CTAs).
 - `pnpm run typecheck` and `pnpm run build` pass.

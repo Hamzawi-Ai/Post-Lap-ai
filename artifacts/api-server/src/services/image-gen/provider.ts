@@ -1,4 +1,5 @@
 import { getGemini } from "../ai/client";
+import { DEV_STUB_IMAGE } from "./devStub";
 
 /**
  * Provider-agnostic image generation pipeline.
@@ -31,10 +32,19 @@ class GeminiImageProvider implements ImageProvider {
   private static readonly MODEL = "gemini-2.5-flash-image";
 
   isAvailable(): boolean {
-    return !!process.env.GEMINI_API_KEY;
+    const isProd = process.env.NODE_ENV === "production";
+    const hasKey = !!(process.env.GEMINI_API_KEY || process.env.NANO_BANANA_API_KEY);
+    // In development, the dev stub counts as "available" so the full pipeline
+    // (brand assets → provider → save → /uploads/…) can be exercised without
+    // an API key. Production without a key still returns 503.
+    return hasKey || !isProd;
   }
 
   async generate({ prompt, referenceImages = [] }: GenerateImageParams): Promise<GeneratedImage | null> {
+    if (process.env.NODE_ENV !== "production" && !process.env.GEMINI_API_KEY && !process.env.NANO_BANANA_API_KEY) {
+      return { mimeType: DEV_STUB_IMAGE.mimeType, data: DEV_STUB_IMAGE.data };
+    }
+
     const parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = [
       { text: prompt },
     ];

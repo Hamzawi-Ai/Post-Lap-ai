@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Download, RefreshCw, Image as ImageIcon, ScanLine } from "lucide-react";
+import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Image as ImageIcon, ScanLine } from "lucide-react";
 import { brandProfileCompletion, type BrandProfileData } from "@/lib/onboarding";
+import { chatRendererRegistry, type ChatRendererContext } from "@/components/chat";
+import type { ChatBlock, BlockExtra, GeneratedImageBlock } from "@/lib/messages/types";
+import { chatBlock, storedContentToBlock, replyToBlock } from "@/lib/messages/parser";
+import { CARD_BLOCK_TYPES } from "@/lib/messages/types";
 
 const LANG_KEY = "postlap_lang";
 const SESSION_OPENED_KEY = "hamzawi_opened";
@@ -20,7 +24,7 @@ function detectLanguage(): "ar" | "en" {
 const i18n = {
   ar: {
     title: "حمزاوي",
-    subtitle: "مساعدك الإعلاني الذكي",
+    subtitle: "مساعدك التسويقي الذكي",
     placeholder: "اكتب رسالتك...",
     loading: "جاري التحميل...",
     thinking: "حمزاوي يفكر...",
@@ -50,13 +54,15 @@ const i18n = {
     attachFile: "إرفاق صورة",
     postGenerated: "✅ تم توليد المنشور! يمكنك تنزيله أو إعادة توليده.",
     postError: "حدث خطأ أثناء توليد المنشور.",
+    copy: "نسخ",
+    copied: "تم النسخ ✓",
     uploading: "جاري رفع الملف...",
     uploadedLogo: "تم رفع الشعار ✓",
     attachTip: "انقر لإرفاق صورة (شعار، تصميم سابق، أو صورة منتج)",
     regeneratePrompt: "ملاحظة للتوليد (اختياري):",
     checkAdTip: "ارفع صورة إعلانك للفحص",
     analyzingAd: "جاري تحليل إعلانك... ⏳",
-    welcome: "أهلاً! 👋 ارفع لي صورة إعلانك وأقولك هل يعدي سياسات ميتا أو لا. أو اسألني أي سؤال إعلاني.",
+    welcome: "أهلاً! 👋 أنا حمزاوي، مساعدك التسويقي الذكي. قلّي على نشاطك وأولّد لك منشوراتك ونصوصك الإعلانية بالليبي الأصيل، وأصمّم صورها بهوية نشاطك — وكمان أفحص إعلانك قبل النشر.",
     profileChip: "اكتمال هوية النشاط",
     quickStart: "ابدأ بسرعة",
     quickActions: [
@@ -69,7 +75,7 @@ const i18n = {
   },
   en: {
     title: "Hamzawi",
-    subtitle: "Your smart ad assistant",
+    subtitle: "Your AI marketing assistant",
     placeholder: "Type your message...",
     loading: "Loading...",
     thinking: "Hamzawi is thinking...",
@@ -99,13 +105,15 @@ const i18n = {
     attachFile: "Attach image",
     postGenerated: "✅ Post generated! You can download or regenerate it.",
     postError: "Error generating post.",
+    copy: "Copy",
+    copied: "Copied ✓",
     uploading: "Uploading...",
     uploadedLogo: "Logo uploaded ✓",
     attachTip: "Click to attach an image (logo, design sample, or product photo)",
     regeneratePrompt: "Regeneration note (optional):",
     checkAdTip: "Upload your ad image to check it",
     analyzingAd: "Analyzing your ad... ⏳",
-    welcome: "Hello! 👋 Upload your ad image and I'll tell you if it passes Meta's policies. Or ask me anything about advertising.",
+    welcome: "Hello! 👋 I'm Hamzawi, your AI marketing assistant. Tell me about your business and I'll generate your posts and ad copy in authentic Libyan, design visuals with your brand identity — and check your ads before you publish.",
     profileChip: "Brand profile completion",
     quickStart: "Quick start",
     quickActions: [
@@ -135,31 +143,11 @@ interface HamzawiChatProps {
   embedded?: boolean;
 }
 
-interface Message {
-  from: "hamzawi" | "user";
-  text: string;
-  time: string;
-  imageUrl?: string;
-  isGeneratedPost?: boolean;
-  generatedDescription?: string;
-}
-
 /**
- * Parse persisted Hamzawi assistant content. Generated-design images are
- * stored as a %%GENERATED_IMAGE%%{...}%%END%% marker appended to the reply so
- * they survive a page reload without any DB schema change.
+ * UX-1: messages are typed ChatBlocks rendered via the chatRendererRegistry.
+ * The legacy { text, imageUrl, isGeneratedPost, ... } shape is handled by
+ * chatBlock()/storedContentToBlock()/replyToBlock() in lib/messages/parser.
  */
-function parseStoredContent(content: string): { text: string; imageUrl?: string; generatedDescription?: string } {
-  const match = content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
-  const text = content.replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "").trim();
-  if (!match) return { text };
-  try {
-    const parsed = JSON.parse(match[1]) as { url?: string; description?: string };
-    return { text, imageUrl: parsed.url, generatedDescription: parsed.description };
-  } catch {
-    return { text };
-  }
-}
 
 // Payload kept for regeneration — never cleared when form resets
 interface GenerationPayload {
@@ -185,7 +173,7 @@ function planLevel(plan?: string): number {
 
 export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen, embedded }: HamzawiChatProps) {
   const [open, setOpen] = useState(!!embedded);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatBlock[]>([]);
   const [input, setInput] = useState("");
   const [initialized, setInitialized] = useState(false);
   const lastReportedCheckRef = useRef<typeof checkResult>(null);
@@ -264,10 +252,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
   const completion = brandProfileCompletion(brandMemory);
   const hasUserMessage = messages.some((m) => m.from === "user");
-  const showQuickActions = level >= 4 && !hasUserMessage && messages.length > 0 && !loading;
+  const showQuickActions = !hasUserMessage && messages.length > 0 && !loading;
 
-  function addHamzawi(text: string, extra?: Partial<Message>) {
-    setMessages((prev) => [...prev, { from: "hamzawi", text, time: now(), ...extra }]);
+  function addHamzawi(text: string, extra?: BlockExtra) {
+    setMessages((prev) => [...prev, chatBlock("hamzawi", text, extra)]);
     if (!open) setUnread(true);
   }
 
@@ -281,14 +269,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       });
       if (res.ok) {
         const data = await res.json();
-        const msgs: Message[] = (data.messages ?? []).map((m: any) => {
-          const parsed = parseStoredContent(m.content);
-          return {
-            from: m.role === "assistant" ? "hamzawi" : "user",
-            text: parsed.text,
-            time: new Date(m.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" }),
-            ...(parsed.imageUrl ? { imageUrl: parsed.imageUrl, isGeneratedPost: true, generatedDescription: parsed.generatedDescription } : {}),
-          };
+        const msgs: ChatBlock[] = (data.messages ?? []).map((m: any) => {
+          const time = new Date(m.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" });
+          return storedContentToBlock(m.content, m.role === "assistant" ? "hamzawi" : "user", time);
         });
         if (msgs.length > 0) setMessages(msgs);
       }
@@ -349,7 +332,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
           setMessages((prev) => {
             if (prev.length > 0) return prev;
             // Temporary loading state — will be replaced by AI response
-            return [{ from: "hamzawi" as const, text: "...", time: now() }];
+            return [chatBlock("hamzawi", "...")];
           });
           try {
             const initRes = await fetch("/api/hamzawi/chat", {
@@ -363,8 +346,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                 // Always show the AI onboarding message, even if history already exists.
                 // Remove "..." placeholder, then append (or replace if history was empty).
                 setMessages((prev) => {
-                  const withoutPlaceholder = prev.filter((m) => m.text !== "...");
-                  return [...withoutPlaceholder, { from: "hamzawi" as const, text: data.reply!, time: now() }];
+                  const withoutPlaceholder = prev.filter((m) => m.type === "text" && m.text !== "...");
+                  return [...withoutPlaceholder, chatBlock("hamzawi", data.reply!)];
                 });
                 return;
               }
@@ -374,9 +357,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
           }
           // Fallback: remove placeholder and show static welcome
           setMessages((prev) => {
-            const withoutPlaceholder = prev.filter((m) => m.text !== "...");
+            const withoutPlaceholder = prev.filter((m) => m.type === "text" && m.text !== "...");
             if (withoutPlaceholder.length === 0) {
-              return [{ from: "hamzawi" as const, text: t.welcome, time: now() }];
+              return [chatBlock("hamzawi", t.welcome)];
             }
             return withoutPlaceholder;
           });
@@ -385,7 +368,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
         setMessages((prev) => {
           if (prev.length === 0) {
-            return [{ from: "hamzawi" as const, text: t.welcome, time: now() }];
+            return [chatBlock("hamzawi", t.welcome)];
           }
           return prev;
         });
@@ -426,7 +409,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     if (!msgText) return;
     if (!text) setInput("");
 
-    setMessages((prev) => [...prev, { from: "user", text: msgText, time: now() }]);
+    setMessages((prev) => [...prev, chatBlock("user", msgText)]);
     setLoading(true);
 
     try {
@@ -446,11 +429,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         addHamzawi(lang === "ar" ? "انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى." : "Session expired. Please log in again.");
       } else if (res.ok) {
         const data = await res.json();
-        if (data.imageUrl) {
-          addHamzawi(data.reply, { imageUrl: data.imageUrl, isGeneratedPost: true, generatedDescription: data.generatedDescription });
-        } else {
-          addHamzawi(data.reply);
-        }
+        setMessages((prev) => [...prev, replyToBlock(data, "hamzawi", now())]);
       } else {
         addHamzawi(lang === "ar" ? "عذراً، حدث خطأ. حاول مرة أخرى." : "Sorry, an error occurred. Please try again.");
       }
@@ -466,11 +445,16 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     if (!token) return;
     setSavingBrand(true);
     try {
-      await fetch("/api/hamzawi/memory", {
+      const res = await fetch("/api/hamzawi/memory", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(brandForm),
+        body: JSON.stringify({ ...brandForm, source: "settings" }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        addHamzawi((data as { error?: string }).error ?? (lang === "ar" ? "حدث خطأ أثناء الحفظ." : "Error saving brand identity."));
+        return;
+      }
       setShowBrandForm(false);
       addHamzawi(lang === "ar"
         ? `تم حفظ هوية نشاطك التجاري "${brandForm.business_name || "النشاط"}" ✅ سأتذكرها في كل محادثة!`
@@ -565,21 +549,12 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       objectUrlsRef.current.push(url);
       setMessages((prev) => [
         ...prev,
-        {
-          from: "user" as const,
-          text: lang === "ar" ? "افحص هذا الإعلان" : "Check this ad",
-          time: now(),
-          imageUrl: url,
-        },
+        chatBlock("user", lang === "ar" ? "افحص هذا الإعلان" : "Check this ad", { imageUrl: url }),
       ]);
     } else {
       setMessages((prev) => [
         ...prev,
-        {
-          from: "user" as const,
-          text: lang === "ar" ? "افحص هذا الفيديو الإعلاني" : "Check this video ad",
-          time: now(),
-        },
+        chatBlock("user", lang === "ar" ? "افحص هذا الفيديو الإعلاني" : "Check this video ad"),
       ]);
     }
 
@@ -645,11 +620,16 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
           if (!hasLogo) {
             // First upload: save as logo
-            await fetch("/api/hamzawi/memory", {
+            const logoRes = await fetch("/api/hamzawi/memory", {
               method: "PUT",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ logo_url: url }),
+              body: JSON.stringify({ logo_url: url, source: "settings" }),
             });
+            if (!logoRes.ok) {
+              const data = await logoRes.json().catch(() => ({}));
+              addHamzawi((data as { error?: string }).error ?? (lang === "ar" ? "حدث خطأ أثناء حفظ الشعار." : "Error saving logo."));
+              return;
+            }
             addHamzawi(
               lang === "ar"
                 ? "تم حفظ الشعار في هوية نشاطك ✅ الآن يمكنك رفع تصاميم سابقة إضافية بنفس الطريقة، أو اكتب 'تخطّ' للمتابعة."
@@ -657,11 +637,16 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
             );
           } else {
             // Subsequent uploads: append as design sample
-            await fetch("/api/hamzawi/memory", {
+            const sampleRes = await fetch("/api/hamzawi/memory", {
               method: "PUT",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ append_design_sample: url }),
+              body: JSON.stringify({ append_design_sample: url, source: "settings" }),
             });
+            if (!sampleRes.ok) {
+              const data = await sampleRes.json().catch(() => ({}));
+              addHamzawi((data as { error?: string }).error ?? (lang === "ar" ? "حدث خطأ أثناء حفظ التصميم." : "Error saving design sample."));
+              return;
+            }
             addHamzawi(
               lang === "ar"
                 ? "تم حفظ نموذج التصميم ✅ سأستخدمه كمرجع بصري عند إنشاء منشوراتك. يمكنك رفع المزيد أو اكتب 'تخطّ' للمتابعة."
@@ -710,11 +695,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       // Add the user request message immediately when user first clicks Generate
       setMessages((prev) => [
         ...prev,
-        {
-          from: "user",
-          text: `${lang === "ar" ? "توليد منشور: " : "Generate post: "}${description}`,
-          time: now(),
-        },
+        chatBlock("user", `${lang === "ar" ? "توليد منشور: " : "Generate post: "}${description}`),
       ]);
     }
 
@@ -773,18 +754,36 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       return;
     }
     // Chat-generated design — ask Hamzawi to regenerate it in a new turn.
-    const lastGenMsg = [...messages].reverse().find((m) => m.isGeneratedPost && m.generatedDescription);
-    if (!lastGenMsg?.generatedDescription) return;
+    const lastGenMsg = [...messages].reverse().find(
+      (m): m is GeneratedImageBlock => m.type === "generated_image" && !!m.description,
+    );
+    if (!lastGenMsg?.description) return;
     const note = prompt(t.regeneratePrompt) ?? "";
     sendMessage(
       lang === "ar"
-        ? `أعد توليد التصميم السابق: ${lastGenMsg.generatedDescription}${note ? ` (ملاحظة: ${note})` : ""}`
-        : `Regenerate the previous design: ${lastGenMsg.generatedDescription}${note ? ` (Note: ${note})` : ""}`
+        ? `أعد توليد التصميم السابق: ${lastGenMsg.description}${note ? ` (ملاحظة: ${note})` : ""}`
+        : `Regenerate the previous design: ${lastGenMsg.description}${note ? ` (Note: ${note})` : ""}`
     );
   }
 
   const isRTL = lang === "ar";
   const dirAttr = isRTL ? "rtl" : "ltr";
+
+  // Shared context handed to every chat renderer via the RendererRegistry.
+  const renderCtx: ChatRendererContext = {
+    lang,
+    t: { download: t.download, regenerate: t.regenerate, copy: t.copy, copied: t.copied },
+    onDownload: downloadImage,
+    onRegenerate: handleRegenerateClick,
+    onCopy: async (text) => {
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        // clipboard unavailable — no-op
+      }
+    },
+    busy: generatingPost,
+  };
 
   return (
     <div className={`${embedded ? "w-full" : `fixed bottom-20 ${isRTL ? "left-4" : "right-4"} z-40 flex flex-col items-end gap-2`}`} dir={dirAttr}>
@@ -990,71 +989,26 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                 {t.loading}
               </div>
             )}
-            {messages.map((m, i) => (
-              <div key={i} className={`flex gap-2 ${m.from === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                {m.from === "hamzawi" && (
-                  <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
-                    ح
-                  </div>
-                )}
-                <div className={`max-w-[80%] rounded-2xl text-sm leading-relaxed ${
-                  m.from === "hamzawi"
-                    ? "bg-muted text-foreground rounded-tr-none"
-                    : "bg-primary text-primary-foreground rounded-tl-none"
-                } ${m.imageUrl ? "overflow-hidden p-0" : "px-3 py-2 whitespace-pre-wrap"}`}>
-                  {m.isGeneratedPost && m.imageUrl ? (
-                    /* Generated post — show download + regenerate actions */
-                    <div>
-                      <img
-                        src={m.imageUrl}
-                        alt="generated post"
-                        className="w-full cursor-zoom-in"
-                        onClick={() => window.open(m.imageUrl, "_blank")}
-                      />
-                      <div className="px-3 py-2 space-y-2">
-                        <p className="text-xs text-muted-foreground">{m.text}</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => downloadImage(m.imageUrl!)}
-                            className="flex-1 flex items-center justify-center gap-1 bg-primary text-primary-foreground text-xs font-bold py-1.5 rounded-lg hover:opacity-90 transition-opacity"
-                          >
-                            <Download className="w-3 h-3" />
-                            {t.download}
-                          </button>
-                          <button
-                            onClick={handleRegenerateClick}
-                            disabled={generatingPost}
-                            className="flex-1 flex items-center justify-center gap-1 bg-muted border border-border text-foreground text-xs py-1.5 rounded-lg hover:bg-muted/80 transition-colors disabled:opacity-50"
-                          >
-                            <RefreshCw className="w-3 h-3" />
-                            {t.regenerate}
-                          </button>
-                        </div>
-                      </div>
+            {messages.map((m, i) => {
+              const Renderer = chatRendererRegistry.get(m.type);
+              const isCard = CARD_BLOCK_TYPES.has(m.type);
+              return (
+                <div key={i} className={`flex gap-2 ${m.from === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                  {m.from === "hamzawi" && (
+                    <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
+                      ح
                     </div>
-                  ) : m.imageUrl ? (
-                    /* User ad preview — simple thumbnail only */
-                    <div>
-                      <img
-                        src={m.imageUrl}
-                        alt="ad preview"
-                        className="w-full max-h-48 object-cover cursor-zoom-in"
-                        onClick={() => window.open(m.imageUrl, "_blank")}
-                      />
-                      <div className="px-3 py-2">
-                        <p className="text-xs opacity-80">{m.text}</p>
-                        <p className="text-[10px] opacity-50 mt-0.5">{m.time}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {m.text}
-                      <p className="text-[10px] opacity-50 mt-1 text-left">{m.time}</p>
-                    </>
                   )}
+                  <div className={`max-w-[80%] rounded-2xl text-sm leading-relaxed ${
+                    m.from === "hamzawi"
+                      ? "bg-muted text-foreground rounded-tr-none"
+                      : "bg-primary text-primary-foreground rounded-tl-none"
+                  } ${isCard ? "overflow-hidden p-0" : "px-3 py-2 whitespace-pre-wrap"}`}>
+                    {Renderer ? <Renderer block={m} ctx={renderCtx} /> : null}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             {checking && (
               <div className="flex gap-2 flex-row">
                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
