@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Loader2, ShieldCheck, Building2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import BrandSetupForm from "@/components/BrandSetupForm";
 import { POST_ONBOARDING_REDIRECT } from "@/lib/onboarding";
 import { getToken, handleAuthError, clearAuth } from "@/lib/utils";
+import { useLocation } from "wouter";
 
 interface MemoryResponse {
   memory: {
@@ -19,7 +19,7 @@ interface MemoryResponse {
 }
 
 export default function Onboarding() {
-  const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [loading, setLoading] = useState(true);
   const [memory, setMemory] = useState<MemoryResponse["memory"]>(null);
 
@@ -82,8 +82,7 @@ export default function Onboarding() {
             mode="onboarding"
             initial={memory}
             onSubmit={() => {
-              toast({ title: "تم إعداد نشاطك التجاري ✅" });
-              window.location.href = POST_ONBOARDING_REDIRECT;
+              navigate(POST_ONBOARDING_REDIRECT);
             }}
           />
         </div>

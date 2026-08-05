@@ -6,6 +6,7 @@ import HamzawiChat from "@/components/HamzawiChat";
 import { useLanguage } from "@/lib/useLanguage";
 import { ui } from "@/lib/i18n";
 import { handleAuthError as authError, clearAuth as clearAuthState } from "@/lib/utils";
+import { useLocation } from "wouter";
 
 const TRIALS_KEY = "postlap_trials";
 const MAX_VISITOR_TRIALS = 3;
@@ -59,6 +60,7 @@ function isDiscountActive(): boolean {
 
 export default function Home() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const { data: config } = useGetConfig({ query: { queryKey: getGetConfigQueryKey() } });
   const { lang } = useLanguage();
   const t = ui[lang];
@@ -275,7 +277,7 @@ export default function Home() {
       setUser(data.user);
       setSubscribeModal(false);
       toast({ title: `تم الاشتراك في ${contentPlan?.name ?? "إدارة المحتوى"} 🎉`, description: `فعّلنا خطة ${contentPlan?.name ?? "إدارة المحتوى"} (${contentPlan?.price ?? 400} ${currency}/شهر) — جهّز نشاطك التجاري الآن` });
-      window.location.href = "/onboarding";
+      navigate("/onboarding");
     } catch (e: any) {
       toast({ title: "خطأ", description: e.message, variant: "destructive" });
     } finally {

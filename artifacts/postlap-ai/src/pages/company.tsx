@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Loader2, Store, ArrowRight } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import BrandSetupForm from "@/components/BrandSetupForm";
 import { getToken, handleAuthError, clearAuth } from "@/lib/utils";
+import { Link, useLocation } from "wouter";
 
 interface MemoryResponse {
   memory: {
@@ -18,7 +18,7 @@ interface MemoryResponse {
 }
 
 export default function CompanySettings() {
-  const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [loading, setLoading] = useState(true);
   const [memory, setMemory] = useState<MemoryResponse["memory"]>(null);
 
@@ -72,22 +72,22 @@ export default function CompanySettings() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <a
+            <Link
               href="/brand"
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
               data-testid="company-view-brand"
             >
               عرض الهوية
               <ArrowRight className="w-4 h-4" />
-            </a>
-            <a
+            </Link>
+            <Link
               href="/"
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
               data-testid="company-back-home"
             >
               الرئيسية
               <ArrowRight className="w-4 h-4" />
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -95,7 +95,7 @@ export default function CompanySettings() {
           <BrandSetupForm
             mode="edit"
             initial={memory}
-            onSubmit={() => toast({ title: "تم حفظ التعديلات ✓" })}
+            onSubmit={() => navigate("/brand")}
           />
         </div>
       </div>

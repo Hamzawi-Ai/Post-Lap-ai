@@ -3,6 +3,7 @@ import { Loader2, Store, ArrowRight, MapPin, Phone, Palette, Images, CheckCircle
 import { useToast } from "@/hooks/use-toast";
 import { getToken, handleAuthError, clearAuth } from "@/lib/utils";
 import { brandProfileCompletion, type BrandProfileData } from "@/lib/onboarding";
+import { Link } from "wouter";
 
 interface MemoryResponse {
   memory: BrandProfileData | null;
@@ -75,14 +76,14 @@ export default function BrandIdentity() {
               <p className="text-xs text-muted-foreground">ملف نشاطك كما يحفظه حمزاوي ويفهمه</p>
             </div>
           </div>
-          <a
+          <Link
             href="/"
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
             data-testid="brand-back-home"
           >
             الرئيسية
             <ArrowRight className="w-4 h-4" />
-          </a>
+          </Link>
         </div>
 
         {/* Completion card */}
@@ -194,13 +195,13 @@ export default function BrandIdentity() {
             </div>
 
             <div className="pt-2">
-              <a
+              <Link
                 href="/company"
                 className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-xl font-black text-sm hover:opacity-90 transition-opacity"
                 data-testid="brand-edit-link"
               >
                 تعديل بيانات النشاط
-              </a>
+              </Link>
             </div>
           </div>
         ) : (
@@ -209,12 +210,12 @@ export default function BrandIdentity() {
             <p className="text-sm text-muted-foreground">
               لم يتم حفظ بيانات النشاط بعد. يمكنك إعدادها الآن ليتذكّرها حمزاوي في كل تصميم.
             </p>
-            <a
+            <Link
               href="/company"
               className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-black text-sm hover:opacity-90 transition-opacity"
             >
               إعداد نشاطك
-            </a>
+            </Link>
           </div>
         )}
       </div>
