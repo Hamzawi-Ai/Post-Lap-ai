@@ -76,11 +76,25 @@ const CHECK_AD_PATTERNS = [
 ];
 
 const GENERATE_IMAGE_PATTERNS = [
+  // Arabic design verbs
   /(صمم|صمّم|اصمم|تصميم|تصاميم)\b/i,
-  /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل|اريد|أريد|عايز|احتاج).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر)/i,
-  /(منشور|بوست|ستوري|بانر|فلاير|ملصق|بوستر).*(بهوية|بألوان|تصميم)/i,
-  /design (a|this|my)? ?(post|banner|flyer|story)/i,
-  /make|create|generate (a|this|my)? ?(post|banner|flyer|story|image)/i,
+  // Arabic action verbs + visual nouns
+  /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل|اريد|أريد|عايز|احتاج|ابتكر|ابدع|خلّق|خلق|صور).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|صورة|إعلان|تصميم|هوية)/i,
+  // Standalone Arabic visual nouns indicating creation intent
+  /(منشور|بوست|ستوري|بانر|فلاير|ملصق|بوستر).*(بهوية|بألوان|تصميم|اعمله|صممه|أنشئه)/i,
+  // Asset-referencing requests (Arabic): "use the logo I uploaded", etc.
+  /(استخدم|استعمل|استخدمي|استعملي).*(الشعار|اللوجو|logo|الصورة|المنشور|التصميم)/i,
+  /باستخدام (الشعار|اللوجو|logo|الصورة|الهوية|التصميم|الشعار اللي رفعته)/i,
+  // English design patterns
+  /design (a|this|my)? ?(post|banner|flyer|story|image|graphic|visual|ad)/i,
+  /\b(make|create|generate|build|put together|draw up)\b.*(post|banner|flyer|story|image|graphic|visual|ad|design)/i,
+  // English asset-referencing requests
+  /using (my|the) (logo|image|photo|asset|brand)/i,
+  /use (my|the) (logo|image|photo|uploaded)/i,
+  // Arabic: "I want a design / visual"
+  /(أريد|اريد|عايز|محتاج|ابغى).*(تصميم|صورة|منشور|بوست)/i,
+  // English informal: "put together a visual", "whip up a post"
+  /\b(whip up|put together|come up with|make me)\b.*(post|image|graphic|visual|banner|design)/i,
 ];
 
 const GENERATE_TEXT_PATTERNS = [
@@ -143,7 +157,14 @@ ${toolsSummary}
       return match[1] as HamzawiIntent;
     }
   } catch (e) {
-    // Fall through to the rule-based default below.
+    // Fall through to the tie-break default below.
+  }
+
+  // Tie-break: if candidates include generate_image and any image-generation
+  // keyword appears in the input, prefer generate_image over check_ad or other
+  // candidates to avoid swallowing legitimate design requests.
+  if (candidates.includes("generate_image") && matchesAny(GENERATE_IMAGE_PATTERNS, message)) {
+    return "generate_image";
   }
   return candidates[0];
 }

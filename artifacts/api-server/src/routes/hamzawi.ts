@@ -308,8 +308,12 @@ function getDesignGenerationInstruction(level: number): string {
 - لا تقترح أبداً Canva أو Photoshop أو أي أدوات تصميم يدوية أو خارجية، إلا إذا طلب المستخدم صراحةً نصيحة للتصميم اليدوي.
 - استخرج من الطلب والمعلومات المحفوظة: اسم النشاط، مجاله، العرض/المنتج المعروض، الألوان، والأسلوب المفضل. اكتب وصف التصميم بالإنجليزية، موجزاً ودقيقاً (يتضمن اسم النشاط، النص الأساسي للمنشور إن ذُكر، ألوان الهوية، الحجم إن ذُكر مثل 1080x1350، والأسلوب).
 - إذا كانت تفاصيل العرض ناقصة بشكل جوهري (ما الذي سيعرضه؟) اسأل سؤالاً واحداً قصيراً قبل التوليد — وإلا ولّد مباشرة دون إطالة.
-- بعد ردك القصير أضف في نهاية الرد دون أي نص بعده:
-%%GENERATE_POST%%{"description": "وصف التصميم بالإنجليزية هنا"}%%END%%`;
+
+قاعدة صارمة وغير قابلة للاستثناء — توليد الصورة:
+عندما يكون نية المستخدم توليد تصميم أو صورة، يجب أن يحتوي ردك دائماً على الماركر التالي بدون استثناء:
+%%GENERATE_POST%%{"description": "وصف التصميم بالإنجليزية هنا"}%%END%%
+لا تردّ بنص وحده. لا تؤكد. لا تسأل. لا تصف ما ستفعله. فقط أضف الماركر مع وصف كامل للتصميم.
+إذا كان الوصف ناقصاً، خمّن القيم المناسبة من بيانات النشاط المحفوظة وولّد مباشرة.`;
 }
 
 /**
@@ -622,7 +626,56 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       ],
     });
 
-    const rawReply = response.choices[0]?.message?.content ?? "عذراً، حدث خطأ. حاول مرة أخرى.";
+    let rawReply = response.choices[0]?.message?.content ?? "عذراً، حدث خطأ. حاول مرة أخرى.";
+
+    // Last-resort retry: if generate_image was the resolved intent but the model
+    // omitted the %%GENERATE_POST%% marker, send one strict follow-up prompt.
+    // This is a diagnostic backstop only — the primary path (expanded patterns +
+    // stronger system prompt) should handle the common cases without reaching here.
+    if (
+      !isInit &&
+      intentDecision.intent === "generate_image" &&
+      user &&
+      level >= 4 &&
+      !rawReply.includes("%%GENERATE_POST%%")
+    ) {
+      const truncatedMsg = (message ?? "").slice(0, 120);
+      logger.warn(
+        { intent: "generate_image", userId: user.id, message: truncatedMsg },
+        "missing_image_marker — marker absent on first attempt, retrying"
+      );
+      try {
+        const retryResponse = await getOpenAI().chat.completions.create({
+          model,
+          max_tokens: 400,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...historyForAI,
+            { role: "user", content: triggerMessage ?? userContentParts },
+            { role: "assistant", content: rawReply },
+            {
+              role: "user",
+              content:
+                'أضف الماركر المطلوب الآن — فقط: %%GENERATE_POST%%{"description": "وصف التصميم بالإنجليزية"}%%END%%',
+            },
+          ],
+        });
+        const retryContent = retryResponse.choices[0]?.message?.content ?? "";
+        if (retryContent.includes("%%GENERATE_POST%%")) {
+          // Merge: keep original conversational text, append the marker from the retry
+          const markerMatch = retryContent.match(/%%GENERATE_POST%%[\s\S]*?%%END%%/);
+          if (markerMatch) {
+            rawReply = `${rawReply}\n${markerMatch[0]}`;
+          }
+          logger.info(
+            { intent: "generate_image", userId: user.id, message: truncatedMsg, retry_success: true },
+            "missing_image_marker — retry_success"
+          );
+        }
+      } catch (retryErr) {
+        logger.error({ retryErr }, "missing_image_marker retry failed");
+      }
+    }
 
     // Parse partial saves, onboarding completion, notes-save, and generate-post markers
     const { cleanedReply, partialData, isOnboardingComplete } = parsePartialSaves(rawReply);
