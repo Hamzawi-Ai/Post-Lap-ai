@@ -13,6 +13,7 @@ import {
   usersTable,
   hamzawiMessagesTable,
   userBrandMemoryTable,
+  companiesTable,
   planLevel,
   type Plan,
 } from "@workspace/db";
@@ -23,6 +24,12 @@ import { getConfig, type AppConfig } from "../../lib/config";
 
 export interface ChatContext {
   user: typeof usersTable.$inferSelect | null;
+  /** Resolved company row for this user (null when user has no company or for guests). */
+  company: typeof companiesTable.$inferSelect | null;
+  /** Display name for the authenticated user (empty string for guests). */
+  userName: string;
+  /** Company name if a company row exists (empty string otherwise). */
+  companyName: string;
   sessionId: string;
   plan: Plan;
   level: number;
@@ -75,13 +82,43 @@ export async function buildChatContext(params: {
     .orderBy(desc(hamzawiMessagesTable.created_at))
     .limit(10);
 
+  // Fetch the company row when the user is linked to one.
+  const company = (user?.company_id)
+    ? await db
+        .select()
+        .from(companiesTable)
+        .where(eq(companiesTable.id, user.company_id))
+        .limit(1)
+        .then((r) => r[0] ?? null)
+    : null;
+
+  const userName = user?.name?.trim() ?? "";
+  const companyName = company?.name?.trim() ?? "";
+
   const brandAssets = user
     ? await collectBrandAssets({ userId: user.id, companyId: user.company_id ?? null, memory })
     : null;
-  const assetContext = brandAssets && brandAssets.images.length > 0 ? brandAssets.summary : undefined;
+
+  // Build an explicit asset context string that lists each category and count,
+  // so the system prompt tells the model exactly what is available.
+  let assetContext: string | undefined;
+  if (brandAssets && brandAssets.assetItems.length > 0) {
+    const { categoryCounts } = brandAssets;
+    const lines: string[] = [];
+    if (categoryCounts.logo) lines.push(`- الشعار: ${categoryCounts.logo} ملف مرفوع`);
+    if (categoryCounts.portfolio) lines.push(`- نماذج التصميم (portfolio): ${categoryCounts.portfolio} ملف`);
+    if (categoryCounts.products) lines.push(`- صور المنتجات: ${categoryCounts.products} ملف`);
+    if (categoryCounts.generated) lines.push(`- تصاميم مولّدة بالذكاء الاصطناعي: ${categoryCounts.generated} ملف`);
+    if (categoryCounts.documents) lines.push(`- مستندات: ${categoryCounts.documents} ملف`);
+    if (categoryCounts.design_samples) lines.push(`- أصول مرجعية (من ذاكرة العلامة): ${categoryCounts.design_samples} ملف`);
+    assetContext = lines.join("\n");
+  }
 
   return {
     user,
+    company,
+    userName,
+    companyName,
     sessionId,
     plan,
     level,

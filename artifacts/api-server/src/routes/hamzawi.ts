@@ -225,7 +225,9 @@ function buildSystemPrompt(
   plan: Plan | string,
   memory: BrandMemoryData | null,
   isOnboarding: boolean,
-  assetContext?: string
+  assetContext?: string,
+  userName?: string,
+  companyName?: string
 ): string {
   const level = planLevel(plan);
 
@@ -237,11 +239,23 @@ function buildSystemPrompt(
     5: "Agency (المستوى 5/5) — وكالة: كامل الصلاحيات. يدعم أنشطة تجارية متعددة. يمكنه إدارة هويات بصرية متعددة",
   };
 
+  // Identity header — greet by name when known.
+  const identityLines: string[] = [];
+  if (userName) identityLines.push(`- المستخدم الحالي: ${userName}`);
+  if (companyName) identityLines.push(`- الشركة/المنشأة: ${companyName}`);
+  const identityBlock = identityLines.length > 0
+    ? `\nهوية المستخدم:\n${identityLines.join("\n")}\n`
+    : "";
+
   const memoryBlock = buildBrandMemoryBlock(memory);
+
+  // Explicit asset listing — names each category and count so the model knows exactly what exists.
   const assetsBlock = assetContext
-    ? `\nالأصول البصرية المحفوظة للمستخدم (مُرفقة كصور عند الحاجة — استخدمها تلقائياً):
-${assetContext}
-`
+    ? `\nالأصول المحفوظة لهذا المستخدم (مُرفقة كصور عند الحاجة — استخدمها تلقائياً):\n${assetContext}\n`
+    : "";
+
+  const assetUsageInstruction = assetContext
+    ? `- كلما كان طلب المستخدم قابلاً للاستفادة من أحد الأصول المذكورة أعلاه (الشعار، صور المنتجات، نماذج التصميم...)، أشر صراحةً إلى أنك ستستخدمه وحدد أيّها بالاسم — مثال: "سأستخدم الشعار الذي رفعته" أو "I'll use the logo you uploaded".`
     : "";
 
   const funnelInstruction = isOnboarding ? "" : getFunnelInstruction(level);
@@ -260,7 +274,7 @@ ${assetContext}
     .join("، ");
 
   return `أنت حمزاوي، مساعد تسويقي ذكي متخصص في سياسات إعلانات Meta وTikTok. شخصيتك ودية، محترفة، عملية.
-
+${identityBlock}
 مستوى خطة المستخدم: ${planCapabilities[level] ?? planCapabilities[1]}
 
 ${memoryBlock}${assetsBlock}
@@ -273,6 +287,7 @@ ${memoryBlock}${assetsBlock}
 - خطط الترقية المتاحة: مسجّل (مجاني)، ${pricingLine}
 - تملك تلقائياً جميع أصول النشاط المحفوظة (الشعار، التصاميم المرجعية، صور المنتجات، مكتبة الوسائط) وتستخدمها تلقائياً عند ملاءمتها للمهمة (التعرف على الشعار، تحليل التصميم، التصميم، وصف المنتج...).
 - لا تطلب أبداً من المستخدم رفع شعار أو أصول أو تصاميم موجودة أصلاً في ملف نشاطه — استخدم ما هو محفوظ مباشرة.
+${assetUsageInstruction}
 ${funnelInstruction}
 ${onboardingInstruction}
 ${designGenInstruction}
@@ -493,7 +508,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding, assetContext);
+    const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName);
 
     const historyForAI = recentMessages
       .reverse()

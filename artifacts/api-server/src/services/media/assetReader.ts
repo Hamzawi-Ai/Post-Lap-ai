@@ -13,9 +13,18 @@ export interface ImageData {
   data: string;
 }
 
+export interface AssetItem {
+  category: string;
+  url: string;
+}
+
 export interface BrandAssets {
   images: ImageData[];
   summary: string;
+  /** Structured listing of every asset, used to build explicit system-prompt blocks. */
+  assetItems: AssetItem[];
+  /** Counts per category across all assets (not just capped images). */
+  categoryCounts: Record<string, number>;
 }
 
 function mimeFromExt(ext: string): string {
@@ -90,11 +99,14 @@ export async function collectBrandAssets(params: {
 }): Promise<BrandAssets> {
   const { userId, companyId, memory } = params;
 
-  const candidateUrls: string[] = [];
+  // Track each candidate with its resolved category so we can build a structured listing.
+  const candidateItems: AssetItem[] = [];
 
-  if (memory?.logo_url?.trim()) candidateUrls.push(memory.logo_url.trim());
+  if (memory?.logo_url?.trim()) {
+    candidateItems.push({ url: memory.logo_url.trim(), category: "logo" });
+  }
   for (const s of parseDesignSamples(memory?.design_samples ?? null)) {
-    if (s.trim()) candidateUrls.push(s.trim());
+    if (s.trim()) candidateItems.push({ url: s.trim(), category: "design_samples" });
   }
 
   if (userId) {
@@ -114,7 +126,7 @@ export async function collectBrandAssets(params: {
       );
       for (const row of ranked) {
         const url = `/uploads/${row.relative_path.replace(/\\/g, "/")}`;
-        if (url.trim()) candidateUrls.push(url);
+        if (url.trim()) candidateItems.push({ url, category: row.category });
       }
     } catch {
       // Media library read failure should never break the chat — fall back to memory only.
@@ -123,39 +135,35 @@ export async function collectBrandAssets(params: {
 
   // Deduplicate (by exact URL) while preserving order.
   const seen = new Set<string>();
-  const unique = candidateUrls.filter((u) => {
-    if (seen.has(u)) return false;
-    seen.add(u);
+  const uniqueItems = candidateItems.filter((item) => {
+    if (seen.has(item.url)) return false;
+    seen.add(item.url);
     return true;
   });
 
   const cap = 6;
   const images: ImageData[] = [];
-  for (const url of unique.slice(0, cap)) {
-    const img = await toImageData(url);
+  for (const item of uniqueItems.slice(0, cap)) {
+    const img = await toImageData(item.url);
     if (img) images.push(img);
   }
 
-  let summary = "";
-  const counts: Record<string, number> = {};
-  for (const url of unique) {
-    const kind = url.startsWith("data:")
-      ? "design_samples"
-      : url.includes("/logo/")
-        ? "logo"
-        : url.includes("/portfolio/")
-          ? "portfolio"
-          : url.includes("/products/")
-            ? "products"
-            : "design_samples";
-    counts[kind] = (counts[kind] ?? 0) + 1;
+  // Build category counts from the full (uncapped) unique list.
+  const categoryCounts: Record<string, number> = {};
+  for (const item of uniqueItems) {
+    categoryCounts[item.category] = (categoryCounts[item.category] ?? 0) + 1;
   }
-  const parts: string[] = [];
-  if (counts.logo) parts.push(`الشعار (${counts.logo})`);
-  if (counts.portfolio) parts.push(`نماذج تصميم (${counts.portfolio})`);
-  if (counts.products) parts.push(`صور منتجات (${counts.products})`);
-  if (counts.design_samples) parts.push(`أصول مرجعية (${counts.design_samples})`);
-  if (parts.length > 0) summary = parts.join("، ") + (images.length < unique.length ? " (+ المزيد في مكتبة الوسائط)" : "");
 
-  return { images, summary };
+  const parts: string[] = [];
+  if (categoryCounts.logo) parts.push(`الشعار (${categoryCounts.logo})`);
+  if (categoryCounts.portfolio) parts.push(`نماذج تصميم (${categoryCounts.portfolio})`);
+  if (categoryCounts.products) parts.push(`صور منتجات (${categoryCounts.products})`);
+  if (categoryCounts.generated) parts.push(`تصاميم مولّدة (${categoryCounts.generated})`);
+  if (categoryCounts.documents) parts.push(`مستندات (${categoryCounts.documents})`);
+  if (categoryCounts.design_samples) parts.push(`أصول مرجعية (${categoryCounts.design_samples})`);
+  const summary = parts.length > 0
+    ? parts.join("، ") + (images.length < uniqueItems.length ? " (+ المزيد في مكتبة الوسائط)" : "")
+    : "";
+
+  return { images, summary, assetItems: uniqueItems, categoryCounts };
 }
