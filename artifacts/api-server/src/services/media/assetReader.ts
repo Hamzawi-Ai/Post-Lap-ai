@@ -96,8 +96,14 @@ export async function collectBrandAssets(params: {
   userId?: number;
   companyId?: number | null;
   memory?: MemoryLike | null;
+  /**
+   * Maximum number of brand images resolved to base64 for vision turns.
+   * Driven by AgentConfig.asset_cap (default 6). All other metrics (categoryCounts,
+   * assetItems) reflect the full deduplicated set regardless of this cap.
+   */
+  cap?: number;
 }): Promise<BrandAssets> {
-  const { userId, companyId, memory } = params;
+  const { userId, companyId, memory, cap = 6 } = params;
 
   // Track each candidate with its resolved category so we can build a structured listing.
   const candidateItems: AssetItem[] = [];
@@ -141,7 +147,6 @@ export async function collectBrandAssets(params: {
     return true;
   });
 
-  const cap = 6;
   const images: ImageData[] = [];
   for (const item of uniqueItems.slice(0, cap)) {
     const img = await toImageData(item.url);

@@ -30,7 +30,9 @@ import {
   isBrandProfileComplete,
 } from "../services/brand/brain";
 
+// TODO(prompt-studio): consume AgentConfig — vision_model (override for vision turns)
 const VISION_MODEL = "gpt-4o";
+// TODO(prompt-studio): consume AgentConfig — text_model (override for text turns)
 const TEXT_MODEL = "gpt-4o-mini";
 
 const router: IRouter = Router();
@@ -221,6 +223,8 @@ function getPermissionsInstruction(): string {
 - ابقَ متخصصاً في التسويق والإعلان وكتابة المحتوى وتصميم المنشورات والهوية البصرية فقط — لا تتوسع إلى مجالات أخرى.`;
 }
 
+// TODO(prompt-studio): consume AgentConfig — system_prompt_prefix, agent_name, agent_role_description,
+//   personality_notes, behavior_rules, safety_rules (inject into buildSystemPrompt after Studio integration pass)
 function buildSystemPrompt(
   plan: Plan | string,
   memory: BrandMemoryData | null,

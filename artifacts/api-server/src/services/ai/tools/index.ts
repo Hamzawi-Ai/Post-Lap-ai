@@ -5,6 +5,11 @@
  * wired in the beta — the existing endpoints (/api/check, /api/generate-text,
  * /api/image-gen, /api/hamzawi/memory, /api/hamzawi/upload-asset) remain the
  * compatibility layer until the orchestrator fully takes over their flows.
+ *
+ * TODO(prompt-studio): consume AgentConfig — tool_policies
+ * After the Studio integration pass, merge AgentConfig.tool_policies into each
+ * registration so requiredLevel and enabled() come from the DB row rather than
+ * being hardcoded here.
  */
 import { toolRegistry } from "./registry";
 import { isImageGenAvailable } from "../../image-gen/provider";

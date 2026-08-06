@@ -21,6 +21,7 @@ import { eq, desc, and } from "drizzle-orm";
 import { collectBrandAssets, type BrandAssets } from "../media/assetReader";
 import { isBrandProfileComplete, type BrandMemoryData } from "../brand/brain";
 import { getConfig, type AppConfig } from "../../lib/config";
+import { getAgentConfig } from "./agentConfig";
 
 export interface ChatContext {
   user: typeof usersTable.$inferSelect | null;
@@ -66,6 +67,8 @@ export async function buildChatContext(params: {
   // When a conversationId is supplied (authenticated turn with a known thread),
   // scope recent messages to that conversation only. This isolates AI context
   // between sidebar threads. Otherwise fall back to the legacy session/user query.
+  const agentConfig = await getAgentConfig();
+
   const recentMessages = await db
     .select()
     .from(hamzawiMessagesTable)
@@ -80,7 +83,7 @@ export async function buildChatContext(params: {
           : eq(hamzawiMessagesTable.session_id, sessionId)
     )
     .orderBy(desc(hamzawiMessagesTable.created_at))
-    .limit(10);
+    .limit(agentConfig.memory_window);
 
   // Fetch the company row when the user is linked to one.
   const company = (user?.company_id)
@@ -96,7 +99,7 @@ export async function buildChatContext(params: {
   const companyName = company?.name?.trim() ?? "";
 
   const brandAssets = user
-    ? await collectBrandAssets({ userId: user.id, companyId: user.company_id ?? null, memory })
+    ? await collectBrandAssets({ userId: user.id, companyId: user.company_id ?? null, memory, cap: agentConfig.asset_cap })
     : null;
 
   // Build an explicit asset context string that lists each category and count,

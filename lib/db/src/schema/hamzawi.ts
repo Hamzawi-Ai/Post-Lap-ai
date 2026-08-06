@@ -113,3 +113,38 @@ export const insertBusinessProfileSchema = createInsertSchema(businessProfilesTa
 });
 export type InsertBusinessProfile = z.infer<typeof insertBusinessProfileSchema>;
 export type BusinessProfile = typeof businessProfilesTable.$inferSelect;
+
+/**
+ * hamzawi_agent_config: Global single-row agent configuration for Prompt Studio.
+ * Covers all Studio dimensions: identity, system prompt, personality, behavior rules,
+ * knowledge source priorities, tool policies, memory window, asset cap, safety rules,
+ * and retrieval config. When no row exists, AgentConfigService falls back to
+ * DEFAULT_AGENT_CONFIG, preserving byte-identical existing behaviour.
+ */
+export const hamzawiAgentConfigTable = pgTable("hamzawi_agent_config", {
+  id: serial("id").primaryKey(),
+  // Identity
+  agent_name: text("agent_name"),
+  agent_role_description: text("agent_role_description"),
+  // System prompt
+  system_prompt_prefix: text("system_prompt_prefix"),
+  personality_notes: text("personality_notes"),
+  // Behavior rules — ordered list of instruction strings
+  behavior_rules: jsonb("behavior_rules"),
+  // Knowledge source priorities — map of source name → priority weight
+  knowledge_priorities: jsonb("knowledge_priorities"),
+  // Tool policies — map of tool id → { enabled, required_level, notes }
+  tool_policies: jsonb("tool_policies"),
+  // Memory config
+  memory_window: integer("memory_window").notNull().default(10),
+  // Asset cap — max number of brand images resolved to base64 per turn
+  asset_cap: integer("asset_cap").notNull().default(6),
+  // Safety rules — list of forbidden topic/content rules
+  safety_rules: jsonb("safety_rules"),
+  // Retrieval config — top_k, similarity_threshold, etc.
+  retrieval_config: jsonb("retrieval_config"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type HamzawiAgentConfig = typeof hamzawiAgentConfigTable.$inferSelect;

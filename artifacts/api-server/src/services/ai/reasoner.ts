@@ -27,7 +27,8 @@ export interface IntentDecision {
   needsVision: boolean;
 }
 
-const TEXT_MODEL = "gpt-4o-mini";
+// TODO(prompt-studio): consume AgentConfig — agent_name, agent_role_description (used in LLM disambiguation prompt)
+const TEXT_MODEL = "gpt-4o-mini"; // TODO(prompt-studio): consume AgentConfig — llm_model (text model override)
 
 // ── Vision routing ───────────────────────────────────────────────────────────
 // Intent-based detection of whether the request needs image understanding
