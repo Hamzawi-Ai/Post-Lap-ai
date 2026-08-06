@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { CheckCircle, XCircle, AlertCircle, Loader2, Copy, Check, Shield, Lock, ScanLine, Image as ImageIcon, Download, Store, Sparkles, PenLine, Palette, BrainCircuit } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Loader2, Check, Shield, Lock, ScanLine, Image as ImageIcon, Download, Store, Sparkles, PenLine, Palette, BrainCircuit } from "lucide-react";
 import { useGetConfig, getGetConfigQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import HamzawiChat from "@/components/HamzawiChat";
 import { useLanguage } from "@/lib/useLanguage";
 import { ui } from "@/lib/i18n";
 import { handleAuthError as authError, clearAuth as clearAuthState, setToken } from "@/lib/utils";
@@ -75,13 +74,8 @@ export default function Home() {
   const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
   const [trialBlockModal, setTrialBlockModal] = useState(false);
   const [genderModal, setGenderModal] = useState(false);
-  const [product, setProduct] = useState("");
-  const [dialect, setDialect] = useState<"شرقية" | "غربية" | "جنوبية">("غربية");
-  const [generatedText, setGeneratedText] = useState("");
-  const [copiedText, setCopiedText] = useState(false);
   const [cookieConsent, setCookieConsent] = useState(() => !!localStorage.getItem(COOKIE_KEY));
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
-  const [textLoading, setTextLoading] = useState(false);
   const [imageProduct, setImageProduct] = useState("");
   const [imageProductName, setImageProductName] = useState("");
   const [imageGenLoading, setImageGenLoading] = useState(false);
@@ -90,7 +84,6 @@ export default function Home() {
   const [subscribeModal, setSubscribeModal] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [userRefreshed, setUserRefreshed] = useState(false);
-  const googleBtnRef = useRef<HTMLDivElement>(null);
   const googleBtnModalRef = useRef<HTMLDivElement>(null);
   const googleBtnLoginModalRef = useRef<HTMLDivElement>(null);
 
@@ -104,25 +97,6 @@ export default function Home() {
     handleFile(file);
   }
 
-  useEffect(() => {
-    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!googleClientId) return;
-    if (!window.google?.accounts?.id) return;
-    window.google.accounts.id.initialize({
-      client_id: googleClientId,
-      callback: handleGoogleCredential,
-    });
-    if (googleBtnRef.current) {
-      window.google.accounts.id.renderButton(googleBtnRef.current, {
-        theme: "outline", size: "large", text: "signin_with", locale: "ar",
-      });
-    }
-    if (googleBtnModalRef.current) {
-      window.google.accounts.id.renderButton(googleBtnModalRef.current, {
-        theme: "outline", size: "large", text: "signin_with", locale: "ar",
-      });
-    }
-  }, [googleBtnRef.current, googleBtnModalRef.current]);
 
   useEffect(() => {
     if (!showLoginModal) return;
@@ -362,42 +336,6 @@ export default function Home() {
   }
 
 
-  async function handleGenerateText() {
-    if (!product.trim()) { toast({ title: "أدخل معلومات المنتج", variant: "destructive" }); return; }
-    setTextLoading(true);
-    const token = localStorage.getItem(TOKEN_KEY);
-    const userLevel = user ? planLevelFrontend(user.plan) : 0;
-    try {
-      const body: Record<string, string> = { product, dialect };
-      // Level 4+ (content/agency): include the uploaded image for richer post generation
-      if (userLevel >= 4 && uploadedImageBase64) {
-        body.imageBase64 = uploadedImageBase64;
-      }
-      const res = await fetch("/api/generate-text", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.status === 401) { logout(); toast({ title: "انتهت الجلسة", variant: "destructive" }); return; }
-      if (!res.ok) throw new Error(data.error);
-      setGeneratedText(data.text);
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message, variant: "destructive" });
-    } finally {
-      setTextLoading(false);
-    }
-  }
-
-  function copyToClipboard(text: string, setter: (v: boolean) => void) {
-    navigator.clipboard.writeText(text);
-    setter(true);
-    setTimeout(() => setter(false), 2000);
-  }
-
   function handleImageProductFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -533,7 +471,7 @@ export default function Home() {
             <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">{lang === "ar" ? "مساعدك التسويقي" : "AI Marketing Assistant"}</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="#generate" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد المنشورات" : "Post Generation"}</a>
+            <a href="/hamzawi" className="hover:text-foreground transition-colors font-semibold text-primary">{lang === "ar" ? "حمزاوي" : "Hamzawi"}</a>
             <a href="#image-gen" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد الصور" : "Image Generation"}</a>
             <a href="#check" className="hover:text-foreground transition-colors">{lang === "ar" ? "افحص إعلانك" : "Check My Ad"}</a>
             <a href="#plans" className="hover:text-foreground transition-colors">{lang === "ar" ? "الخطط" : "Plans"}</a>
@@ -566,141 +504,6 @@ export default function Home() {
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-16">
-
-        {/* ── 1. HERO: AI Post Generation ─────────────────────────────────── */}
-        <section id="generate" className="w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            {/* Left: headline + text generator */}
-            <div className="space-y-6">
-              <div className="text-center lg:text-right space-y-3">
-                <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold px-3 py-1.5 rounded-full">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  {lang === "ar" ? "مساعدك التسويقي بالذكاء الاصطناعي" : "Your AI Marketing Assistant"}
-                </div>
-                <h1 className="text-3xl sm:text-4xl font-black text-foreground leading-tight">
-                  {lang === "ar" ? (
-                    <>ولّد منشورك الإعلاني مع <span className="text-primary">حمزاوي</span></>
-                  ) : (
-                    <>Generate your ad post with <span className="text-primary">Hamzawi</span></>
-                  )}
-                </h1>
-                <p className="text-sm text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed">
-                  {lang === "ar"
-                    ? "حمزاوي يكتب منشوراتك ونصوصك الإعلانية بالليبي الأصيل، ويصمّم صورها بهوية نشاطك — مع ضمان التوافق مع سياسات Meta. اكتب وصف المنتج والسعر والعرض، وارفق صورة لنتيجة أدق."
-                    : "Hamzawi writes your posts and ad copy in authentic Libyan, designs visuals with your brand identity — all while staying Meta-compliant. Describe your product, price and offer, and attach an image for sharper results"}
-                </p>
-              </div>
-
-              {user && planLevelFrontend(user.plan) >= 3 ? (
-                /* Smart Fix+ users (level 3+) — full text generator; level 4+ gets image+description mode */
-                <div className="space-y-4">
-                  {planLevelFrontend(user.plan) >= 4 && uploadedImageBase64 && (
-                    <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-                      <ScanLine className="w-3.5 h-3.5 shrink-0" />
-                      <span>سيتم استخدام صورة الإعلان المرفوعة لإنشاء منشور أكثر دقة وتخصيصاً</span>
-                    </div>
-                  )}
-                  <textarea
-                    className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
-                    placeholder="(اسم المنتج، السعر، العرض...)"
-                    value={product}
-                    onChange={(e) => setProduct(e.target.value)}
-                    data-testid="input-product"
-                  />
-                  <div className="flex gap-3">
-                    <select
-                      className="flex-1 bg-card border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      value={dialect}
-                      onChange={(e) => setDialect(e.target.value as any)}
-                      data-testid="select-dialect"
-                    >
-                      <option value="غربية">اللهجة الغربية</option>
-                      <option value="شرقية">اللهجة الشرقية</option>
-                      <option value="جنوبية">اللهجة الجنوبية</option>
-                    </select>
-                    <button
-                      onClick={handleGenerateText}
-                      disabled={textLoading}
-                      className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50"
-                      data-testid="button-generate-text"
-                    >
-                      {textLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                      ولّد النص
-                    </button>
-                  </div>
-                  {generatedText && (
-                    <div className="relative bg-card border border-border rounded-xl p-4 pb-12" data-testid="text-generated-result">
-                      <p className="text-foreground leading-relaxed whitespace-pre-wrap">{generatedText}</p>
-                      <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between border-t border-border pt-2 mt-2">
-                        <p className="text-xs text-muted-foreground">متوافق مع سياسات Meta ✓</p>
-                        <button
-                          onClick={() => copyToClipboard(generatedText, setCopiedText)}
-                          className="flex items-center gap-1.5 text-xs bg-muted text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
-                          data-testid="button-copy-text"
-                        >
-                          {copiedText ? <><Check className="w-3 h-3 text-green-400" /> تم النسخ</> : <><Copy className="w-3 h-3" /> نسخ النص</>}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Non-paid / non-logged users — gated prompt */
-                <div className="bg-card border border-primary/20 rounded-2xl p-8 text-center space-y-4">
-                  <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-                    <Lock className="w-7 h-7 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-black text-foreground">
-                      {!user ? "سجّل الدخول مجاناً للوصول" : "ميزة للمشتركين المدفوعين"}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                      {!user
-                        ? "سجّل دخولك مجاناً وابدأ توليد منشوراتك الإعلانية مع حمزاوي — وافحص إعلاناتك بالتفصيل."
-                        : <>توليد نصوص إعلانية بالليبي الأصيل متاح لخطط <span className="text-primary font-semibold">Smart Fix</span> وما فوق.</>}
-                    </p>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                    {!user ? (
-                      <>
-                        <div ref={googleBtnRef} className="flex justify-center" data-testid="button-google-signin-generate" />
-                        <button onClick={() => setShowLoginModal(true)} className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors" data-testid="button-register-free">
-                          سجّل مجاناً
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => setSubscribeModal(true)}
-                          className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
-                          data-testid="button-subscribe-start"
-                        >
-                          اشترك وابدأ التوليد
-                        </button>
-                        <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
-                          عرض الخطط
-                        </a>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Right: embedded functional Hamzawi assistant */}
-            <div className="lg:sticky lg:top-24">
-              <HamzawiChat
-                embedded
-                gender={gender}
-                checkResult={checkResult}
-                whatsapp={whatsapp}
-                userPlan={user?.plan}
-                onFileCheck={handleFile}
-                checking={checking}
-              />
-            </div>
-          </div>
-        </section>
 
         {/* ── 2. AI Image Generation ──────────────────────────────────────── */}
         <section id="image-gen" className="w-full">

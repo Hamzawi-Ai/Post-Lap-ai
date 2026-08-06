@@ -10,6 +10,7 @@ import Terms from "@/pages/terms";
 import Onboarding from "@/pages/onboarding";
 import CompanySettings from "@/pages/company";
 import BrandIdentity from "@/pages/brand";
+import HamzawiWorkspace from "@/pages/hamzawi";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -18,6 +19,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/hamzawi" component={HamzawiWorkspace} />
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/company" component={CompanySettings} />
       <Route path="/brand" component={BrandIdentity} />

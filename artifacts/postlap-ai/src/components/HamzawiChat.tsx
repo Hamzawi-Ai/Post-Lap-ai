@@ -141,6 +141,10 @@ interface HamzawiChatProps {
   heroVisible?: boolean;
   forceOpen?: number;
   embedded?: boolean;
+  /** When set, the chat displays this conversation's history. Pass null to start a fresh thread. */
+  conversationId?: string | null;
+  /** Called with the newly-created conversation id the first time a message is sent in a fresh thread. */
+  onConversationCreated?: (id: string) => void;
 }
 
 /**
@@ -171,7 +175,7 @@ function planLevel(plan?: string): number {
   return levels[plan ?? "visitor"] ?? 1;
 }
 
-export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen, embedded }: HamzawiChatProps) {
+export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen, embedded, conversationId, onConversationCreated }: HamzawiChatProps) {
   const [open, setOpen] = useState(!!embedded);
   const [messages, setMessages] = useState<ChatBlock[]>([]);
   const [input, setInput] = useState("");
@@ -353,9 +357,68 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     setUnread(false);
   }, [forceOpen]);
 
+  // conversationId: manages all message loading in workspace mode (when the prop is defined).
+  // When undefined (floating chat), this effect is a no-op — the open effect handles it.
+  // When null (new chat) or a string (selected conversation), this effect owns the full
+  // load cycle and marks historyLoaded=true so the open effect never calls loadHistory.
+  const prevConversationIdRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    // Not in workspace mode — nothing to do here.
+    if (conversationId === undefined) return;
+
+    // Identical to previous value — skip.
+    if (conversationId === prevConversationIdRef.current) return;
+    prevConversationIdRef.current = conversationId ?? null;
+
+    // Suppress the open effect's loadHistory for the lifetime of this component.
+    setHistoryLoaded(true);
+    setInitialized(true);
+    setMessages([]);
+
+    if (!conversationId) {
+      // New-chat: show welcome message immediately, no API call needed.
+      setMessages([chatBlock("hamzawi", t.welcome)]);
+      return;
+    }
+
+    // Fetch messages for the selected conversation.
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) {
+      setMessages([chatBlock("hamzawi", t.welcome)]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/hamzawi/messages?conversationId=${conversationId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json();
+          const msgs: ChatBlock[] = (data.messages ?? []).map((m: any) => {
+            const time = new Date(m.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" });
+            return storedContentToBlock(m.content, m.role === "assistant" ? "hamzawi" : "user", time);
+          });
+          if (!cancelled) setMessages(msgs.length > 0 ? msgs : [chatBlock("hamzawi", t.welcome)]);
+        }
+      } catch {
+        if (!cancelled) console.error("Failed to load conversation messages");
+      }
+    })();
+    // Cleanup: mark as cancelled so a stale request cannot overwrite a newer conversation's messages.
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId]);
+
   useEffect(() => {
     if (!open) return;
     setUnread(false);
+    // In workspace mode (conversationId prop is defined), all history loading is owned by
+    // the conversationId effect above. Never call loadHistory here to avoid fetching all
+    // unscoped history when conversationId is null (new-chat state).
+    if (conversationId !== undefined) return;
     loadHistory().then(async () => {
       if (!initialized) {
         setInitialized(true);
@@ -457,7 +520,11 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message: msgText, checkReport: checkReport ?? null }),
+        body: JSON.stringify({
+          message: msgText,
+          checkReport: checkReport ?? null,
+          ...(conversationId ? { conversationId: parseInt(conversationId, 10) } : {}),
+        }),
       });
 
       if (res.status === 401) {
@@ -466,6 +533,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         addHamzawi(lang === "ar" ? "انتهت صلاحية الجلسة. سجّل الدخول مرة أخرى." : "Session expired. Please log in again.");
       } else if (res.ok) {
         const data = await res.json();
+        // Notify workspace when a new conversation was auto-created on the first message.
+        if (data.conversationId && !conversationId && onConversationCreated) {
+          onConversationCreated(String(data.conversationId));
+        }
         setMessages((prev) => [...prev, replyToBlock(data, "hamzawi", now())]);
       } else {
         addHamzawi(lang === "ar" ? "عذراً، حدث خطأ. حاول مرة أخرى." : "Sorry, an error occurred. Please try again.");

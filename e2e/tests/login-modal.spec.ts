@@ -18,7 +18,8 @@ test("header sign-in button opens the login modal", async ({ page }) => {
 });
 
 test("'سجّل مجاناً' button opens the login modal", async ({ page }) => {
-  const registerBtn = page.getByTestId("button-register-free");
+  // The register-free button is in the image generation gated section
+  const registerBtn = page.getByTestId("button-register-free-image");
   await expect(registerBtn).toBeVisible();
   await registerBtn.click();
   await expect(page.getByTestId("modal-login")).toBeVisible();
