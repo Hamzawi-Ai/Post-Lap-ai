@@ -179,6 +179,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   const lastReportedCheckRef = useRef<typeof checkResult>(null);
   const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  // Incremented on every login event so effects that depend on it re-run
+  // even when `open` is already true.
+  const [sessionVersion, setSessionVersion] = useState(0);
+  const sessionVersionRef = useRef(0);
   const objectUrlsRef = useRef<string[]>([]);
   const [showBrandForm, setShowBrandForm] = useState(false);
   const [brandForm, setBrandForm] = useState({
@@ -227,6 +231,30 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
   }, []);
 
+  // Reset chat when the user logs in so guest messages are cleared and
+  // the authenticated user's history is loaded fresh.
+  // Uses a custom "postlap:login" event (dispatched by setToken in utils.ts)
+  // so the reset fires in the *same* tab that performed the login, not just
+  // cross-tab via the native storage event.
+  useEffect(() => {
+    function handleLogin() {
+      // Bump the version ref first so any in-flight guest history fetch
+      // can detect it has been superseded and discard its results.
+      sessionVersionRef.current += 1;
+      const v = sessionVersionRef.current;
+      setMessages([]);
+      setHistoryLoaded(false);
+      setInitialized(false);
+      // Increment state version — this causes the open effect to re-run
+      // even though `open` itself hasn't changed, triggering history reload
+      // and initialization for the now-authenticated user.
+      setSessionVersion(v);
+    }
+
+    window.addEventListener("postlap:login", handleLogin);
+    return () => window.removeEventListener("postlap:login", handleLogin);
+  }, []);
+
   // Load brand profile once for authenticated users → completion badge + quick actions
   useEffect(() => {
     if (level < 2) return;
@@ -262,11 +290,17 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   const loadHistory = useCallback(async () => {
     if (historyLoaded) return;
     setHistoryLoaded(true);
+    // Snapshot the session version at call-time so we can detect a login
+    // that fires while this fetch is in-flight and discard stale results.
+    const versionAtStart = sessionVersionRef.current;
     try {
       const token = localStorage.getItem(TOKEN_KEY);
       const res = await fetch("/api/hamzawi/messages", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      // If login happened while we were fetching, bail — the open effect
+      // will re-run and call a fresh loadHistory with the correct token.
+      if (sessionVersionRef.current !== versionAtStart) return;
       if (res.ok) {
         const data = await res.json();
         const msgs: ChatBlock[] = (data.messages ?? []).map((m: any) => {
@@ -374,7 +408,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         });
       }
     });
-  }, [open]);
+  // sessionVersion is included so this effect re-runs on login even when
+  // open is already true, giving the authenticated user a fresh session.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, sessionVersion]);
 
   useEffect(() => {
     if (!checkResult) return;

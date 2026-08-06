@@ -95,7 +95,7 @@ export default function CompanySettings() {
           <BrandSetupForm
             mode="edit"
             initial={memory}
-            onSubmit={() => navigate("/brand")}
+            onSubmit={() => navigate("/")}
           />
         </div>
       </div>

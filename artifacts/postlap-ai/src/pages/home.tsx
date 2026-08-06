@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import HamzawiChat from "@/components/HamzawiChat";
 import { useLanguage } from "@/lib/useLanguage";
 import { ui } from "@/lib/i18n";
-import { handleAuthError as authError, clearAuth as clearAuthState } from "@/lib/utils";
+import { handleAuthError as authError, clearAuth as clearAuthState, setToken } from "@/lib/utils";
 import { useLocation } from "wouter";
 
 const TRIALS_KEY = "postlap_trials";
@@ -166,7 +166,7 @@ export default function Home() {
       });
       if (!res.ok) throw new Error("فشل تسجيل الدخول");
       const data = await res.json();
-      localStorage.setItem(TOKEN_KEY, data.token);
+      setToken(data.token);
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       setUser(data.user);
       setShowLoginModal(false);
