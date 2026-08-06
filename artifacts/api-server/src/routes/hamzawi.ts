@@ -1,8 +1,8 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { tmpdir } from "os";
-import { db, usersTable, hamzawiMessagesTable, userBrandMemoryTable, mediaAssetsTable, type MediaAssetCategory } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { db, usersTable, hamzawiMessagesTable, hamzawiConversationsTable, userBrandMemoryTable, mediaAssetsTable, type MediaAssetCategory } from "@workspace/db";
+import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 import { planLevel, type Plan } from "@workspace/db";
@@ -385,9 +385,10 @@ function parseGeneratePost(reply: string): {
 // Supports isInit: true — proactive first message from Hamzawi, no user input needed.
 // Used to auto-start guided onboarding for level 4+ users on chat open.
 router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
-  const { message, checkReport, isInit } = req.body as {
+  const { message, checkReport, isInit, conversationId: conversationIdInput } = req.body as {
     message?: string;
     isInit?: boolean;
+    conversationId?: number | null;
     checkReport?: {
       status: string;
       score: number;
@@ -423,8 +424,57 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
   setSessionCookie(res, signedCookie);
 
+  // Resolve conversation for authenticated users only.
+  // Guest users (no auth) never receive a conversation_id — their messages are session-scoped.
+  // Explicitly reject conversationId from unauthenticated callers so we don't silently accept
+  // and ignore a field that requires auth context.
+  if (!user && conversationIdInput) {
+    res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام معرّف المحادثة" });
+    return;
+  }
+
+  let resolvedConversationId: number | null = null;
+  if (user) {
+    if (conversationIdInput) {
+      // Validate ownership: the conversation must belong to this user and not be archived.
+      const [ownedConv] = await db
+        .select({ id: hamzawiConversationsTable.id })
+        .from(hamzawiConversationsTable)
+        .where(
+          and(
+            eq(hamzawiConversationsTable.id, conversationIdInput),
+            eq(hamzawiConversationsTable.user_id, user.id),
+            isNull(hamzawiConversationsTable.archived_at)
+          )
+        )
+        .limit(1);
+
+      if (!ownedConv) {
+        res.status(403).json({ error: "المحادثة غير موجودة أو لا تملك صلاحية الوصول إليها" });
+        return;
+      }
+      resolvedConversationId = ownedConv.id;
+    } else {
+      try {
+        const firstMessage = message?.trim() ?? "محادثة جديدة";
+        // Use first ~40 chars of the user message as the auto-generated title
+        const autoTitle = firstMessage.length > 40
+          ? `${firstMessage.slice(0, 40)}…`
+          : firstMessage;
+        const [newConv] = await db
+          .insert(hamzawiConversationsTable)
+          .values({ user_id: user.id, title: autoTitle })
+          .returning();
+        resolvedConversationId = newConv.id;
+      } catch (e) {
+        logger.error({ e }, "Failed to auto-create conversation");
+        // Non-fatal — continue without a conversation_id
+      }
+    }
+  }
+
   try {
-    const ctx = await buildChatContext({ user, sessionId: sessionRawId });
+    const ctx = await buildChatContext({ user, sessionId: sessionRawId, conversationId: resolvedConversationId });
     const { plan, level, memory, isOnboarding, recentMessages, brandAssets, assetContext } = ctx;
 
     // isInit: proactive first message.
@@ -501,14 +551,30 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
             session_id: sessionRawId,
             role: "user",
             content: message,
+            conversation_id: resolvedConversationId,
           });
           await db.insert(hamzawiMessagesTable).values({
             user_id: user?.id ?? null,
             session_id: sessionRawId,
             role: "assistant",
             content: reply,
+            conversation_id: resolvedConversationId,
           });
-          res.json({ reply, sessionId: sessionRawId, onboardingComplete: false, upsell: true });
+          if (resolvedConversationId) {
+            const now = new Date();
+            await db
+              .update(hamzawiConversationsTable)
+              .set({ updated_at: now, last_message_at: now })
+              .where(eq(hamzawiConversationsTable.id, resolvedConversationId))
+              .catch(() => {});
+          }
+          res.json({
+            reply,
+            sessionId: sessionRawId,
+            onboardingComplete: false,
+            upsell: true,
+            ...(resolvedConversationId ? { conversationId: resolvedConversationId } : {}),
+          });
           return;
         }
       }
@@ -590,6 +656,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
         session_id: sessionRawId,
         role: "user",
         content: message,
+        conversation_id: resolvedConversationId,
       });
     }
 
@@ -624,12 +691,24 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       session_id: sessionRawId,
       role: "assistant",
       content: storedContent,
+      conversation_id: resolvedConversationId,
     });
+
+    // Update conversation timestamps after each assistant reply
+    if (resolvedConversationId) {
+      const now = new Date();
+      await db
+        .update(hamzawiConversationsTable)
+        .set({ updated_at: now, last_message_at: now })
+        .where(eq(hamzawiConversationsTable.id, resolvedConversationId))
+        .catch((e: unknown) => logger.error({ e }, "Failed to update conversation timestamps"));
+    }
 
     res.json({
       reply,
       sessionId: sessionRawId,
       onboardingComplete: isOnboardingComplete,
+      ...(resolvedConversationId ? { conversationId: resolvedConversationId } : {}),
       ...(generatedImageUrl ? { imageUrl: generatedImageUrl, generatedDescription } : {}),
     });
   } catch (err) {
@@ -638,24 +717,216 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
   }
 });
 
+// ─── Conversation CRUD endpoints ────────────────────────────────────────────
+
+// GET /api/hamzawi/conversations
+// List non-archived conversations for the logged-in user, sorted by
+// last_message_at DESC NULLS LAST, then created_at DESC.
+router.get("/hamzawi/conversations", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول" });
+    return;
+  }
+
+  try {
+    const conversations = await db
+      .select()
+      .from(hamzawiConversationsTable)
+      .where(
+        and(
+          eq(hamzawiConversationsTable.user_id, user.id),
+          isNull(hamzawiConversationsTable.archived_at)
+        )
+      )
+      .orderBy(
+        sql`${hamzawiConversationsTable.last_message_at} DESC NULLS LAST`,
+        desc(hamzawiConversationsTable.created_at)
+      );
+
+    res.json({ conversations });
+  } catch (err) {
+    logger.error({ err }, "Hamzawi list conversations error");
+    res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+// POST /api/hamzawi/conversations
+// Create a new conversation for the logged-in user. Returns id + title.
+router.post("/hamzawi/conversations", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول" });
+    return;
+  }
+
+  const { title } = req.body as { title?: string };
+  const conversationTitle = title?.trim() || "محادثة جديدة";
+
+  try {
+    const [conversation] = await db
+      .insert(hamzawiConversationsTable)
+      .values({ user_id: user.id, title: conversationTitle })
+      .returning();
+
+    res.json({ id: conversation.id, title: conversation.title });
+  } catch (err) {
+    logger.error({ err }, "Hamzawi create conversation error");
+    res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+// PATCH /api/hamzawi/conversations/:id
+// Rename a conversation (title only). The conversation must belong to the user.
+router.patch("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول" });
+    return;
+  }
+
+  const conversationId = parseInt(req.params.id, 10);
+  if (isNaN(conversationId)) {
+    res.status(400).json({ error: "معرّف المحادثة غير صالح" });
+    return;
+  }
+
+  const { title } = req.body as { title?: string };
+  if (!title?.trim()) {
+    res.status(400).json({ error: "العنوان مطلوب" });
+    return;
+  }
+
+  try {
+    const [updated] = await db
+      .update(hamzawiConversationsTable)
+      .set({ title: title.trim(), updated_at: new Date() })
+      .where(
+        and(
+          eq(hamzawiConversationsTable.id, conversationId),
+          eq(hamzawiConversationsTable.user_id, user.id)
+        )
+      )
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "المحادثة غير موجودة" });
+      return;
+    }
+
+    res.json({ id: updated.id, title: updated.title });
+  } catch (err) {
+    logger.error({ err }, "Hamzawi rename conversation error");
+    res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+// DELETE /api/hamzawi/conversations/:id
+// Soft-delete: sets archived_at = now(). The row and its messages are preserved.
+// Archived conversations are excluded from the list endpoint.
+router.delete("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول" });
+    return;
+  }
+
+  const conversationId = parseInt(req.params.id, 10);
+  if (isNaN(conversationId)) {
+    res.status(400).json({ error: "معرّف المحادثة غير صالح" });
+    return;
+  }
+
+  try {
+    const [archived] = await db
+      .update(hamzawiConversationsTable)
+      .set({ archived_at: new Date(), updated_at: new Date() })
+      .where(
+        and(
+          eq(hamzawiConversationsTable.id, conversationId),
+          eq(hamzawiConversationsTable.user_id, user.id)
+        )
+      )
+      .returning();
+
+    if (!archived) {
+      res.status(404).json({ error: "المحادثة غير موجودة" });
+      return;
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "Hamzawi archive conversation error");
+    res.status(500).json({ error: "حدث خطأ" });
+  }
+});
+
+// ─── Messages endpoint ───────────────────────────────────────────────────────
+
 // GET /api/hamzawi/messages
+// Optional query param: conversationId — when present, returns messages for that
+// specific conversation (authentication + ownership required). When absent, falls
+// back to the legacy session/user query so existing frontend code works unchanged.
 router.get("/hamzawi/messages", async (req, res): Promise<void> => {
   const user = await getUserFromToken(req.headers.authorization);
   const verifiedSessionId = user ? null : getVerifiedSessionId(req);
+  const conversationIdRaw = req.query.conversationId as string | undefined;
+  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
 
   try {
-    const messages = await db
-      .select()
-      .from(hamzawiMessagesTable)
-      .where(
-        user
-          ? eq(hamzawiMessagesTable.user_id, user.id)
-          : verifiedSessionId
-            ? eq(hamzawiMessagesTable.session_id, verifiedSessionId)
-            : eq(hamzawiMessagesTable.session_id, "__none__")
-      )
-      .orderBy(desc(hamzawiMessagesTable.created_at))
-      .limit(30);
+    let messages: typeof hamzawiMessagesTable.$inferSelect[];
+
+    if (conversationId && !isNaN(conversationId)) {
+      // Conversation-scoped reads require authentication — unauthenticated callers
+      // cannot enumerate messages across guessable numeric conversation IDs (IDOR guard).
+      if (!user) {
+        res.status(401).json({ error: "يجب تسجيل الدخول للوصول إلى المحادثة" });
+        return;
+      }
+
+      // Validate ownership via hamzawi_conversations table before returning any rows.
+      const [ownedConv] = await db
+        .select({ id: hamzawiConversationsTable.id })
+        .from(hamzawiConversationsTable)
+        .where(
+          and(
+            eq(hamzawiConversationsTable.id, conversationId),
+            eq(hamzawiConversationsTable.user_id, user.id)
+          )
+        )
+        .limit(1);
+
+      if (!ownedConv) {
+        res.status(403).json({ error: "المحادثة غير موجودة أو لا تملك صلاحية الوصول إليها" });
+        return;
+      }
+
+      messages = await db
+        .select()
+        .from(hamzawiMessagesTable)
+        .where(
+          and(
+            eq(hamzawiMessagesTable.conversation_id, conversationId),
+            eq(hamzawiMessagesTable.user_id, user.id)
+          )
+        )
+        .orderBy(desc(hamzawiMessagesTable.created_at))
+        .limit(30);
+    } else {
+      // Legacy path: return last 30 messages for the session/user (no conversation filter).
+      messages = await db
+        .select()
+        .from(hamzawiMessagesTable)
+        .where(
+          user
+            ? eq(hamzawiMessagesTable.user_id, user.id)
+            : verifiedSessionId
+              ? eq(hamzawiMessagesTable.session_id, verifiedSessionId)
+              : eq(hamzawiMessagesTable.session_id, "__none__")
+        )
+        .orderBy(desc(hamzawiMessagesTable.created_at))
+        .limit(30);
+    }
 
     res.json({ messages: messages.reverse() });
   } catch (err) {

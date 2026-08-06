@@ -16,7 +16,7 @@ import {
   planLevel,
   type Plan,
 } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { collectBrandAssets, type BrandAssets } from "../media/assetReader";
 import { isBrandProfileComplete, type BrandMemoryData } from "../brand/brain";
 import { getConfig, type AppConfig } from "../../lib/config";
@@ -37,8 +37,10 @@ export interface ChatContext {
 export async function buildChatContext(params: {
   user: typeof usersTable.$inferSelect | null;
   sessionId: string;
+  /** When set, recent message history is scoped to this conversation only. */
+  conversationId?: number | null;
 }): Promise<ChatContext> {
-  const { user, sessionId } = params;
+  const { user, sessionId, conversationId } = params;
 
   const plan = (user?.plan ?? "visitor") as Plan;
   const level = planLevel(plan);
@@ -54,13 +56,21 @@ export async function buildChatContext(params: {
 
   const isOnboarding = level >= 4 && !isBrandProfileComplete(memory);
 
+  // When a conversationId is supplied (authenticated turn with a known thread),
+  // scope recent messages to that conversation only. This isolates AI context
+  // between sidebar threads. Otherwise fall back to the legacy session/user query.
   const recentMessages = await db
     .select()
     .from(hamzawiMessagesTable)
     .where(
-      user
-        ? eq(hamzawiMessagesTable.user_id, user.id)
-        : eq(hamzawiMessagesTable.session_id, sessionId)
+      user && conversationId
+        ? and(
+            eq(hamzawiMessagesTable.user_id, user.id),
+            eq(hamzawiMessagesTable.conversation_id, conversationId)
+          )
+        : user
+          ? eq(hamzawiMessagesTable.user_id, user.id)
+          : eq(hamzawiMessagesTable.session_id, sessionId)
     )
     .orderBy(desc(hamzawiMessagesTable.created_at))
     .limit(10);

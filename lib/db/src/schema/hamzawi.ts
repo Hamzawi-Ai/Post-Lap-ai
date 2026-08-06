@@ -3,6 +3,31 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 
+/**
+ * hamzawi_conversations: One named conversation per chat thread per user.
+ * Supports ChatGPT-style sidebar with multiple conversations.
+ * Soft-deleted via archived_at (never hard-deleted at the API level).
+ */
+export const hamzawiConversationsTable = pgTable("hamzawi_conversations", {
+  id: serial("id").primaryKey(),
+  user_id: integer("user_id")
+    .notNull()
+    .references(() => usersTable.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+  last_message_at: timestamp("last_message_at"),
+  archived_at: timestamp("archived_at"),
+});
+
+export const insertHamzawiConversationSchema = createInsertSchema(hamzawiConversationsTable).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export type InsertHamzawiConversation = z.infer<typeof insertHamzawiConversationSchema>;
+export type HamzawiConversation = typeof hamzawiConversationsTable.$inferSelect;
+
 export const hamzawiMessagesTable = pgTable("hamzawi_messages", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").references(() => usersTable.id, { onDelete: "cascade" }),
@@ -10,6 +35,9 @@ export const hamzawiMessagesTable = pgTable("hamzawi_messages", {
   role: text("role", { enum: ["user", "assistant"] }).notNull(),
   content: text("content").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  conversation_id: integer("conversation_id").references(() => hamzawiConversationsTable.id, {
+    onDelete: "set null",
+  }),
 });
 
 export const insertHamzawiMessageSchema = createInsertSchema(hamzawiMessagesTable).omit({
