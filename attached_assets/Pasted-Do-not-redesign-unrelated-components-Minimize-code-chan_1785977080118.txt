@@ -1,0 +1,243 @@
+Do not redesign unrelated components. Minimize code changes. Preserve existing behavior. Focus only on the objectives listed below. If an architectural issue is discovered, document it instead of expanding the task scope.
+
+PHASE 3 — Hamzawi Intelligence Foundation
+
+
+
+الهدف: جعل حمزاوي Agent حقيقي وليس مجرد Chat.
+
+
+
+IMPORTANT
+
+
+
+Do not change UI significantly.
+
+
+
+Focus only on AI reasoning.
+
+
+
+1. Automatic Context Loading
+
+
+
+Before every response Hamzawi must automatically load available knowledge.
+
+
+
+Priority order
+
+
+
+User Profile
+
+Company Profile
+
+Brand Brain
+
+Uploaded Assets
+
+Media Library
+
+Previous Conversation
+
+Active Conversation
+
+
+
+Hamzawi should never behave as if these resources do not exist.
+
+
+
+2. Uploaded Images Awareness
+
+
+
+Current Issue
+
+
+
+Hamzawi behaves as if uploaded images do not exist.
+
+
+
+Required
+
+
+
+If the user uploads:
+
+
+
+logo
+
+product image
+
+advertisement
+
+design
+
+branding assets
+
+
+
+Hamzawi must know they exist.
+
+
+
+He should reference them naturally.
+
+
+
+Example
+
+
+
+"I'll use the logo you uploaded."
+
+
+
+"I'll create a design using your previous product image."
+
+
+
+3. Reliable Image Generation
+
+
+
+Current Issue
+
+
+
+Hamzawi avoids generating images and answers conversationally instead.
+
+
+
+Required
+
+
+
+Whenever the user's request clearly requires image generation:
+
+
+
+Hamzawi MUST invoke the image generation tool.
+
+
+
+Never answer with excuses.
+
+
+
+Never ignore the tool.
+
+
+
+Never pretend.
+
+
+
+The reasoning engine should correctly detect image-generation intent.
+
+
+
+4. Better Tool Selection
+
+
+
+Improve reasoning so Hamzawi correctly selects:
+
+
+
+generate_image
+
+generate_text
+
+ad_check
+
+memory
+
+assets
+
+
+
+based on user intent.
+
+
+
+5. Prepare Prompt Studio Architecture
+
+
+
+Do NOT build the UI yet.
+
+
+
+Prepare architecture only.
+
+
+
+Future module:
+
+
+
+Hamzawi Studio
+
+
+
+Structure
+
+
+
+Identity
+
+System Prompt
+
+Personality
+
+Rules
+
+Knowledge Sources
+
+Available Tools
+
+Tool Policies
+
+Memory Strategy
+
+Brand Strategy
+
+Safety
+
+Retrieval Configuration
+
+
+
+Everything should become configurable without editing source code.
+
+
+
+Acceptance
+
+
+
+✅ Uploaded images automatically available
+
+
+
+✅ Brand knowledge automatically loaded
+
+
+
+✅ Image generation always invokes the proper tool
+
+
+
+✅ Better tool selection
+
+
+
+✅ Prompt Studio architecture prepared
