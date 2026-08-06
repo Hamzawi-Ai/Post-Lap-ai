@@ -41,7 +41,7 @@ function detectImageIntent(message: string): boolean {
   if (!m) return false;
 
   const intentPatterns = [
-    /(صمم|صمّم|اصمم|تصميم|تصاميم)\b/i,
+    /(صمم|صمّم|اصمم|تصميم|تصاميم)(?=\s|$|[،,؟?!.])/i,
     /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|إعلان مرئي)/i,
     /(منشور|بوست|ستوري|بانر|فلاير|ملصق|بوستر)\b/i,
     /شعار|لوجو|logo/i,
@@ -78,7 +78,7 @@ const CHECK_AD_PATTERNS = [
 
 const GENERATE_IMAGE_PATTERNS = [
   // Arabic design verbs
-  /(صمم|صمّم|اصمم|تصميم|تصاميم)\b/i,
+  /(صمم|صمّم|اصمم|تصميم|تصاميم)(?=\s|$|[،,؟?!.])/i,
   // Arabic action verbs + visual nouns
   /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل|اريد|أريد|عايز|احتاج|ابتكر|ابدع|خلّق|خلق|صور).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|صورة|إعلان|تصميم|هوية)/i,
   // Standalone Arabic visual nouns indicating creation intent

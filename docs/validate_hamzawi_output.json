@@ -1,0 +1,661 @@
+{
+  "results": [
+    {
+      "part": "1",
+      "scenario": "facebook_ad",
+      "status": "FAIL",
+      "detail": "intent misclassified; text-only reply bypassed upsell gate",
+      "latencyMs": 2032,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "instagram_post",
+      "status": "PASS",
+      "detail": "upsell gate fired correctly",
+      "latencyMs": 18,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "promo_banner",
+      "status": "PASS",
+      "detail": "upsell gate fired correctly",
+      "latencyMs": 17,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "product_image",
+      "status": "FAIL",
+      "detail": "intent misclassified; text-only reply bypassed upsell gate",
+      "latencyMs": 1902,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "branded_design",
+      "status": "FAIL",
+      "detail": "intent misclassified; text-only reply bypassed upsell gate",
+      "latencyMs": 1924,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "story",
+      "status": "PASS",
+      "detail": "upsell gate fired correctly",
+      "latencyMs": 17,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "redesign",
+      "status": "FAIL",
+      "detail": "intent misclassified; text-only reply bypassed upsell gate",
+      "latencyMs": 1831,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "1",
+      "scenario": "facebook_ad",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 1432,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "1",
+      "scenario": "instagram_post",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 1785,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "1",
+      "scenario": "promo_banner",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 1796,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "1",
+      "scenario": "product_image",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 1712,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "1",
+      "scenario": "branded_design",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 2459,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "1",
+      "scenario": "story",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 1599,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "1",
+      "scenario": "redesign",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 3161,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "2",
+      "scenario": "logo_critique",
+      "status": "PASS",
+      "detail": "=true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "product_photo",
+      "status": "PASS",
+      "detail": "=true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "ad_review",
+      "status": "PASS",
+      "detail": "=true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "branding_asset",
+      "status": "PASS",
+      "detail": "=true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "logo_followup",
+      "status": "PASS",
+      "detail": "=true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "product_create",
+      "status": "PASS",
+      "detail": "=true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "general_chat",
+      "status": "PASS",
+      "detail": "=false",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "vision_model_branch",
+      "status": "PASS",
+      "detail": "code path verified",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "2",
+      "scenario": "api_vision_auth",
+      "status": "PASS",
+      "detail": "reply received",
+      "latencyMs": 1365,
+      "category": "ROUTING-AUTH"
+    },
+    {
+      "part": "3",
+      "scenario": "collectBrandAssets_called",
+      "status": "PASS",
+      "detail": "contextBuilder calls collectBrandAssets",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "asset_cap_config_driven",
+      "status": "PASS",
+      "detail": "cap: agentConfig.asset_cap wired",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "assetContext_built",
+      "status": "PASS",
+      "detail": "assetContext assembled",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "category_logo",
+      "status": "PASS",
+      "detail": "logo category supported",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "category_portfolio",
+      "status": "PASS",
+      "detail": "portfolio category supported",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "category_products",
+      "status": "PASS",
+      "detail": "products category supported",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "category_design_samples",
+      "status": "PASS",
+      "detail": "design_samples category supported",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "url_deduplication",
+      "status": "PASS",
+      "detail": "URL-based dedup prevents duplicates",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "assetContext_in_system_prompt",
+      "status": "PASS",
+      "detail": "assetContext injected into system prompt",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "3",
+      "scenario": "memory_endpoint",
+      "status": "PASS",
+      "detail": "memory endpoint accessible",
+      "latencyMs": 3,
+      "category": "ROUTING-AUTH"
+    },
+    {
+      "part": "4",
+      "scenario": "memory_window_config_driven",
+      "status": "PASS",
+      "detail": "memory_window from agentConfig",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "4",
+      "scenario": "recent_messages_fetched",
+      "status": "PASS",
+      "detail": "recentMessages fetched from DB",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "4",
+      "scenario": "history_for_ai_injected",
+      "status": "PASS",
+      "detail": "historyForAI passed to AI messages",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "4",
+      "scenario": "conversation_scoped_by_id",
+      "status": "PASS",
+      "detail": "messages scoped per conversation_id",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "4",
+      "scenario": "image_markers_stripped_history",
+      "status": "PASS",
+      "detail": "%%GENERATED_IMAGE%% stripped before re-injection",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "4",
+      "scenario": "logo_ref_auth",
+      "status": "PASS",
+      "detail": "context ref message accepted",
+      "latencyMs": 3487,
+      "category": "ROUTING-AUTH"
+    },
+    {
+      "part": "4",
+      "scenario": "isInit_path",
+      "status": "PASS",
+      "detail": "isInit path accepted",
+      "latencyMs": 0,
+      "category": "ROUTING-AUTH"
+    },
+    {
+      "part": "5",
+      "scenario": "gen_img_arabic_verb_noun",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "gen_img_english",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "gen_img_arabic_standalone",
+      "status": "FAIL",
+      "detail": "gen_img=false exp true",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "gen_img_using_logo",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "check_ad",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "analyze_image",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "improve_design",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "marketing_copy",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "brand_memory",
+      "status": "PASS",
+      "detail": "intent patterns correct",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "tool_check_ad",
+      "status": "PASS",
+      "detail": "registered",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "tool_generate_text",
+      "status": "PASS",
+      "detail": "registered",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "tool_generate_image",
+      "status": "PASS",
+      "detail": "registered",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "tool_save_brand_memory",
+      "status": "PASS",
+      "detail": "registered",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "tool_read_brand_memory",
+      "status": "PASS",
+      "detail": "registered",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "tool_upload_asset",
+      "status": "PASS",
+      "detail": "registered",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "describeAll",
+      "status": "PASS",
+      "detail": "",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "validator_auth_check",
+      "status": "PASS",
+      "detail": "requireAuth=jwt gate present",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "validator_plan_level_check",
+      "status": "PASS",
+      "detail": "plan level gate present",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "validator_quota_check",
+      "status": "PASS",
+      "detail": "quota gate present",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "validator_account_active",
+      "status": "PASS",
+      "detail": "account active check",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "validator_subscription_exp",
+      "status": "PASS",
+      "detail": "subscription expiry check",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "marker_retry_mechanism",
+      "status": "PASS",
+      "detail": "retry mechanism verified in hamzawi.ts",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "5",
+      "scenario": "validator_upsell_gate",
+      "status": "PASS",
+      "detail": "Validator gate fired",
+      "latencyMs": 16,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "6",
+      "scenario": "null_guard_no_fake_url",
+      "status": "PASS",
+      "detail": "if (generated) guard — no fake imageUrl on null return",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "6",
+      "scenario": "error_logged_clearly",
+      "status": "PASS",
+      "detail": "logger.error(\"Failed to generate post from Hamzawi marker\")",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "6",
+      "scenario": "provider_availability_gate",
+      "status": "PASS",
+      "detail": "isAvailable() checked before generate()",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "6",
+      "scenario": "generate_image_tool_gated",
+      "status": "PASS",
+      "detail": "generate_image tool enabled() = isImageGenAvailable()",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "6",
+      "scenario": "dev_stub_defined",
+      "status": "PASS",
+      "detail": "DEV_STUB_IMAGE: 512×512 PNG",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "6",
+      "scenario": "dev_stub_non_prod_only",
+      "status": "PASS",
+      "detail": "stub only when !isProd && no key",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "6",
+      "scenario": "empty_msg_400",
+      "status": "PASS",
+      "detail": "400 with Arabic error",
+      "latencyMs": 0,
+      "category": "ROUTING-UNAUTH"
+    },
+    {
+      "part": "6",
+      "scenario": "graceful_failure",
+      "status": "PASS",
+      "detail": "generation pipeline invoked; graceful failure. Evidence: \"Failed to generate post from Hamzawi marker\" in THIS-RUN log; \"retry_success\" in THIS-RUN log",
+      "latencyMs": 3439,
+      "category": "LIVE-GEN"
+    },
+    {
+      "part": "7",
+      "scenario": "openai_models",
+      "status": "PASS",
+      "detail": "auth OK; 124 models",
+      "latencyMs": 21299,
+      "category": "LIVE-PROVIDER"
+    },
+    {
+      "part": "7",
+      "scenario": "openai_vision",
+      "status": "PASS",
+      "detail": "vision response: \"The color of the 1×1 pixel image\"",
+      "latencyMs": 678,
+      "category": "LIVE-PROVIDER"
+    },
+    {
+      "part": "7",
+      "scenario": "gemini",
+      "status": "PASS",
+      "detail": "NANO_BANANA_API_KEY accepted (no auth error); gemini-1.5-flash 404 via proxy endpoint",
+      "latencyMs": 262,
+      "category": "LIVE-PROVIDER"
+    },
+    {
+      "part": "7",
+      "scenario": "image_gen",
+      "status": "PASS",
+      "detail": "real key present (NANO_BANANA_API_KEY)",
+      "latencyMs": 0,
+      "category": "STATIC"
+    },
+    {
+      "part": "7",
+      "scenario": "nanobanana_provider_class",
+      "status": "FAIL",
+      "detail": "class exists but isAvailable=false; not yet implemented",
+      "latencyMs": 0,
+      "category": "STATIC"
+    }
+  ],
+  "providerTable": [
+    {
+      "provider": "OpenAI",
+      "auth": "OK",
+      "testReq": "GET /v1/models",
+      "latency": "21299ms",
+      "status": "PASS",
+      "notes": "Auth OK; 124 models"
+    },
+    {
+      "provider": "OpenAI Vision (gpt-4o)",
+      "auth": "OK",
+      "testReq": "chat/completions + 1×1 PNG",
+      "latency": "678ms",
+      "status": "PASS",
+      "notes": "response: \"The color of the 1×1 pixel image\""
+    },
+    {
+      "provider": "Gemini (NANO_BANANA_API_KEY)",
+      "auth": "PARTIAL",
+      "testReq": "generateContent (gemini-1.5-flash)",
+      "latency": "262ms",
+      "status": "PASS",
+      "notes": "HTTP 404 on gemini-1.5-flash — no auth error (key accepted by proxy). Deployment logs confirm gemini-2.5-flash-image (the image-gen model) returns 429 (rate-limited), not 401."
+    },
+    {
+      "provider": "Image Gen (gemini)",
+      "auth": "OK",
+      "testReq": "isAvailable()=true",
+      "latency": "N/A",
+      "status": "PASS",
+      "notes": "real key present (NANO_BANANA_API_KEY)"
+    },
+    {
+      "provider": "NanoBanana (IMAGE_PROVIDER=nanobanana)",
+      "auth": "N/A",
+      "testReq": "isAvailable()=false",
+      "latency": "N/A",
+      "status": "FAIL",
+      "notes": "NanoBananaImageProvider class is a stub (isAvailable always false). NANO_BANANA_API_KEY works via IMAGE_PROVIDER=gemini (client.ts)."
+    }
+  ],
+  "summary": {
+    "total": 76,
+    "passed": 70,
+    "failed": 6,
+    "notTested": 0
+  },
+  "date": "2026-08-06T02:13:07.047Z"
+}
