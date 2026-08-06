@@ -1,6 +1,6 @@
 # PROJECT_STATUS.md
 
-**Project:** PostLapAI — AI ad-compliance checker + Hamzawi assistant (Arabic, Meta/TikTok)
+**Project:** PostLapAI — AI ad-compliance checker + Hamzawi Multimodal AI Marketing Agent (Arabic, Meta/TikTok)
 **Last updated:** 2026-08-03
 **Branch:** `main` @ `eeab99b` (remote: `origin` → `github.com/Hamzawi-Ai/Post-Lap-ai.git`)
 
@@ -46,7 +46,7 @@ Local dev environment as of today:
 - Guest ad-check flow with 3-scan daily cap (`postlap_trials` localStorage) + redacted results for guests.
 - Authenticated full check results (Arabic statuses `ممتاز` / `جيد` / `مرفوض`, violations, suggestions).
 - AI text generation (`/api/generate-text`): level 3+ gated, dialect select (غربية / شرقية / جنوبية), image+description mode at level 4+.
-- Embedded Hamzawi assistant chat in hero (`HamzawiChat embedded` prop, always-open inline).
+- **Hamzawi Multimodal AI Marketing Agent** — embedded inline chat in hero (`HamzawiChat embedded` prop, always-open). Hamzawi understands uploaded images (logos, products, ad creatives), generates branded posts natively (plan level 4+, `%%GENERATE_POST%%` marker pipeline → `gemini-2.5-flash-image`), classifies intent via rule-first reasoner (`reasoner.ts`), and loads all seven context sources per turn (`contextBuilder.ts`): user profile, company profile, brand brain, uploaded assets, media library, active conversation, previous conversations.
 - Brand memory upsert / onboarding (`/api/hamzawi/memory`, partial-save markers, consent-gated), brand completion score.
 - Auto company creation on Google registration.
 - Admin panel (`/api/admin/*`): user list, upgrade, activate, set-plan-by-email, unlimited, reset-limits, delete.

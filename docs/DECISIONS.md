@@ -108,6 +108,17 @@ Chronological record of important product and technical decisions.
 25. **Image generation moved to `gemini-2.5-flash-image`** via GoogleGenAI
     (requires `GEMINI_API_KEY` at runtime).
 
+## 2026-08-06 — Hamzawi canonical definition
+
+29. **Hamzawi officially defined as a Multimodal AI Marketing Agent.**
+    Hamzawi is not a text chatbot. It is the primary AI agent of PostLap AI,
+    operating across text, uploaded images, brand assets, company knowledge,
+    conversation history, and generated designs. Seven architectural principles
+    adopted: Multimodal First, Native Image Generation, Context-Aware Reasoning,
+    Asset Awareness, No Fake Capabilities, Tool Selection Policy, and Product Vision.
+    `docs/HAMZAWI_AGENT.md` is the canonical reference; all future development
+    decisions about the agent must be reconciled against it.
+
 ## 2026-08-03 — Launch Readiness Audit (`docs/LAUNCH_READINESS_AUDIT.md`)
 
 26. **All Phase-4 high-priority UX fixes (H1, H2, H4, H5) now confirmed fixed**

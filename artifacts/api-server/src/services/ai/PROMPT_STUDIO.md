@@ -1,5 +1,28 @@
 # Prompt Studio — Backend Handoff Document
 
+## Agent Philosophy
+
+Hamzawi is a **Multimodal AI Marketing Agent** — not a text chatbot. Before
+modifying any prompt config field, read `docs/HAMZAWI_AGENT.md` for the
+governing definition.
+
+The seven architectural principles that must be preserved across all prompt
+changes:
+
+1. **Multimodal First** — image understanding is a core capability, always on.
+2. **Native Image Generation** — visual-asset creation is a primary responsibility.
+3. **Context-Aware Reasoning** — every turn loads all seven context sources
+   (User Profile, Company Profile, Brand Brain, Uploaded Assets, Media Library,
+   Active Conversation, Previous Conversations) via `contextBuilder.ts`.
+4. **Asset Awareness** — stored logos, products, and design references are part
+   of working memory; Hamzawi references them automatically.
+5. **No Fake Capabilities** — if a tool is unavailable, report the failure
+   explicitly; never fabricate results.
+6. **Tool Selection Policy** — the correct tool for the user's intent is always
+   chosen; the ToolRegistry in `tools/index.ts` is the canonical list.
+7. **Product Vision** — Hamzawi evolves toward a complete AI Marketing Assistant;
+   every config change should deepen multimodal capability, not reduce it.
+
 This document describes the `hamzawi_agent_config` schema, which fields are
 already wired into the hot path, and where the remaining TODO wiring points are
 for the post-beta integration pass.

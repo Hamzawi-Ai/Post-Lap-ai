@@ -1,6 +1,9 @@
 # PostLapAI
 
-PostLapAI هو منصة ذكاء اصطناعي لفحص الإعلانات ومطابقتها مع سياسات Meta، مع مساعد ذكي (حمزاوي) يتذكر هوية النشاط التجاري لكل مستخدم.
+**Hamzawi is a Multimodal AI Marketing Agent — not a text chatbot.**  
+حمزاوي وكيل تسويقي ذكي متعدد الوسائط، يعمل مع النصوص والصور ومقومات العلامة التجارية ومعرفة النشاط التجاري وسجل المحادثات والتصاميم المولّدة بالذكاء الاصطناعي.
+
+PostLapAI is an AI platform that combines Meta/TikTok ad-policy compliance checking with Hamzawi — a multimodal marketing agent that understands images, generates branded creatives, and retains each user's complete brand identity across sessions. See `docs/HAMZAWI_AGENT.md` for the full architectural definition.
 
 ## Run & Operate
 
