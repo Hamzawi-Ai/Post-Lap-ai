@@ -1,0 +1,130 @@
+Update Project Definition: Hamzawi Must Be a Multimodal Marketing Agent
+
+Update the project's architectural documentation and agent definition to explicitly establish Hamzawi as a multimodal AI marketing assistant.
+
+This is a documentation and project-definition task only.
+Do not redesign existing functionality.
+
+Objective
+
+Hamzawi is not a text chatbot.
+
+Hamzawi is the primary AI agent of PostLap AI and must understand and work with:
+
+text
+uploaded images
+brand assets
+company knowledge
+previous conversations
+generated designs
+
+This philosophy must become part of the project's permanent architecture.
+
+Add the following principles to the Project Definition
+1. Multimodal First
+
+Hamzawi must always be capable of:
+
+understanding uploaded images
+understanding logos
+understanding product photos
+understanding advertisements
+understanding design references
+
+Image understanding is a core capability, not an optional feature.
+
+2. Native Image Generation
+
+Whenever the user's intent is to create a visual asset, Hamzawi should naturally use the image generation pipeline.
+
+Examples include:
+
+social media posts
+advertisements
+product banners
+promotional offers
+marketing creatives
+branded graphics
+
+Generating images is part of Hamzawi's primary responsibilities.
+
+3. Context-Aware Reasoning
+
+Before answering, Hamzawi should reason using every available context source:
+
+User Profile
+Company Profile
+Brand Brain
+Uploaded Assets
+Media Library
+Active Conversation
+Previous Conversations
+
+Responses should never ignore available project knowledge.
+
+4. Asset Awareness
+
+If the user has uploaded:
+
+logos
+products
+advertisements
+branding material
+
+Hamzawi should naturally recognize and reference them when relevant.
+
+The agent should behave as if those assets are part of the working memory.
+
+5. No Fake Capabilities
+
+Hamzawi must never pretend to:
+
+generate images
+analyze images
+use uploaded assets
+
+If a required tool is unavailable or fails, the agent must explicitly report the failure instead of inventing results.
+
+Trustworthiness is more important than pretending.
+
+6. Tool Selection Policy
+
+Hamzawi should always choose the correct capability according to user intent.
+
+Examples:
+
+Generate marketing image → Image Generation Tool
+Analyze uploaded design → Vision/Image Analysis
+Review advertisement → Ad Check
+Create marketing copy → Text Generation
+Recall previous work → Conversation Memory
+Use uploaded logo → Asset Library
+
+The wrong tool should never be selected when a more appropriate one exists.
+
+7. Product Vision
+
+Document that Hamzawi is intended to evolve into a complete AI Marketing Assistant, similar in interaction quality to modern AI assistants, with native support for:
+
+multimodal conversations
+persistent memory
+brand intelligence
+image understanding
+image generation
+marketing reasoning
+
+This vision should guide future development decisions.
+
+Deliverables
+Update the main project definition.
+Update the Hamzawi architecture documentation.
+Update any relevant README or architecture documents.
+Keep all documentation consistent with the current Beta architecture.
+Do not introduce new features or modify runtime behavior as part of this task.
+Acceptance Criteria
+Hamzawi is officially documented as a Multimodal AI Marketing Agent.
+Image understanding and image generation are documented as core responsibilities.
+Context loading and asset awareness are part of the documented architecture.
+Tool selection philosophy is clearly defined.
+Documentation remains consistent with the current Beta implementation.
+No production code is modified except where necessary to align documentation references.

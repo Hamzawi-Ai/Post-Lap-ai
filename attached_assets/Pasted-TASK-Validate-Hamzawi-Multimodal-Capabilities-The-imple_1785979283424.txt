@@ -1,0 +1,117 @@
+TASK — Validate Hamzawi Multimodal Capabilities
+
+The implementation for image understanding and image generation has already been completed.
+
+This task is NOT to add new features.
+
+The goal is to verify that the complete multimodal workflow actually works end-to-end.
+
+Part 1 — Image Generation Validation
+
+Verify that Hamzawi correctly invokes the image generation pipeline whenever the user's intent is visual creation.
+
+Test scenarios:
+
+Create a Facebook advertisement.
+Create an Instagram post.
+Create a promotional banner.
+Create a product image.
+Create a branded marketing design.
+Create a story design.
+Redesign an existing advertisement.
+
+Expected:
+
+The Image Generation Tool is invoked.
+Hamzawi never responds with text instead of generating an image.
+No fake responses.
+No conversational avoidance.
+Tool execution is visible in logs.
+Part 2 — Uploaded Image Understanding
+
+Verify that uploaded images become available to Hamzawi.
+
+Test:
+
+Upload:
+
+logo
+product photo
+advertisement
+branding asset
+
+Then ask questions like:
+
+What do you think about this design?
+Improve this advertisement.
+Use this logo in the next design.
+Create another version using the uploaded image.
+
+Expected:
+
+Hamzawi understands that the uploaded assets exist and references them correctly.
+
+Part 3 — Asset Memory
+
+Verify that Hamzawi automatically loads:
+
+uploaded logos
+uploaded products
+uploaded advertisements
+
+without requiring the user to explain them again inside the same conversation.
+
+Part 4 — Conversation Context
+
+Verify that Hamzawi correctly remembers uploaded assets within the active conversation.
+
+Example:
+
+User:
+
+"Use the logo I uploaded."
+
+Expected:
+
+Hamzawi immediately understands which logo is being referenced.
+
+Part 5 — Tool Selection Verification
+
+Verify that intent detection chooses the correct tool.
+
+Expected mapping:
+
+Generate image → Image Generation Tool
+Analyze uploaded image → Vision / Image Analysis
+Improve design → Image Generation
+Marketing copy → Text Generation
+Policy review → Ad Checker
+
+No incorrect routing.
+
+Part 6 — Failure Handling
+
+If image generation fails:
+
+Hamzawi must:
+
+report the tool failure,
+never pretend the image was generated,
+never fabricate results.
+Deliverables
+
+Produce a validation report containing:
+
+Tested scenarios
+Pass / Fail for each scenario
+Tool invocation logs
+Any missing integrations
+Any discovered regressions
+Recommended fixes (if needed)
+Acceptance Criteria
+Image generation works end-to-end.
+Uploaded images are understood.
+Uploaded assets are available in reasoning.
+Correct tool selection is verified.
+No fake image generation responses.
+Validation report confirms production readiness.
