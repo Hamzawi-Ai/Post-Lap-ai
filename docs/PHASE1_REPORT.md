@@ -35,8 +35,11 @@ All user-visible Hamzawi branding was replaced with **PostLab**.
 - Internal identifiers: `addHamzawi`, `chatBlock("hamzawi")`, `from: "hamzawi"`,
   `SESSION_OPENED_KEY = "hamzawi_opened"`, component names `HamzawiChat`,
   `HamzawiSidebar`, `HamzawiWorkspace`, file names `hamzawi.tsx`.
-- Route paths (`/hamzawi`, `/khtfa-secure-portal`, etc.) and auth.
-- DB schema, backend services, deployment/Replit/build config.
+- Route paths (`/hamzawi`, `/khtfa-secure-portal`, etc.), URLs, API endpoints,
+  and auth.
+- DB schema, backend services, deployment/Replit/build config, file names.
+- **No redirects added, no files moved, no components refactored, no functional
+  changes** — the only edits are user-visible text and the chat avatar letter.
 - Code comments referencing "Hamzawi" (e.g. `lib/messages/parser.ts:21`) — internal
   documentation only, not user-facing.
 
