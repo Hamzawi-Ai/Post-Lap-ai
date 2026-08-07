@@ -73,7 +73,7 @@ export default function BrandIdentity() {
             </div>
             <div>
               <h1 className="text-xl font-black">هوية النشاط التجاري</h1>
-              <p className="text-xs text-muted-foreground">ملف نشاطك كما يحفظه حمزاوي ويفهمه</p>
+              <p className="text-xs text-muted-foreground">ملف نشاطك كما يحفظه PostLab ويفهمه</p>
             </div>
           </div>
           <Link
@@ -113,7 +113,7 @@ export default function BrandIdentity() {
           ) : (
             <p className="flex items-center gap-2 text-xs text-green-600">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              ملف نشاطك مكتمل بالكامل — حمزاوي جاهز للعمل بهوية كاملة.
+              ملف نشاطك مكتمل بالكامل — PostLab جاهز للعمل بهوية كاملة.
             </p>
           )}
         </div>
@@ -208,7 +208,7 @@ export default function BrandIdentity() {
           <div className="bg-card border border-border rounded-2xl p-10 text-center space-y-4">
             <Store className="w-10 h-10 text-muted-foreground mx-auto" />
             <p className="text-sm text-muted-foreground">
-              لم يتم حفظ بيانات النشاط بعد. يمكنك إعدادها الآن ليتذكّرها حمزاوي في كل تصميم.
+              لم يتم حفظ بيانات النشاط بعد. يمكنك إعدادها الآن ليتذكّرها PostLab في كل تصميم.
             </p>
             <Link
               href="/company"

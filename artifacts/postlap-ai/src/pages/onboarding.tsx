@@ -68,7 +68,7 @@ export default function Onboarding() {
           </div>
           <h1 className="text-2xl sm:text-3xl font-black">إعداد نشاطك التجاري</h1>
           <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-            هذه البيانات تُحفظ كذاكرة دائمة لنشاطك التجاري — يستخدمها حمزاوي تلقائياً عند إنشاء أي
+            هذه البيانات تُحفظ كذاكرة دائمة لنشاطك التجاري — يستخدمها PostLab تلقائياً عند إنشاء أي
             منشور أو تصميم، بدون الحاجة لإعادة شرح نشاطك في كل مرة.
           </p>
           <div className="inline-flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-full px-3 py-1.5">

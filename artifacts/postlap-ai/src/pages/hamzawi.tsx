@@ -156,7 +156,7 @@ export default function HamzawiWorkspace() {
             PostLap<span className="text-foreground">AI</span>
           </a>
           <span className="text-xs text-muted-foreground border border-border rounded px-2 py-0.5 hidden sm:inline">
-            حمزاوي — مساعدك التسويقي
+            PostLab — مساعدك التسويقي
           </span>
           {!isAuthenticated && (
             <a

@@ -193,7 +193,7 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
         </label>
         <input
           className={inputCls}
-          placeholder="مثال: مخبز حمزاوي"
+          placeholder="مثال: مخبز الأصيل"
           value={fields.business_name}
           onChange={(e) => setField("business_name", e.target.value)}
           data-testid="onboarding-input-name"
@@ -361,7 +361,7 @@ export default function BrandSetupForm({ mode, initial, onSubmit }: BrandSetupFo
               جاري الحفظ...
             </>
           ) : isOnboarding ? (
-            "حفظ والبدء مع حمزاوي 🚀"
+            "حفظ والبدء مع PostLab 🚀"
           ) : (
             "حفظ التعديلات"
           )}

@@ -390,7 +390,7 @@ export default function Home() {
 
 
   const faqs = [
-    { q: "كيف يعمل PostLapAI؟", a: "عرّف حمزاوي على نشاطك مرة واحدة، ثم اطلب منه توليد منشوراتك ونصوصك الإعلانية بالليبي الأصيل وتصميم صورها بهوية نشاطك — وكل منشور يُفحص تلقائياً لضمان توافقه مع سياسات Meta قبل النشر." },
+    { q: "كيف يعمل PostLapAI؟", a: "عرّف PostLab على نشاطك مرة واحدة، ثم اطلب منه توليد منشوراتك ونصوصك الإعلانية بالليبي الأصيل وتصميم صورها بهوية نشاطك — وكل منشور يُفحص تلقائياً لضمان توافقه مع سياسات Meta قبل النشر." },
     { q: "هل نتائج الفحص دقيقة 100%؟", a: "الدقة 90% لأن سياسات المنصات تتحدث باستمرار. النتيجة مساعدة لكنها لا تضمن قبول المنصة." },
     { q: "هل تخزنون محتواي؟", a: "لا، نحذف جميع الملفات فور انتهاء التحليل. لا نخزن محتواك أبداً." },
     { q: "ما الفرق بين الخطط؟", a: "Smart Fix للمحتوى النصي والفحص، إدارة المحتوى للشركات التي تريد منشورات مصممة بهويتها وتوليد صور، وخطة الوكالة للمكاتب والمشاريع المتعددة." },
@@ -420,7 +420,7 @@ export default function Home() {
       nameAr: "للشركات والمتاجر",
       price: 400,
       desc: "للشركات والمتاجر",
-      features: ["كل مميزات Smart Fix", "تصميم منشورات بشعار نشاطك وألوانه", "توليد نصوص بالليبي الأصيل", "توليد صور المنشورات بالذكاء الاصطناعي", "ذاكرة دائمة — حمزاوي يتذكر نشاطك"],
+      features: ["كل مميزات Smart Fix", "تصميم منشورات بشعار نشاطك وألوانه", "توليد نصوص بالليبي الأصيل", "توليد صور المنشورات بالذكاء الاصطناعي", "ذاكرة دائمة — PostLab يتذكر نشاطك"],
       badge: "الأكثر طلباً",
       cta: "اشترك في إدارة المحتوى",
       highlight: true,
@@ -471,7 +471,7 @@ export default function Home() {
             <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">{lang === "ar" ? "مساعدك التسويقي" : "AI Marketing Assistant"}</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="/hamzawi" className="hover:text-foreground transition-colors font-semibold text-primary">{lang === "ar" ? "حمزاوي" : "Hamzawi"}</a>
+            <a href="/hamzawi" className="hover:text-foreground transition-colors font-semibold text-primary">{lang === "ar" ? "المساعد" : "Assistant"}</a>
             <a href="#image-gen" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد الصور" : "Image Generation"}</a>
             <a href="#check" className="hover:text-foreground transition-colors">{lang === "ar" ? "افحص إعلانك" : "Check My Ad"}</a>
             <a href="#plans" className="hover:text-foreground transition-colors">{lang === "ar" ? "الخطط" : "Plans"}</a>
@@ -619,8 +619,8 @@ export default function Home() {
             </h2>
             <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
               {lang === "ar"
-                ? "أداة مساندة من حمزاوي — ارفع إعلانك (صورة أو فيديو) ليفحص توافقه مع سياسات Meta وتظهر النتيجة في محادثتك مباشرةً"
-                : "A supporting tool from Hamzawi — upload your ad (image or video) to check Meta compliance and see the result right in your chat"}
+                ? "أداة مساندة من PostLab — ارفع إعلانك (صورة أو فيديو) ليفحص توافقه مع سياسات Meta وتظهر النتيجة في محادثتك مباشرةً"
+                : "A supporting tool from PostLab — upload your ad (image or video) to check Meta compliance and see the result right in your chat"}
             </p>
           </div>
 
@@ -732,10 +732,10 @@ export default function Home() {
           <p className="text-center text-muted-foreground text-sm mb-10">مساعدك التسويقي الواحد — من الفكرة إلى النشر</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { icon: <Sparkles className="w-5 h-5 text-primary" />, title: "مساعد تسويقي ذكي", desc: "حمزاوي يفهم نشاطك ويولّد محتوى يناسب هويتك وأسلوبك" },
+              { icon: <Sparkles className="w-5 h-5 text-primary" />, title: "مساعد تسويقي ذكي", desc: "PostLab يفهم نشاطك ويولّد محتوى يناسب هويتك وأسلوبك" },
               { icon: <PenLine className="w-5 h-5 text-primary" />, title: "نصوص ليبية أصيلة", desc: "توليد إعلاني باللهجات الغربية والشرقية والجنوبية" },
               { icon: <Palette className="w-5 h-5 text-primary" />, title: "تصميم بهوية نشاطك", desc: "شعارك وألوانك وأسلوبك المفضل في كل منشور" },
-              { icon: <BrainCircuit className="w-5 h-5 text-primary" />, title: "ذاكرة دائمة لنشاطك", desc: "حمزاوي يتذكر اسم نشاطك ومجاله وتفضيلاتك في كل مرة" },
+              { icon: <BrainCircuit className="w-5 h-5 text-primary" />, title: "ذاكرة دائمة لنشاطك", desc: "PostLab يتذكر اسم نشاطك ومجاله وتفضيلاتك في كل مرة" },
               { icon: <Shield className="w-5 h-5 text-primary" />, title: "متوافق مع Meta", desc: "كل منشور يُفحص لضمان التوافق قبل النشر — بدون مفاجآت" },
               { icon: <Lock className="w-5 h-5 text-primary" />, title: "خصوصية تامة", desc: "محتواك لا يُخزن أبداً — يُحذف فور الانتهاء من التحليل" },
             ].map((f) => (
@@ -846,7 +846,7 @@ export default function Home() {
           <p className="text-center text-muted-foreground text-xs mb-8">ثلاث خطوات من الفكرة إلى المنشور الجاهز</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
             {[
-              { step: "01", emoji: "🏪", title: "عرّف حمزاوي على نشاطك", desc: "سجّل وأخبره باسم نشاطك ومجاله وأسلوبك المفضل مرة واحدة" },
+              { step: "01", emoji: "🏪", title: "عرّف PostLab على نشاطك", desc: "سجّل وأخبره باسم نشاطك ومجاله وأسلوبك المفضل مرة واحدة" },
               { step: "02", emoji: "✨", title: "اطلب منشورك", desc: "اكتب وصف منتجك وعرضك — نصاً أو تصميماً — بالطريقة التي تحبها" },
               { step: "03", emoji: "🚀", title: "انشر بثقة", desc: "نص ليبي أصيل وتصميم بهوية نشاطك، متوافق مع سياسات Meta" },
             ].map((s) => (
@@ -967,7 +967,7 @@ export default function Home() {
               <Shield className="w-8 h-8 text-primary" />
             </div>
              <p className="text-lg font-bold text-foreground leading-relaxed">
-               سادك هكي يا غالي! جربت حمزاوي وشفت الفلاحة.. لو تبي تكمل وتولّد منشوراتك وتصميماتك، سجّل الدخول مجاناً.
+               سادك هكي يا غالي! جربت PostLab وشفت الفلاحة.. لو تبي تكمل وتولّد منشوراتك وتصميماتك، سجّل الدخول مجاناً.
              </p>
              <div className="space-y-3">
                <div ref={googleBtnModalRef} className="flex justify-center" />
@@ -978,7 +978,7 @@ export default function Home() {
                  className="block w-full bg-primary text-primary-foreground py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
                  data-testid="button-modal-subscribe"
                >
-                  أنشئ حساباً مجانياً وابدأ توليد منشوراتك مع حمزاوي
+                  أنشئ حساباً مجانياً وابدأ توليد منشوراتك مع PostLab
                 </a>
               <button
                 onClick={() => setTrialBlockModal(false)}
@@ -1023,7 +1023,7 @@ export default function Home() {
                 <p className="text-xs text-muted-foreground mt-1">شهرياً — تفعيل فوري</p>
               </div>
             <ul className="space-y-2 text-sm text-foreground text-right max-w-xs mx-auto">
-              {["توليد نصوص إعلانية باللهجة الليبية", "تصميم منشورات بشعار نشاطك وهويته", "ذاكرة دائمة لنشاطك — حمزاوي يتذكره دائماً", "فحوصات غير محدودة"].map((f) => (
+              {["توليد نصوص إعلانية باللهجة الليبية", "تصميم منشورات بشعار نشاطك وهويته", "ذاكرة دائمة لنشاطك — PostLab يتذكره دائماً", "فحوصات غير محدودة"].map((f) => (
                 <li key={f} className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-primary shrink-0" />
                   {f}
@@ -1031,7 +1031,7 @@ export default function Home() {
               ))}
             </ul>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              بعد الاشتراك سنجهّز ملف نشاطك التجاري في خطوة واحدة، ثم يبدأ حمزاوي بالعمل مباشرة.
+              بعد الاشتراك سنجهّز ملف نشاطك التجاري في خطوة واحدة، ثم يبدأ PostLab بالعمل مباشرة.
             </p>
             <button
               onClick={handleSubscribe}
@@ -1073,7 +1073,7 @@ export default function Home() {
               </button>
             </div>
             <p className="text-sm text-muted-foreground">
-              سجّل دخولك مجاناً وابدأ توليد منشوراتك ونصوصك الإعلانية مع حمزاوي
+              سجّل دخولك مجاناً وابدأ توليد منشوراتك ونصوصك الإعلانية مع PostLab
             </p>
             <div className="flex justify-center" ref={googleBtnLoginModalRef} data-testid="button-google-signin-login-modal" />
           </div>

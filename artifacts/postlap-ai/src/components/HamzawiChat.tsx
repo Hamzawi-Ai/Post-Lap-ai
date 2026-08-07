@@ -23,11 +23,11 @@ function detectLanguage(): "ar" | "en" {
 
 const i18n = {
   ar: {
-    title: "حمزاوي",
+    title: "PostLab",
     subtitle: "مساعدك التسويقي الذكي",
     placeholder: "اكتب رسالتك...",
     loading: "جاري التحميل...",
-    thinking: "حمزاوي يفكر...",
+    thinking: "PostLab يفكر...",
     saveBrand: "احفظ هوية نشاطي",
     saveTitle: "هوية النشاط التجاري",
     businessName: "اسم النشاط",
@@ -62,7 +62,7 @@ const i18n = {
     regeneratePrompt: "ملاحظة للتوليد (اختياري):",
     checkAdTip: "ارفع صورة إعلانك للفحص",
     analyzingAd: "جاري تحليل إعلانك... ⏳",
-    welcome: "أهلاً! 👋 أنا حمزاوي، مساعدك التسويقي الذكي. قلّي على نشاطك وأولّد لك منشوراتك ونصوصك الإعلانية بالليبي الأصيل، وأصمّم صورها بهوية نشاطك — وكمان أفحص إعلانك قبل النشر.",
+    welcome: "أهلاً! 👋 أنا مساعد PostLab، مساعدك التسويقي الذكي. قلّي على نشاطك وأولّد لك منشوراتك ونصوصك الإعلانية بالليبي الأصيل، وأصمّم صورها بهوية نشاطك — وكمان أفحص إعلانك قبل النشر.",
     profileChip: "اكتمال هوية النشاط",
     quickStart: "ابدأ بسرعة",
     quickActions: [
@@ -74,11 +74,11 @@ const i18n = {
     ],
   },
   en: {
-    title: "Hamzawi",
+    title: "PostLab",
     subtitle: "Your AI marketing assistant",
     placeholder: "Type your message...",
     loading: "Loading...",
-    thinking: "Hamzawi is thinking...",
+    thinking: "PostLab is thinking...",
     saveBrand: "Save my brand identity",
     saveTitle: "Brand Identity",
     businessName: "Business name",
@@ -113,7 +113,7 @@ const i18n = {
     regeneratePrompt: "Regeneration note (optional):",
     checkAdTip: "Upload your ad image to check it",
     analyzingAd: "Analyzing your ad... ⏳",
-    welcome: "Hello! 👋 I'm Hamzawi, your AI marketing assistant. Tell me about your business and I'll generate your posts and ad copy in authentic Libyan, design visuals with your brand identity — and check your ads before you publish.",
+    welcome: "Hello! 👋 I'm PostLab, your AI marketing assistant. Tell me about your business and I'll generate your posts and ad copy in authentic Libyan, design visuals with your brand identity — and check your ads before you publish.",
     profileChip: "Brand profile completion",
     quickStart: "Quick start",
     quickActions: [
@@ -850,7 +850,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   function downloadImage(url: string) {
     const a = document.createElement("a");
     a.href = url;
-    a.download = `hamzawi-post-${Date.now()}.jpg`;
+    a.download = `postlab-post-${Date.now()}.jpg`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -901,7 +901,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
           <div className="bg-primary px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-lg font-black text-white">
-                ح
+                P
               </div>
               <div>
                 <p className="text-sm font-bold text-white">{t.title}</p>
@@ -1104,7 +1104,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                 <div key={i} className={`flex gap-2 ${m.from === "user" ? "flex-row-reverse" : "flex-row"}`}>
                   {m.from === "hamzawi" && (
                     <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
-                      ح
+                      P
                     </div>
                   )}
                   <div className={`max-w-[80%] rounded-2xl text-sm leading-relaxed ${
@@ -1120,7 +1120,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
             {checking && (
               <div className="flex gap-2 flex-row">
                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
-                  ح
+                  P
                 </div>
                 <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2 flex items-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
@@ -1131,7 +1131,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
             {loading && (
               <div className="flex gap-2 flex-row">
                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
-                  ح
+                  P
                 </div>
                 <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2 flex items-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
@@ -1142,7 +1142,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
             {generatingPost && (
               <div className="flex gap-2 flex-row">
                 <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
-                  ح
+                  P
                 </div>
                 <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2 flex items-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
@@ -1237,13 +1237,13 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       <button
         onClick={() => { setOpen(!open); setUnread(false); }}
         className={`w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:scale-105 transition-all duration-300 relative ${heroVisible ? "opacity-0 pointer-events-none scale-75" : "opacity-100 scale-100"}`}
-        title={isRTL ? "تحدث مع حمزاوي" : "Chat with Hamzawi"}
+        title={isRTL ? "تحدث مع PostLab" : "Chat with PostLab"}
       >
         {open ? (
           <X className="w-6 h-6 text-white" />
         ) : (
           <>
-            <span className="text-xl font-black text-white">ح</span>
+            <span className="text-xl font-black text-white">P</span>
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-background" />
             {unread && (
               <span className="absolute -top-1 -left-1 w-4 h-4 bg-red-500 rounded-full border-2 border-background animate-pulse" />

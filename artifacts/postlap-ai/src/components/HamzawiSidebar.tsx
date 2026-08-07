@@ -107,9 +107,9 @@ export default function HamzawiSidebar({
         <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary">
-              ح
+              P
             </div>
-            <span className="font-bold text-foreground text-sm">حمزاوي</span>
+            <span className="font-bold text-foreground text-sm">PostLab</span>
           </div>
           <button
             onClick={onClose}
