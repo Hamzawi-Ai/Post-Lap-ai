@@ -14,9 +14,9 @@ import {
   hamzawiMessagesTable,
   userBrandMemoryTable,
   companiesTable,
-  planLevel,
   type Plan,
 } from "@workspace/db";
+import { effectiveLevel } from "../beta/access";
 import { eq, desc, and } from "drizzle-orm";
 import { collectBrandAssets, type BrandAssets } from "../media/assetReader";
 import { isBrandProfileComplete, type BrandMemoryData } from "../brand/brain";
@@ -51,7 +51,8 @@ export async function buildChatContext(params: {
   const { user, sessionId, conversationId } = params;
 
   const plan = (user?.plan ?? "visitor") as Plan;
-  const level = planLevel(plan);
+  // Beta-aware capability level (beta users get full access without a plan change).
+  const level = effectiveLevel(user);
 
   const memory = user
     ? await db

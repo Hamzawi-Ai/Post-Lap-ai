@@ -86,6 +86,9 @@ interface HamzawiChatProps {
   } | null;
   whatsapp: string;
   userPlan?: string;
+  /** Temporary Beta access — elevates the effective capability level to full
+   * (level 4) without faking a paid plan. Mirrors the server-side beta grant. */
+  betaAccess?: boolean;
   onFileCheck?: (file: File) => void;
   checking?: boolean;
   heroVisible?: boolean;
@@ -120,7 +123,11 @@ function planLevel(plan?: string): number {
   return levels[plan ?? "visitor"] ?? 1;
 }
 
-export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, onFileCheck, checking, heroVisible, forceOpen, embedded, conversationId, onConversationCreated }: HamzawiChatProps) {
+// Temporary Beta access — full capability level (content-plan equivalent).
+// Mirrors BETA_LEVEL in api-server/src/services/beta/access.ts.
+const BETA_LEVEL = 4;
+
+export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, betaAccess, onFileCheck, checking, heroVisible, forceOpen, embedded, conversationId, onConversationCreated }: HamzawiChatProps) {
   const [open, setOpen] = useState(!!embedded);
   const [messages, setMessages] = useState<ChatBlock[]>([]);
   const [input, setInput] = useState("");
@@ -153,7 +160,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   const adCheckFileRef = useRef<File | null>(null);
 
   const t = i18n[lang];
-  const level = planLevel(userPlan);
+  // Beta users get full capability level without faking a paid plan.
+  const level = Math.max(planLevel(userPlan), betaAccess ? BETA_LEVEL : 0);
 
   /** Reads a File into a base64 data URL (used to attach ad-check images to chat). */
   function fileToDataUrl(file: File): Promise<string | null> {

@@ -25,6 +25,7 @@ interface LocalUser {
   plan: string;
   gender: string | null;
   is_active: boolean;
+  beta_access?: boolean;
   trials_remaining: number;
   total_checks: number;
   brand_onboarded?: boolean;
@@ -358,7 +359,7 @@ export default function Home() {
     if (!user) {
       const trials = getTrials();
       if (trials <= 0) { setTrialBlockModal(true); return; }
-    } else if (["visitor", "registered"].includes(user.plan) && user.trials_remaining <= 0) {
+    } else if (["visitor", "registered"].includes(user.plan) && user.trials_remaining <= 0 && !user.beta_access) {
       setTrialBlockModal(true); return;
     }
 
@@ -540,6 +541,7 @@ export default function Home() {
             checkResult={checkResult}
             whatsapp={whatsapp}
             userPlan={user?.plan}
+            betaAccess={user?.beta_access === true}
             onFileCheck={handleFile}
             checking={checking}
             conversationId={activeConversationId}

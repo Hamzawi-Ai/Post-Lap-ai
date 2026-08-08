@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 import { planLevel, type Plan } from "@workspace/db";
+import { effectiveLevel } from "../services/beta/access";
 import { getUserFromToken } from "../middleware/auth";
 import { getOpenAI } from "../services/ai/client";
 import type OpenAI from "openai";
@@ -325,7 +326,8 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   }
 
   const plan = user.plan as Plan;
-  const level = planLevel(plan);
+  // Beta-aware capability level (beta users get full access without a plan change).
+  const level = effectiveLevel(user);
   // Text generation requires Smart Fix / professional or higher (level 3+)
   if (level < 3) {
     res.status(403).json({ error: "توليد النصوص متاح من خطة Smart Fix فأعلى" });
@@ -397,7 +399,8 @@ router.post("/generate-text", async (req, res): Promise<void> => {
 router.post("/image-gen", async (req, res): Promise<void> => {
   const user = await getUserFromToken(req.headers.authorization);
   const plan = (user?.plan ?? "visitor") as Plan;
-  const level = planLevel(plan);
+  // Beta-aware capability level (beta users get full access without a plan change).
+  const level = effectiveLevel(user);
 
   const {
     mode,

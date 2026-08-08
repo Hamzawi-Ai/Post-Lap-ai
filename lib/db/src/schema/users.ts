@@ -19,6 +19,11 @@ export const usersTable = pgTable("users", {
   company_id: integer("company_id"),
   gender: text("gender"),
   is_active: boolean("is_active").notNull().default(true),
+  // Temporary Beta-access flag: grants full PostLab capability to active Google
+  // users while the product is in open beta (gated by BETA_ACCESS_ENABLED).
+  // Never fakes a paid plan — the account's plan stays "registered". See
+  // api-server/src/services/beta/access.ts. Removed with the flag when beta ends.
+  beta_access: boolean("beta_access").notNull().default(false),
   trials_remaining: integer("trials_remaining").notNull().default(6),
   total_checks: integer("total_checks").notNull().default(0),
   last_check_at: timestamp("last_check_at"),

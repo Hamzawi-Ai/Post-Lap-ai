@@ -33,3 +33,21 @@ export async function getUserFromToken(authHeader?: string) {
 export function requireUser(req: { headers: { authorization?: string } }): Promise<typeof usersTable.$inferSelect | null> {
   return getUserFromToken(req.headers.authorization);
 }
+
+/**
+ * Verify that the presented Bearer token is a valid admin (owner) JWT —
+ * the same credential `/api/admin/login` issues and `requireAdmin` enforces.
+ * Non-blocking boolean form so routes can detect the supervisory context
+ * without rejecting the request. Never trusts client-supplied claims: only a
+ * SESSION_SECRET-signed token carrying `role: "admin"` passes.
+ */
+export function isAdminToken(authHeader?: string): boolean {
+  if (!authHeader?.startsWith("Bearer ")) return false;
+  try {
+    const token = authHeader.slice(7);
+    const decoded = jwt.verify(token, SESSION_SECRET) as { role?: string };
+    return decoded.role === "admin";
+  } catch {
+    return false;
+  }
+}

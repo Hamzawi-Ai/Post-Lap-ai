@@ -6,9 +6,17 @@ import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 import { planLevel } from "@workspace/db";
+import { hasBetaAccess } from "../services/beta/access";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
-import { getUserFromToken } from "../middleware/auth";
+import { getUserFromToken, isAdminToken } from "../middleware/auth";
+import {
+  isOperationalQuestion,
+  detectPeriod,
+  wantsTopAccounts,
+  summarizeForHamzawi,
+  OPERATIONAL_DECLINE_GUARD,
+} from "../services/operational/supervisor";
 import { MediaService } from "../services/media/MediaService";
 import { getOpenAI } from "../services/ai/client";
 import type OpenAI from "openai";
@@ -388,6 +396,12 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
   const user = await getUserFromToken(req.headers.authorization);
 
+  // Supervisory context: the owner/admin JWT (role: "admin", signed with
+  // SESSION_SECRET — same credential as requireAdmin). An admin token carries
+  // no userId, so the owner chats as a guest session WITH read access to
+  // operational intelligence. Ordinary customers/guests are never supervisory.
+  const isSupervisor = !user && isAdminToken(req.headers.authorization);
+
   // Authenticated users follow a clean token-based flow: the JWT is the sole
   // credential and no session cookie is set. Any stale hamzawi_session cookie
   // (e.g. from an earlier guest visit, or a user_* cookie left by the previous
@@ -481,7 +495,38 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    const systemPrompt = composeSystemPrompt(plan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName);
+    // On-demand operational access (supervisory bridge). Operational facts are
+    // fetched ONLY when a valid admin JWT is present AND the owner asks an
+    // operational question — never injected into normal conversations, never
+    // persisted. Ordinary customers never reach OperationalMetrics; instead they
+    // get a polite decline guard so Hamzawi never fabricates platform stats.
+    const operationalQuestion = isOperationalQuestion(message ?? "");
+    let operationalBlock = "";
+    if (isSupervisor) {
+      if (operationalQuestion) {
+        operationalBlock = await summarizeForHamzawi(detectPeriod(message ?? ""), {
+          includeTopAccounts: wantsTopAccounts(message ?? ""),
+        });
+      }
+    }
+
+    // The supervisor is not a paying customer: present the full-capability
+    // plan text so no registration/upsell nudge is aimed at the platform owner.
+    const promptPlan = isSupervisor ? "agency" : plan;
+    const systemPrompt =
+      composeSystemPrompt(promptPlan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName) +
+      // Temporary Beta override: beta users (plan "registered" + beta_access) have
+      // full product access without a subscription — suppress any upgrade nudge
+      // that the plan-level capability text would otherwise produce.
+      (user && hasBetaAccess(user)
+        ? `\n\n[وضع وصول تجريبي (Beta): هذا المستخدم مسجّل عبر Google ويحظى بوصول تجريبي كامل لكل قدرات PostLab — فحص الإعلانات، توليد النصوص، توليد الصور، وتصميم المنشورات بهوية نشاطه — دون اشتراك مدفوع. لا تعرض عليه ترقية ولا تذكره بخطط أو أسعار مدفوعة ولا تحدّ قدراته كمسجّل عادي.]`
+        : "") +
+      (isSupervisor
+        ? `\n\n[وضع مساعد المالك (Supervisory): المستخدم الحالي هو مالك/مشرف PostLab. يمكنك الإجابة عن بيانات المنصة التشغيلية عند سؤاله عنها.]` +
+          (operationalBlock ? `\n\n${operationalBlock}` : "")
+        : operationalQuestion
+          ? `\n\n${OPERATIONAL_DECLINE_GUARD}`
+          : "");
 
     // Stored history with attached-image markers re-expanded as image parts
     // (generated-image markers are always stripped).

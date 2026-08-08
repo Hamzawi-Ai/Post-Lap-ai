@@ -7,6 +7,7 @@ import { logger } from "../lib/logger";
 import { getUserFromToken } from "../middleware/auth";
 import { autoCreateCompanyForUser, isBrandProfileComplete } from "../services/brand/brain";
 import { AccountDeletionService } from "../services/account/AccountDeletionService";
+import { isBetaEnabled } from "../services/beta/access";
 
 const router: IRouter = Router();
 
@@ -24,6 +25,7 @@ async function getUserPayload(user: typeof usersTable.$inferSelect) {
     plan: user.plan,
     gender: user.gender ?? null,
     is_active: user.is_active,
+    beta_access: user.beta_access,
     trials_remaining: user.trials_remaining,
     total_checks: user.total_checks,
     last_check_at: user.last_check_at?.toISOString() ?? null,
@@ -73,12 +75,29 @@ router.post("/auth/google", async (req, res): Promise<void> => {
           name: payload.name ?? "",
           plan: "registered",
           is_active: true,
+          beta_access: isBetaEnabled(),
           trials_remaining: 6,
           total_checks: 0,
         })
         .returning();
 
       await autoCreateCompanyForUser(user.id, payload.name ?? "");
+    }
+
+    // Temporary Beta access (idempotent): active Google users get the full-access
+    // flag whenever the beta toggle is on. Disabled accounts are never flagged
+    // (and their access is denied by the auth middleware on every endpoint).
+    if (isBetaEnabled() && user.is_active && !user.beta_access) {
+      try {
+        const [updated] = await db
+          .update(usersTable)
+          .set({ beta_access: true })
+          .where(eq(usersTable.id, user.id))
+          .returning();
+        if (updated) user = updated;
+      } catch (err) {
+        logger.error({ err }, "Failed to grant beta access on login");
+      }
     }
 
     // Reset daily trials if needed
@@ -191,7 +210,23 @@ router.get("/users/me", async (req, res): Promise<void> => {
       return;
     }
 
-    res.json(await getUserPayload(user));
+    // Temporary Beta access (idempotent lazy grant): any active user gets the
+    // full-access flag while the beta toggle is on — no re-login required.
+    let activeUser = user;
+    if (isBetaEnabled() && !user.beta_access) {
+      try {
+        const [updatedUser] = await db
+          .update(usersTable)
+          .set({ beta_access: true })
+          .where(eq(usersTable.id, user.id))
+          .returning();
+        if (updatedUser) activeUser = updatedUser;
+      } catch (err) {
+        logger.error({ err }, "Failed to grant beta access on /users/me");
+      }
+    }
+
+    res.json(await getUserPayload(activeUser));
   } catch {
     res.status(401).json({ error: "رمز الدخول غير صالح" });
   }
