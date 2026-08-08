@@ -1,0 +1,568 @@
+# POSTLAB OPERATIONAL INTELLIGENCE — DATABASE MIGRATION ONLY
+
+You are working in the Replit runtime environment for PostLab AI.
+
+The code for PostLab Operational Intelligence has already been implemented in the repository and has already passed typecheck/build in OpenCode.
+
+Your task now is ONLY to safely apply the existing database schema/migration for PostLab Operational Intelligence to the CURRENT Replit database and verify that the migration did not alter any existing application paths, integrations, configuration, or customer data.
+
+This is a DATABASE MIGRATION + INTEGRITY VERIFICATION task.
+
+Do NOT use this task as an opportunity to refactor, clean up, fix unrelated issues, or change application behavior.
+
+==================================================
+1. CRITICAL SCOPE
+==================================================
+
+DO NOT modify application architecture.
+
+DO NOT modify source code unless absolutely required to apply an already-existing migration.
+
+DO NOT redesign the database.
+
+DO NOT create a new migration design.
+
+DO NOT change:
+
+- API routes
+- authentication
+- authorization
+- PostLab Brain
+- Hamzawi
+- subscriptions
+- plans
+- pricing
+- validator.ts
+- account deletion
+- Company/Brand Memory
+- image generation
+- Gemini
+- Nano Banana
+- MediaService behavior
+- frontend
+- deployment configuration
+- .replit
+- ports
+- proxy
+- domains/DNS
+- database connection configuration
+- external integrations
+
+DO NOT change existing runtime wiring.
+
+DO NOT change existing paths or connections.
+
+The only intended database change is the existing PostLab Operational Intelligence schema.
+
+==================================================
+2. EXISTING MIGRATION
+==================================================
+
+The repository already contains:
+
+- the Operational Intelligence database schema
+- the existing migration for operational_events
+
+Expected table:
+
+operational_events
+
+Use the existing repository schema and migration as the ONLY source of truth.
+
+DO NOT invent a different table structure.
+
+DO NOT create a replacement migration.
+
+DO NOT rename the table.
+
+DO NOT modify the schema simply because you prefer another design.
+
+==================================================
+3. BEFORE MIGRATION — INSPECT FIRST
+==================================================
+
+Before applying anything, inspect:
+
+1. Current database/schema state.
+2. Existing operational_events schema definition.
+3. Existing operational_events migration file.
+4. Repository's established database migration convention.
+5. Whether operational_events already exists in the current Replit database.
+6. Whether the existing database schema is otherwise consistent with the repository.
+
+If operational_events already exists:
+
+- compare its structure with the repository schema
+- verify columns
+- verify types
+- verify indexes
+- verify constraints
+- DO NOT recreate it
+- DO NOT drop it
+- DO NOT destroy existing operational data
+
+If operational_events does not exist:
+
+- apply the EXISTING repository migration using the project's established migration mechanism.
+
+Do not improvise.
+
+==================================================
+4. NON-DESTRUCTIVE REQUIREMENT
+==================================================
+
+The migration MUST be non-destructive.
+
+DO NOT:
+
+- DROP TABLE
+- DROP DATABASE
+- TRUNCATE
+- reset the database
+- delete users
+- delete companies
+- delete conversations
+- delete messages
+- delete media
+- delete checks
+- modify existing customer records
+- rewrite existing tables
+- rename existing tables
+- remove existing columns
+- remove existing indexes
+- remove existing foreign keys
+
+Do not run broad schema reset commands.
+
+Do not use a destructive database reset command.
+
+Use the project's normal migration mechanism only.
+
+==================================================
+5. APPLY THE MIGRATION
+==================================================
+
+If the table is missing:
+
+Apply the repository's existing operational_events migration.
+
+Follow the existing project convention.
+
+If the project convention uses Drizzle tooling, use the appropriate existing Drizzle migration/push mechanism already used by this repository.
+
+Do NOT create another migration.
+
+Do NOT manually recreate the table with ad-hoc SQL unless the repository's established migration process explicitly requires it.
+
+==================================================
+6. VERIFY operational_events
+==================================================
+
+After migration, verify:
+
+1. operational_events exists.
+2. Every expected column exists.
+3. Column types match the repository schema.
+4. Nullability/defaults match.
+5. Expected indexes exist.
+6. Expected constraints exist.
+7. The API server can access the table through the existing database connection.
+8. No unrelated schema changes were introduced.
+
+Do not generate real AI requests just to test the table.
+
+Do not generate images.
+
+Do not send customer-facing requests.
+
+==================================================
+7. POST-MIGRATION INTEGRITY CHECK — CRITICAL
+==================================================
+
+After applying the migration, perform a repository/runtime integrity check to confirm that ONLY the intended database schema change was applied.
+
+The purpose is to make sure this migration did NOT accidentally alter existing operational paths or connections.
+
+Verify that the following remain unchanged:
+
+- API routes
+- API route registration
+- /api/hamzawi/chat
+- /api/check
+- /api/generate-text
+- /api/image-gen
+- authentication flow
+- authorization middleware
+- PostLab Brain
+- Hamzawi chat flow
+- Company/Brand Memory
+- AccountDeletionService
+- subscription/plan logic
+- validator.ts
+- image-generation provider
+- Gemini configuration
+- Nano Banana configuration
+- MediaService behavior
+- storage paths
+- database connection configuration
+- Replit configuration
+- .replit
+- deployment configuration
+- ports
+- proxy configuration
+- domains/DNS
+- frontend routes/components
+- external integrations
+
+IMPORTANT:
+
+Do not merely say these areas "should be unchanged".
+
+Verify them using repository state and database/schema inspection where possible.
+
+==================================================
+8. GIT INTEGRITY CHECK
+==================================================
+
+If Git is available, inspect:
+
+- git status --short
+- git diff --stat
+- git diff
+
+The expected result is:
+
+NO unexpected application-code changes.
+
+The migration task should not modify unrelated source files.
+
+If any files changed unexpectedly:
+
+DO NOT automatically revert them.
+
+DO NOT attempt to "fix" them.
+
+Report every changed file and explain exactly why it changed.
+
+If the changes are unrelated to this migration, STOP and report them.
+
+==================================================
+9. DATABASE INTEGRITY CHECK
+==================================================
+
+Inspect the database schema after migration.
+
+Verify:
+
+- no existing table was dropped
+- no existing table was renamed
+- no existing column was removed
+- no existing column was unexpectedly changed
+- no existing foreign key was removed
+- no existing index was removed
+- no existing constraint was removed
+- no existing customer data was modified
+
+The intended result is:
+
+EXISTING DATABASE
++
+operational_events
++
+its intended indexes/constraints
+=
+FINAL DATABASE
+
+Everything else must remain intact.
+
+If unexpected schema changes are detected:
+
+STOP.
+
+Do NOT attempt to repair or revert them automatically.
+
+Report the exact changes and wait for instructions.
+
+==================================================
+10. EXISTING CUSTOMER DATA SAFETY
+==================================================
+
+Do NOT modify customer data.
+
+Before/after verification should confirm that the migration did not affect:
+
+- users
+- companies
+- user_brand_memory
+- business_profiles
+- hamzawi_conversations
+- hamzawi_messages
+- media_assets
+- checks
+- existing account/subscription records
+
+Do not expose customer data in the final report.
+
+Only report structural/data-integrity confirmation.
+
+==================================================
+11. APPLICATION PATH INTEGRITY
+==================================================
+
+Confirm that the migration did not modify or require changes to:
+
+### Authentication
+- Google authentication
+- JWT
+- auth middleware
+- session behavior
+
+### AI
+- Hamzawi chat
+- PostLab AI Persona
+- PostLab Brain
+- contextBuilder
+- Brand Memory
+- operational intelligence service
+
+### Image Generation
+- Gemini
+- Nano Banana
+- image provider
+- image model
+- image storage
+- generation pipeline
+
+### Account Management
+- account deletion
+- admin deletion
+- self deletion
+- company ownership
+
+### Subscriptions
+- plans
+- plan levels
+- validator
+- trial logic
+- subscription expiry
+- admin plan management
+
+### Infrastructure
+- Replit
+- .replit
+- ports
+- proxy
+- deployment
+- domains/DNS
+- DB connection
+- environment configuration
+
+These areas must remain untouched.
+
+==================================================
+12. NO LIVE PRODUCT TESTING
+==================================================
+
+Do NOT:
+
+- open the deployed PostLab application
+- use the browser to test the production/deployed application
+- send live chat messages
+- generate a real image
+- create a real customer account
+- delete a real customer account
+- perform customer-facing API tests
+
+This task is only:
+
+DATABASE MIGRATION
++
+SCHEMA VERIFICATION
++
+INTEGRITY CHECK
+
+==================================================
+13. DO NOT TOUCH IMAGE GENERATION
+==================================================
+
+Do NOT test or modify:
+
+- Gemini API key configuration
+- NANO_BANANA_API_KEY
+- GEMINI_API_KEY
+- image provider
+- model selection
+- image-generation parameters
+- image-generation error handling
+
+Task #43 remains separate.
+
+==================================================
+14. DO NOT TOUCH ACCOUNT DELETION
+==================================================
+
+The complete AccountDeletionService has already been implemented.
+
+Do NOT modify:
+
+- AccountDeletionService
+- deletion routes
+- MediaService deletion behavior
+- company deletion behavior
+- checks cleanup
+- operational_events deletion behavior
+
+The migration must simply make the operational_events table available to the already-implemented code.
+
+==================================================
+15. DO NOT TOUCH SUBSCRIPTIONS
+==================================================
+
+Do NOT modify:
+
+- plan definitions
+- plan levels
+- pricing
+- validator
+- trial logic
+- subscription expiry
+- admin plan mapping
+- Beta access behavior
+
+Subscription work is a separate task.
+
+==================================================
+16. VALIDATION
+==================================================
+
+After migration and integrity verification:
+
+Run safe repository-level validation if available:
+
+- pnpm run typecheck
+- pnpm run build
+
+Do NOT modify source code to make these pass.
+
+If a pre-existing warning/error appears that is unrelated to this migration:
+
+- do not fix it
+- report it clearly
+
+If typecheck/build fails because of something caused by this migration:
+
+- stop
+- report the exact error
+- do not make unrelated fixes
+
+==================================================
+17. IF MIGRATION CANNOT BE SAFELY APPLIED
+==================================================
+
+STOP.
+
+Do not improvise.
+
+Do not:
+
+- create a replacement table
+- change schema definitions
+- reset the DB
+- drop/recreate tables
+- modify unrelated migrations
+- modify application code to bypass the problem
+
+Report:
+
+- what was found
+- why migration cannot safely proceed
+- exact error
+- what decision is required
+
+==================================================
+18. FINAL REPORT
+==================================================
+
+Return a concise but complete report with these sections:
+
+A. MIGRATION STATUS
+- Was operational_events already present?
+- If not, was the existing migration applied successfully?
+
+B. MIGRATION MECHANISM
+- Exact command/tool/mechanism used.
+- Confirm it was the repository's existing migration mechanism.
+
+C. TABLE VERIFICATION
+- operational_events exists: YES/NO
+- columns verified: YES/NO
+- types verified: YES/NO
+- constraints verified: YES/NO
+- indexes verified: YES/NO
+
+D. DATABASE INTEGRITY
+- Existing tables unchanged: YES/NO
+- Existing columns unchanged: YES/NO
+- Existing foreign keys unchanged: YES/NO
+- Existing indexes unchanged: YES/NO
+- Existing customer data untouched: YES/NO
+
+E. APPLICATION INTEGRITY
+Confirm whether the following remained unchanged:
+- API routes
+- Hamzawi
+- PostLab Brain
+- Brand Memory
+- Account deletion
+- subscriptions
+- image generation
+- authentication
+- authorization
+- MediaService
+- storage paths
+
+F. INFRASTRUCTURE INTEGRITY
+Confirm:
+- Replit config unchanged
+- .replit unchanged
+- deployment unchanged
+- ports unchanged
+- proxy unchanged
+- domains/DNS unchanged
+- database connection unchanged
+- environment/secrets unchanged
+
+G. GIT INTEGRITY
+Report:
+- git status --short
+- git diff --stat
+- unexpected files changed: YES/NO
+- if YES, list every file
+
+H. VALIDATION
+- typecheck: PASS/FAIL
+- build: PASS/FAIL
+- unrelated pre-existing warnings/errors, if any
+
+I. WARNINGS
+List any warnings or anomalies.
+
+J. FINAL DATABASE STATUS
+State clearly:
+
+"operational_events is now available to the existing PostLab Operational Intelligence code, and no unrelated application/runtime/database paths were changed."
+
+Only state this if the verification actually proves it.
+
+==================================================
+FINAL RULE
+==================================================
+
+This is a migration task, NOT a development task.
+
+Do not improve anything.
+Do not refactor anything.
+Do not fix unrelated issues.
+Do not change existing wiring.
+
+Add/verify operational_events and leave the rest of PostLab exactly as it was.
