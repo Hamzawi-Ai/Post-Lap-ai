@@ -1,6 +1,5 @@
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
@@ -10,30 +9,16 @@ import Terms from "@/pages/terms";
 import Onboarding from "@/pages/onboarding";
 import CompanySettings from "@/pages/company";
 import BrandIdentity from "@/pages/brand";
-import HamzawiWorkspace from "@/pages/hamzawi";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
-
-// The /hamzawi route is the internal owner assistant. Customers must never
-// reach it: anyone without an admin session is redirected to the PostLab home.
-const ADMIN_TOKEN_KEY = "postlap_admin_token";
-
-function OwnerOnly({ children }: { children: ReactNode }) {
-  if (!localStorage.getItem(ADMIN_TOKEN_KEY)) {
-    return <Redirect to="/" replace />;
-  }
-  return <>{children}</>;
-}
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/hamzawi">
-        <OwnerOnly>
-          <HamzawiWorkspace />
-        </OwnerOnly>
+        <Redirect to="/khtfa-secure-portal/hamzawi" replace />
       </Route>
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/company" component={CompanySettings} />
