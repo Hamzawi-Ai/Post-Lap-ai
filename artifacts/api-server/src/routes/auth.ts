@@ -149,6 +149,18 @@ router.post("/dev/login", async (_req, res): Promise<void> => {
   }
 });
 
+// POST /auth/logout — client-side session teardown.
+// The JWT is stateless (the client drops it from localStorage), so this only
+// clears the server-set guest `hamzawi_session` cookie to guarantee session
+// cleanup on logout. Idempotent and token-optional — logout always succeeds.
+router.post("/auth/logout", (_req, res): void => {
+  res.setHeader(
+    "Set-Cookie",
+    `hamzawi_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
+  );
+  res.json({ ok: true });
+});
+
 // Get current user from JWT
 router.get("/users/me", async (req, res): Promise<void> => {
   const authHeader = req.headers.authorization;
@@ -168,6 +180,11 @@ router.get("/users/me", async (req, res): Promise<void> => {
 
     if (!user) {
       res.status(401).json({ error: "المستخدم غير موجود" });
+      return;
+    }
+
+    if (!user.is_active) {
+      res.status(401).json({ error: "تم تعطيل الحساب" });
       return;
     }
 

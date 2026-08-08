@@ -24,6 +24,12 @@ export function setToken(token: string): void {
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  // Best-effort server-side session cleanup (clears the guest session cookie).
+  try {
+    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  } catch {
+    // no-op — clearing local auth always succeeds
+  }
 }
 
 export function handleAuthError(res: Response): boolean {

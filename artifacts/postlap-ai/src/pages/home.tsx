@@ -166,6 +166,12 @@ export default function Home() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setUser(null);
+    // Best-effort server-side session cleanup (clears the guest session cookie).
+    try {
+      fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    } catch {
+      // no-op — logout succeeds regardless
+    }
     toast({ title: "تم تسجيل الخروج" });
   }
 

@@ -272,8 +272,8 @@ router.post("/admin/users/:id/reset-limits", requireAdmin, async (req, res): Pro
   res.json(formatUser(user));
 });
 
-// Usage stats
-router.get("/stats", async (_req, res): Promise<void> => {
+// Usage stats — admin only (aggregate metrics, no longer anonymously exposed).
+router.get("/stats", requireAdmin, async (_req, res): Promise<void> => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 

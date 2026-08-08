@@ -107,13 +107,28 @@ function getVerifiedSessionId(req: { headers: { cookie?: string } }): string | n
   const match = cookieHeader.match(/hamzawi_session=([^;]+)/);
   if (!match?.[1]) return null;
   const decoded = decodeURIComponent(match[1]);
-  return verifySessionId(decoded);
+  const raw = verifySessionId(decoded);
+  // The guest cookie may ONLY reference a genuine guest session (anon_*).
+  // Rejecting any user_* session id prevents a stale cookie (left behind by an
+  // earlier authenticated request after client-side logout) from scoping a
+  // guest to an authenticated user's chat data — a cross-user leak.
+  if (!raw || !raw.startsWith("anon_")) return null;
+  return raw;
 }
 
 function setSessionCookie(res: { setHeader: (k: string, v: string) => void }, signed: string) {
+  const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
   res.setHeader(
     "Set-Cookie",
-    `hamzawi_session=${encodeURIComponent(signed)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
+    `hamzawi_session=${encodeURIComponent(signed)}; Path=/; HttpOnly; SameSite=Lax${secure}; Max-Age=${60 * 60 * 24 * 30}`
+  );
+}
+
+/** Delete the hamzawi_session cookie (authenticated users and logout). */
+function clearSessionCookie(res: { setHeader: (k: string, v: string) => void }) {
+  res.setHeader(
+    "Set-Cookie",
+    `hamzawi_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`
   );
 }
 
@@ -536,24 +551,25 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
   const user = await getUserFromToken(req.headers.authorization);
 
+  // Authenticated users follow a clean token-based flow: the JWT is the sole
+  // credential and no session cookie is set. Any stale hamzawi_session cookie
+  // (e.g. from an earlier guest visit, or a user_* cookie left by the previous
+  // implementation) is deleted so it can never leak into a later guest session.
+  // Guests keep the signed anon_* cookie for session-scoped history continuity.
   let sessionRawId: string;
-  let signedCookie: string;
   if (user) {
     sessionRawId = `user_${user.id}`;
-    signedCookie = signSessionId(sessionRawId);
+    clearSessionCookie(res);
   } else {
     const existing = getVerifiedSessionId(req);
     if (existing) {
       sessionRawId = existing;
-      signedCookie = signSessionId(existing);
     } else {
       const created = generateSignedSession();
       sessionRawId = created.rawId;
-      signedCookie = created.signed;
     }
+    setSessionCookie(res, signSessionId(sessionRawId));
   }
-
-  setSessionCookie(res, signedCookie);
 
   // Resolve conversation for authenticated users only.
   // Guest users (no auth) never receive a conversation_id — their messages are session-scoped.

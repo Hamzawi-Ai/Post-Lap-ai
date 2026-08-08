@@ -14,7 +14,11 @@ export async function getUserFromToken(authHeader?: string) {
       .from(usersTable)
       .where(eq(usersTable.id, decoded.userId))
       .limit(1);
-    return user ?? null;
+    if (!user) return null;
+    // A deactivated account must not retain session access — treat its token
+    // as invalid so every token-protected endpoint refuses it.
+    if (!user.is_active) return null;
+    return user;
   } catch {
     return null;
   }
