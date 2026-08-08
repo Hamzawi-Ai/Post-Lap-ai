@@ -145,8 +145,25 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   const attachInputRef = useRef<HTMLInputElement>(null);
   const checkAdInputRef = useRef<HTMLInputElement>(null);
 
+  // Image the user attached that will be sent with the next chat message.
+  // Set after a paperclip upload, cleared once consumed by sendMessage.
+  const pendingAttachmentRef = useRef<{ url?: string; dataUrl?: string } | null>(null);
+  // Last file selected for the ad-check button, so the follow-up chat turn can
+  // attach the same image (the check endpoint itself does not persist it).
+  const adCheckFileRef = useRef<File | null>(null);
+
   const t = i18n[lang];
   const level = planLevel(userPlan);
+
+  /** Reads a File into a base64 data URL (used to attach ad-check images to chat). */
+  function fileToDataUrl(file: File): Promise<string | null> {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+    });
+  }
 
   useEffect(() => {
     setLang(detectLanguage());
@@ -416,7 +433,21 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     const autoMsg = lang === "ar"
       ? `تحقق من نتيجة فحص الإعلان وأخبرني بتوصياتك`
       : `Check the ad review result and tell me your recommendations`;
-    sendMessage(autoMsg, report);
+    // Attach the checked ad image to this follow-up turn so Hamzawi can see the
+    // actual ad (the check endpoint analyses it but does not persist it for chat).
+    const file = adCheckFileRef.current;
+    adCheckFileRef.current = null;
+    if (file && file.type.startsWith("image/")) {
+      fileToDataUrl(file).then((dataUrl) => {
+        if (dataUrl) {
+          sendMessage(autoMsg, report, { dataUrl });
+        } else {
+          sendMessage(autoMsg, report);
+        }
+      });
+    } else {
+      sendMessage(autoMsg, report);
+    }
   }, [checkResult]);
 
   useEffect(() => {
@@ -427,11 +458,17 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
 
   async function sendMessage(
     text?: string,
-    checkReport?: HamzawiChatProps["checkResult"] | null
+    checkReport?: HamzawiChatProps["checkResult"] | null,
+    attachment?: { url?: string; dataUrl?: string } | null,
   ) {
     const msgText = text ?? input.trim();
     if (!msgText) return;
     if (!text) setInput("");
+
+    // The uploaded image rides along with the next outgoing message, so the AI
+    // always receives it. One-shot: consumed once sent (unless explicitly passed).
+    const attach = attachment ?? pendingAttachmentRef.current ?? null;
+    if (!attachment) pendingAttachmentRef.current = null;
 
     setMessages((prev) => [...prev, chatBlock("user", msgText)]);
     setLoading(true);
@@ -447,6 +484,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         body: JSON.stringify({
           message: msgText,
           checkReport: checkReport ?? null,
+          ...(attach ? { attachment: attach } : {}),
           ...(conversationId ? { conversationId: parseInt(conversationId, 10) } : {}),
         }),
       });
@@ -510,6 +548,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     if (!file) return;
     e.target.value = "";
 
+    // Remember the file so the auto follow-up chat message can attach the same
+    // image to the AI turn (the /api/check endpoint does not persist it).
+    adCheckFileRef.current = file;
+
     // Open chat if not already open
     if (!open) {
       setOpen(true);
@@ -570,6 +612,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       addHamzawi(lang === "ar" ? "حدث خطأ أثناء رفع الصورة." : "Error uploading image.");
       return;
     }
+
+    // Attach the uploaded image to the next chat message so Hamzawi sees it
+    // immediately (not only in later brand-asset vision turns).
+    pendingAttachmentRef.current = { url };
 
     if (level >= 4) {
       // During onboarding (step 7) or post-onboarding for level 4+:

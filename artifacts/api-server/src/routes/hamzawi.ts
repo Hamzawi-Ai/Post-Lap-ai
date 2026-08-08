@@ -11,7 +11,9 @@ import { readFileSync, unlinkSync, existsSync } from "fs";
 import { getUserFromToken } from "../middleware/auth";
 import { MediaService } from "../services/media/MediaService";
 import { getOpenAI } from "../services/ai/client";
+import type OpenAI from "openai";
 import { buildChatContext } from "../services/ai/contextBuilder";
+import { uploadsUrlToBase64 } from "../services/media/assetReader";
 // Side-effect import: registers the beta tool metadata into the ToolRegistry
 // at server start. Registration is idempotent and required by the Reasoner (P1).
 import "../services/ai/tools";
@@ -404,14 +406,120 @@ function parseGeneratePost(reply: string): {
   return { cleanedReply, description };
 }
 
+// ─── Chat image attachments ───────────────────────────────────────────────────
+// A user uploads an image (ad-check via the scan button, or the paperclip in
+// chat). The image must reach the vision model, otherwise Hamzawi genuinely
+// cannot see it and answers "لا أستطيع رؤية الصورة". Root-cause fix: the chat
+// turn now accepts an `attachment` ({ url } for an uploaded /uploads/… asset,
+// or { dataUrl } for a raw base64 image) and ALWAYS passes it to the vision
+// model when present. The reference is also persisted as a marker inside the
+// stored user message so later turns keep seeing it (expanded by
+// buildHistoryForAI below, stripped from visible text by the frontend parser).
+
+const ATTACHED_IMAGE_MARKER_RE = /%%ATTACHED_IMAGE%%(\{[\s\S]*?\})%%END%%/g;
+
+type AiContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
+interface ResolvedAttachment {
+  mimeType: string;
+  data: string;
+  /** Present when the attachment references an uploaded asset (persisted form). */
+  url?: string;
+}
+
+/**
+ * Resolve an optional chat attachment (an uploaded /uploads/… URL or a raw
+ * base64 data URL) to image data the vision model can read. Returns null when
+ * nothing usable is provided. Never throws — a bad attachment degrades to a
+ * text-only turn.
+ */
+async function resolveAttachment(
+  attachment?: { url?: string; dataUrl?: string } | null,
+): Promise<ResolvedAttachment | null> {
+  if (!attachment) return null;
+  if (typeof attachment.url === "string" && attachment.url.startsWith("/uploads/")) {
+    const img = await uploadsUrlToBase64(attachment.url);
+    if (img) return { ...img, url: attachment.url };
+  }
+  if (typeof attachment.dataUrl === "string" && attachment.dataUrl.startsWith("data:image/")) {
+    const m = attachment.dataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+    if (m && m[2]) return { mimeType: m[1], data: m[2] };
+  }
+  return null;
+}
+
+/** Build the persistence marker for an attached image (URL form when available). */
+function buildAttachmentMarker(attachment: ResolvedAttachment): string {
+  const payload = attachment.url
+    ? { url: attachment.url }
+    : { data: `data:${attachment.mimeType};base64,${attachment.data}` };
+  return `%%ATTACHED_IMAGE%%${JSON.stringify(payload)}%%END%%`;
+}
+
+/**
+ * Convert stored conversation rows into OpenAI messages. Generated-image
+ * markers are always stripped (never re-sent); attached-image markers are
+ * re-expanded into image content parts so the vision model keeps seeing images
+ * the user uploaded earlier in the conversation.
+ */
+async function buildHistoryForAI(
+  rows: typeof hamzawiMessagesTable.$inferSelect[],
+): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
+  const out: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  for (const row of [...rows].reverse()) {
+    const raw = row.content ?? "";
+    const text = raw
+      .replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "")
+      .replace(ATTACHED_IMAGE_MARKER_RE, "")
+      .trim();
+
+    const images: AiContentPart[] = [];
+    const re = new RegExp(ATTACHED_IMAGE_MARKER_RE.source, "g");
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(raw)) !== null) {
+      try {
+        const parsed = JSON.parse(match[1]) as { url?: string; data?: string };
+        if (typeof parsed.url === "string") {
+          const img = await uploadsUrlToBase64(parsed.url);
+          if (img) {
+            images.push({
+              type: "image_url",
+              image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+            });
+          }
+        } else if (typeof parsed.data === "string" && parsed.data.startsWith("data:image/")) {
+          images.push({ type: "image_url", image_url: { url: parsed.data } });
+        }
+      } catch {
+        // Malformed marker — ignore, the message still works as text.
+      }
+    }
+
+    // Only user messages carry image parts — assistant rows stay plain text
+    // (matches OpenAI's per-role content constraints).
+    if (row.role === "assistant") {
+      out.push({ role: "assistant", content: text });
+    } else {
+      out.push({
+        role: "user",
+        content: images.length > 0 ? [{ type: "text", text }, ...images] : text,
+      });
+    }
+  }
+  return out;
+}
+
 // POST /api/hamzawi/chat
 // Supports isInit: true — proactive first message from Hamzawi, no user input needed.
 // Used to auto-start guided onboarding for level 4+ users on chat open.
 router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
-  const { message, checkReport, isInit, conversationId: conversationIdInput } = req.body as {
+  const { message, checkReport, isInit, conversationId: conversationIdInput, attachment } = req.body as {
     message?: string;
     isInit?: boolean;
     conversationId?: number | null;
+    attachment?: { url?: string; dataUrl?: string } | null;
     checkReport?: {
       status: string;
       score: number;
@@ -500,6 +608,10 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     const ctx = await buildChatContext({ user, sessionId: sessionRawId, conversationId: resolvedConversationId });
     const { plan, level, memory, isOnboarding, recentMessages, brandAssets, assetContext } = ctx;
 
+    // Resolve the user's uploaded image (if any) BEFORE the turn is built — it
+    // unconditionally routes the turn to the vision model below.
+    const attachedImage = await resolveAttachment(attachment);
+
     // isInit: proactive first message.
     // - Brand setup not done → start guided onboarding.
     // - Brand setup done but no chat history → personalized welcome.
@@ -518,12 +630,9 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
     const systemPrompt = buildSystemPrompt(plan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName);
 
-    const historyForAI = recentMessages
-      .reverse()
-      .map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content.replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "").trim(),
-      }));
+    // Stored history with attached-image markers re-expanded as image parts
+    // (generated-image markers are always stripped).
+    const historyForAI = await buildHistoryForAI(recentMessages);
 
     let userContent = message ?? "";
     if (!isInit && checkReport && message) {
@@ -537,6 +646,13 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           : ""
       }]`;
       userContent = `${reportSummary}\n\n${message}`;
+    }
+
+    // The attached image is passed as an image content part below. Tell the
+    // model explicitly that the image is in front of it so it analyses it and
+    // never answers that it cannot see the image.
+    if (attachedImage && userContent.trim()) {
+      userContent = `${userContent}\n[الصورة المرفقة معروضة أمامك في هذه الرسالة — حللها مباشرة وردّ بناءً عليها، ولا تقل أبداً أنك لا ترى الصورة المرفقة.]`;
     }
 
     // Intent-based vision routing: use the vision model + attach the company's
@@ -603,21 +719,33 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    let userContentParts:
-      | string
-      | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+    // Vision routing: an attached user image is an unconditional vision signal —
+    // the model ALWAYS receives it, regardless of intent detection. Brand images
+    // are still attached only when the intent genuinely needs image understanding
+    // (original gating preserved). Normal text turns stay on the cheaper model.
+    const intentVision = needsVision && hasBrandImages;
+    const hasImageContext = !!attachedImage || intentVision;
+
+    let userContentParts: string | AiContentPart[] = userContent;
     let model = TEXT_MODEL;
-    if (needsVision && hasBrandImages) {
+    if (hasImageContext) {
       model = VISION_MODEL;
-      userContentParts = [
-        { type: "text", text: userContent },
-        ...brandAssets!.images.map((img) => ({
-          type: "image_url" as const,
-          image_url: { url: `data:${img.mimeType};base64,${img.data}` },
-        })),
-      ];
-    } else {
-      userContentParts = userContent;
+      const parts: AiContentPart[] = [{ type: "text", text: userContent }];
+      if (attachedImage) {
+        parts.push({
+          type: "image_url",
+          image_url: { url: `data:${attachedImage.mimeType};base64,${attachedImage.data}` },
+        });
+      }
+      if (intentVision) {
+        for (const img of brandAssets!.images) {
+          parts.push({
+            type: "image_url",
+            image_url: { url: `data:${img.mimeType};base64,${img.data}` },
+          });
+        }
+      }
+      userContentParts = parts;
     }
 
     const response = await getOpenAI().chat.completions.create({
@@ -727,7 +855,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
         user_id: user?.id ?? null,
         session_id: sessionRawId,
         role: "user",
-        content: message,
+        content: attachedImage ? `${message}${buildAttachmentMarker(attachedImage)}` : message,
         conversation_id: resolvedConversationId,
       });
     }

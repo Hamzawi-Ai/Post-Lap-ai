@@ -25,7 +25,10 @@ export function parseStoredContent(content: string): {
   generatedDescription?: string;
 } {
   const match = content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
-  const text = content.replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "").trim();
+  const text = content
+    .replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "")
+    .replace(/%%ATTACHED_IMAGE%%[\s\S]*?%%END%%/g, "")
+    .trim();
   if (!match) return { text };
   try {
     const parsed = JSON.parse(match[1]) as { url?: string; description?: string };
