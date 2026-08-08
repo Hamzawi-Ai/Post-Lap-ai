@@ -1,5 +1,5 @@
-import { Loader2, Users as UsersIcon, Search, Plus, Pencil, Trash2, UserCheck, UserX } from "lucide-react";
-import { ADMIN_TOKEN_KEY, DURATION_OPTIONS, PLAN_LABEL, expiryBadge } from "@/lib/admin-shared";
+import { Loader2, Users as UsersIcon, Search, Plus, Pencil, Trash2, UserCheck, UserX, User } from "lucide-react";
+import { ADMIN_TOKEN_KEY, ALL_PLAN_OPTIONS, DURATION_OPTIONS, PLAN_COLORS, PLAN_LABEL, expiryBadge } from "@/lib/admin-shared";
 import { useAdminUsers } from "@/hooks/useAdminUsers";
 import AdminEditModal from "@/components/admin/AdminEditModal";
 
@@ -12,6 +12,8 @@ export default function Users() {
     editUser, setEditUser, editPlanOption, setEditPlanOption,
     editDuration, setEditDuration, editLoading, saveEdit, openEdit,
     deletingId, deleteUser, activating, toggleActive,
+    byEmailInput, setByEmailInput, byEmailPlan, setByEmailPlan, byEmailLoading, setPlanByEmail,
+    unlimitingId, grantUnlimited, resettingId, resetLimits, changingPlanId, quickSetPlan,
   } = useAdminUsers(token);
 
   const filtered = searchFilter
@@ -81,6 +83,39 @@ export default function Users() {
         </button>
       </section>
 
+      {/* Quick set plan by email */}
+      <section className="bg-card border border-primary/20 rounded-2xl p-6 space-y-4">
+        <h2 className="font-black text-foreground flex items-center gap-2">
+          <User className="w-5 h-5 text-primary" />
+          تعيين خطة بالبريد الإلكتروني
+        </h2>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="email"
+            placeholder="email@example.com"
+            value={byEmailInput}
+            onChange={(e) => setByEmailInput(e.target.value)}
+            dir="ltr"
+            className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-left text-sm"
+          />
+          <select
+            value={byEmailPlan}
+            onChange={(e) => setByEmailPlan(e.target.value)}
+            className="bg-background border border-border rounded-xl px-4 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm"
+          >
+            {ALL_PLAN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+          <button
+            onClick={setPlanByEmail}
+            disabled={byEmailLoading || !byEmailInput.trim()}
+            className="bg-primary text-white px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2 shrink-0"
+          >
+            {byEmailLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            تعيين
+          </button>
+        </div>
+      </section>
+
       {/* Users table */}
       <section className="bg-card border border-border rounded-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -127,13 +162,12 @@ export default function Users() {
                     <td className="px-4 py-3">
                       <p className="font-semibold text-foreground text-sm">{u.name || "—"}</p>
                       <p className="text-xs text-muted-foreground mt-0.5" dir="ltr">{u.email}</p>
+                      <p className="text-xs text-muted-foreground/60 mt-0.5">
+                        فحوصات: {u.total_checks} · متبقي: {u.trials_remaining}
+                      </p>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                        u.plan === "professional"
-                          ? "border-primary/40 text-primary bg-primary/10"
-                          : "border-border text-muted-foreground"
-                      }`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${PLAN_COLORS[u.plan] ?? "text-muted-foreground border-border"}`}>
                         {u.subscription_label ?? PLAN_LABEL[u.plan] ?? u.plan}
                       </span>
                     </td>
@@ -158,7 +192,32 @@ export default function Users() {
                       </button>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 justify-center">
+                      <div className="flex items-center gap-1.5 justify-center flex-wrap">
+                        <select
+                          value={u.plan}
+                          onChange={(e) => quickSetPlan(u.id, u.email, e.target.value)}
+                          disabled={changingPlanId === u.id}
+                          className="bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                          title="تغيير الخطة مباشرة"
+                        >
+                          {ALL_PLAN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                        </select>
+                        <button
+                          onClick={() => grantUnlimited(u.id, u.email)}
+                          disabled={unlimitingId === u.id}
+                          className="text-xs px-2 py-1 rounded-lg border border-purple-400/30 text-purple-400 hover:bg-purple-400/10 transition-colors disabled:opacity-50"
+                          title={u.trials_remaining >= 99999 ? "استخدام غير محدود" : "منح استخدام غير محدود"}
+                        >
+                          {unlimitingId === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "∞"}
+                        </button>
+                        <button
+                          onClick={() => resetLimits(u.id, u.email)}
+                          disabled={resettingId === u.id}
+                          className="text-xs px-2 py-1 rounded-lg border border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10 transition-colors disabled:opacity-50"
+                          title="إعادة تعيين الحدود اليومية"
+                        >
+                          {resettingId === u.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "↻"}
+                        </button>
                         <button
                           onClick={() => openEdit(u)}
                           className="text-xs text-primary border border-primary/20 px-2.5 py-1 rounded-lg hover:bg-primary/10 transition-colors flex items-center gap-1"

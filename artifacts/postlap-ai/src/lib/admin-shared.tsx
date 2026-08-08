@@ -87,6 +87,26 @@ export const PLAN_LABEL: Record<string, string> = {
 
 export const PAID_PLANS = ["professional", "smart_fix", "content", "agency"];
 
+// Full plan list used by the quick plan-change controls (matches the old
+// /dashboard-admin-access dashboard). Labels mirror PLAN_LABEL.
+export const ALL_PLAN_OPTIONS = [
+  { label: "وكالة", value: "agency" },
+  { label: "إدارة المحتوى", value: "content" },
+  { label: "Smart Fix", value: "smart_fix" },
+  { label: "Smart Fix (قديم)", value: "professional" },
+  { label: "مسجل", value: "registered" },
+  { label: "زائر", value: "visitor" },
+];
+
+export const PLAN_COLORS: Record<string, string> = {
+  visitor: "text-muted-foreground border-border",
+  registered: "text-yellow-400 border-yellow-400/40",
+  professional: "text-primary border-primary/50",
+  smart_fix: "text-primary border-primary/50",
+  content: "text-green-400 border-green-400/40",
+  agency: "text-purple-400 border-purple-400/40",
+};
+
 export function expiryBadge(expiresAt: string | null): ReactNode {
   if (!expiresAt) return null;
   const d = new Date(expiresAt);

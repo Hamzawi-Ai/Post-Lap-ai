@@ -52,7 +52,7 @@ export default function AdminLayout({ active, onLogout, children }: AdminLayoutP
         <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-primary" />
-            <span className="font-black text-foreground">PostLapAI</span>
+            <span className="font-black text-foreground">لوحة تحكم المالك</span>
           </div>
           <button
             onClick={() => setOpen(false)}

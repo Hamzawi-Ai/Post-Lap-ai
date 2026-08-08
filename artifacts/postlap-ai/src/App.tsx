@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import Admin from "@/pages/admin";
-import SecretAdmin from "@/pages/secret-admin";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import Onboarding from "@/pages/onboarding";
@@ -43,7 +42,9 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/khtfa-secure-portal" component={Admin} />
       <Route path="/khtfa-secure-portal/:section" component={Admin} />
-      <Route path="/dashboard-admin-access" component={SecretAdmin} />
+      <Route path="/dashboard-admin-access">
+        <Redirect to="/khtfa-secure-portal" replace />
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

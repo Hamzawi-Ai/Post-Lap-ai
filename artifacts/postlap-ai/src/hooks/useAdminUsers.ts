@@ -4,6 +4,7 @@ import {
   ADMIN_TOKEN_KEY,
   DEFAULT_PLAN_OPTIONS,
   DURATION_OPTIONS,
+  PLAN_LABEL,
   type AdminUser,
   type PlanOption,
 } from "@/lib/admin-shared";
@@ -32,6 +33,14 @@ export function useAdminUsers(token: string | null) {
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [activating, setActivating] = useState<string | null>(null);
+
+  const [byEmailInput, setByEmailInput] = useState("");
+  const [byEmailPlan, setByEmailPlan] = useState("smart_fix");
+  const [byEmailLoading, setByEmailLoading] = useState(false);
+
+  const [unlimitingId, setUnlimitingId] = useState<number | null>(null);
+  const [resettingId, setResettingId] = useState<number | null>(null);
+  const [changingPlanId, setChangingPlanId] = useState<number | null>(null);
 
   const loadUsers = useCallback(
     async (t: string) => {
@@ -192,6 +201,85 @@ export function useAdminUsers(token: string | null) {
     if (token) loadUsers(token);
   }
 
+  async function setPlanByEmail() {
+    if (!token || !byEmailInput.trim()) return;
+    setByEmailLoading(true);
+    try {
+      const res = await fetch("/api/admin/set-plan-by-email", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: byEmailInput.trim(), plan: byEmailPlan }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast({ title: "✅ تم تعيين الخطة", description: `${data.email} → ${PLAN_LABEL[data.plan] ?? data.plan}` });
+      setByEmailInput("");
+      loadUsers(token);
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setByEmailLoading(false);
+    }
+  }
+
+  async function grantUnlimited(id: number, email: string) {
+    if (!token) return;
+    if (!window.confirm(`منح استخدام غير محدود لـ ${email}؟`)) return;
+    setUnlimitingId(id);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/unlimited`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("فشل منح الاستخدام غير المحدود");
+      toast({ title: "✅ تم منح استخدام غير محدود", description: email });
+      loadUsers(token);
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setUnlimitingId(null);
+    }
+  }
+
+  async function resetLimits(id: number, email: string) {
+    if (!token) return;
+    if (!window.confirm(`إعادة تعيين الحدود اليومية لـ ${email}؟`)) return;
+    setResettingId(id);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/reset-limits`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("فشل إعادة تعيين الحدود");
+      toast({ title: "✅ تم إعادة تعيين الحدود اليومية", description: email });
+      loadUsers(token);
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setResettingId(null);
+    }
+  }
+
+  async function quickSetPlan(id: number, email: string, plan: string) {
+    if (!token) return;
+    setChangingPlanId(id);
+    try {
+      const res = await fetch(`/api/admin/users/${id}/upgrade`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setUsers((prev) => prev.map((u) => u.id === id ? { ...u, plan: data.plan, subscription_label: data.subscription_label ?? u.subscription_label } : u));
+      toast({ title: "تم تحديث الخطة", description: `${email} → ${PLAN_LABEL[data.plan] ?? data.plan}` });
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+    } finally {
+      setChangingPlanId(null);
+    }
+  }
+
   return {
     users,
     usersLoading,
@@ -222,5 +310,17 @@ export function useAdminUsers(token: string | null) {
     deleteUser,
     activating,
     toggleActive,
+    byEmailInput,
+    setByEmailInput,
+    byEmailPlan,
+    setByEmailPlan,
+    byEmailLoading,
+    setPlanByEmail,
+    unlimitingId,
+    grantUnlimited,
+    resettingId,
+    resetLimits,
+    changingPlanId,
+    quickSetPlan,
   };
 }

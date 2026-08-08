@@ -95,7 +95,7 @@ export default function Admin() {
             <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
               <ShieldAlert className="w-7 h-7 text-primary" />
             </div>
-            <h1 className="text-xl font-black text-foreground">لوحة تحكم المدير</h1>
+            <h1 className="text-xl font-black text-foreground">لوحة تحكم المالك</h1>
             <p className="text-sm text-muted-foreground text-center">أدخل كلمة السر للوصول</p>
           </div>
           <form onSubmit={handleLogin} className="space-y-4">
