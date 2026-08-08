@@ -617,6 +617,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     // immediately (not only in later brand-asset vision turns).
     pendingAttachmentRef.current = { url };
 
+    // Show the uploaded image as a user-side media bubble in the chat.
+    setMessages((prev) => [...prev, chatBlock("user", "", { imageUrl: url })]);
+
     if (level >= 4) {
       // During onboarding (step 7) or post-onboarding for level 4+:
       // First upload → logo (if no logo yet); subsequent uploads → design samples
