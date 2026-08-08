@@ -888,7 +888,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       }
     }
 
-    const reply = generateReply;
+    let reply = generateReply;
 
     // For isInit: only store the assistant message (no user message shown/stored)
     if (!isInit && message?.trim()) {
@@ -921,9 +921,22 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
             url: generated.url,
             description: generateDescription,
           })}%%END%%`;
+        } else {
+          // Provider returned null — surface the failure instead of silently
+          // returning a text reply that looks like a successful response.
+          const notice = "\n\n⚠️ لم يتمكن النظام من توليد الصورة. حاول مرة أخرى.";
+          reply = `${reply}${notice}`;
+          storedContent = reply;
         }
       } catch (e) {
         logger.error({ e }, "Failed to generate post from Hamzawi marker");
+        // Surface a user-visible notice instead of silently returning only text.
+        const isQuota = (e as { status?: number })?.status === 429;
+        const notice = isQuota
+          ? "\n\n⚠️ توليد الصور غير متاح مؤقتاً بسبب تجاوز الحصة المسموح بها. حاول بعد دقيقة."
+          : "\n\n⚠️ حدث خطأ أثناء توليد الصورة. حاول مرة أخرى.";
+        reply = `${reply}${notice}`;
+        storedContent = reply;
       }
     }
 
