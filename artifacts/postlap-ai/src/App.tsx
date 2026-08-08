@@ -42,6 +42,7 @@ function Router() {
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />
       <Route path="/khtfa-secure-portal" component={Admin} />
+      <Route path="/khtfa-secure-portal/:section" component={Admin} />
       <Route path="/dashboard-admin-access" component={SecretAdmin} />
       <Route component={NotFound} />
     </Switch>
