@@ -17,7 +17,7 @@ const adminLoginLimiter = rateLimit({
 
 import { SESSION_SECRET, ADMIN_PASSWORD } from "../lib/secrets";
 
-function requireAdmin(req: any, res: any, next: any) {
+export function requireAdmin(req: any, res: any, next: any) {
   const authHeader = req.headers.authorization as string | undefined;
   if (!authHeader?.startsWith("Bearer ")) {
     res.status(401).json({ error: "Admin authentication required" });
