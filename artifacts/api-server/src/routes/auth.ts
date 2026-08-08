@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getUserFromToken } from "../middleware/auth";
 import { autoCreateCompanyForUser, isBrandProfileComplete } from "../services/brand/brain";
-import { getConfig } from "../lib/config";
 
 const router: IRouter = Router();
 
@@ -50,7 +49,9 @@ router.post("/auth/google", async (req, res): Promise<void> => {
       audience: GOOGLE_CLIENT_ID,
     });
     const payload = ticket.getPayload();
-    if (!payload?.email) {
+    // H6 (docs/FINAL_AUDIT_REPORT.md): never treat an unverified email as an
+    // identity — an account with an unverified Google email is rejected.
+    if (!payload?.email || payload.email_verified !== true) {
       res.status(401).json({ error: "رمز Google غير صالح" });
       return;
     }
@@ -107,9 +108,11 @@ router.post("/auth/google", async (req, res): Promise<void> => {
 });
 
 // DEV-ONLY login bypass. Never mounted in production — returns 404.
+// Also requires an explicit DEV_LOGIN=1 opt-in, so the endpoint can never be
+// silently active (docs/FINAL_AUDIT_REPORT.md — C1).
 // Lets the full authenticated flow be tested without Google OAuth.
 router.post("/dev/login", async (_req, res): Promise<void> => {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === "production" || process.env.DEV_LOGIN !== "1") {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -227,8 +230,11 @@ router.patch("/users/me/gender", async (req, res): Promise<void> => {
   }
 });
 
-// POST /auth/subscribe — self-service upgrade to the Professional (content) plan.
-// Payment is settled out-of-band (bank transfer via admin); access is granted immediately.
+// POST /auth/subscribe — self-service paid-plan upgrade.
+// Disabled until a real payment flow exists: the previous behavior granted the
+// paid plan to any authenticated caller with no payment verification, which was
+// an unverifiable self-grant (docs/FINAL_AUDIT_REPORT.md — C3). Until payment
+// verification is implemented, return a controlled "Not Available Yet" response.
 router.post("/auth/subscribe", async (req, res): Promise<void> => {
   const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
@@ -236,30 +242,10 @@ router.post("/auth/subscribe", async (req, res): Promise<void> => {
     return;
   }
 
-  try {
-    const cfg = getConfig();
-    const contentPlan = cfg.pricing.plans.find((p) => p.id === "content") ?? cfg.pricing.plans[1];
-    const [updated] = await db
-      .update(usersTable)
-      .set({
-        plan: "content",
-        subscription_label: `${contentPlan?.name ?? "إدارة المحتوى"} — ${contentPlan?.price ?? 400} ${cfg.pricing.currency}/شهر`,
-        trials_remaining: 9999,
-        is_active: true,
-      })
-      .where(eq(usersTable.id, user.id))
-      .returning();
-
-    if (!updated) {
-      res.status(404).json({ error: "المستخدم غير موجود" });
-      return;
-    }
-
-    res.json({ user: await getUserPayload(updated), ok: true });
-  } catch (err) {
-    logger.error({ err }, "Subscribe error");
-    res.status(500).json({ error: "حدث خطأ أثناء الاشتراك" });
-  }
+  res.status(501).json({
+    ok: false,
+    error: "الاشتراك غير متاح حالياً — سيتم تفعيله قريباً",
+  });
 });
 
 export default router;

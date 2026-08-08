@@ -37,6 +37,19 @@ const VISION_MODEL = "gpt-4o";
 // TODO(prompt-studio): consume AgentConfig — text_model (override for text turns)
 const TEXT_MODEL = "gpt-4o-mini";
 
+// C2 resource-protection limits (docs/FINAL_AUDIT_REPORT.md). A chat attachment
+// may not exceed 4 MiB decoded — bounds the base64 stored in hamzawi_messages
+// and the vision-model payload, and blocks guests from pushing unbounded data.
+const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
+// Cap on image parts re-expanded from stored history into a single vision turn
+// (OpenAI cost protection). Newer image markers take precedence.
+const MAX_VISION_IMAGES_PER_TURN = 6;
+
+/** Approximate decoded byte length of a base64 string (safe upper bound). */
+function approximateBase64Bytes(base64: string): number {
+  return Math.ceil((base64.length * 3) / 4);
+}
+
 const router: IRouter = Router();
 
 const chatLimiter = rateLimit({
@@ -456,11 +469,15 @@ async function resolveAttachment(
   if (!attachment) return null;
   if (typeof attachment.url === "string" && attachment.url.startsWith("/uploads/")) {
     const img = await uploadsUrlToBase64(attachment.url);
-    if (img) return { ...img, url: attachment.url };
+    if (img && approximateBase64Bytes(img.data) <= MAX_ATTACHMENT_BYTES) {
+      return { ...img, url: attachment.url };
+    }
   }
   if (typeof attachment.dataUrl === "string" && attachment.dataUrl.startsWith("data:image/")) {
     const m = attachment.dataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/);
-    if (m && m[2]) return { mimeType: m[1], data: m[2] };
+    if (m && m[2] && approximateBase64Bytes(m[2]) <= MAX_ATTACHMENT_BYTES) {
+      return { mimeType: m[1], data: m[2] };
+    }
   }
   return null;
 }
@@ -483,6 +500,7 @@ async function buildHistoryForAI(
   rows: typeof hamzawiMessagesTable.$inferSelect[],
 ): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam[]> {
   const out: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+  let imageCount = 0;
   for (const row of [...rows].reverse()) {
     const raw = row.content ?? "";
     const text = raw
@@ -494,18 +512,25 @@ async function buildHistoryForAI(
     const re = new RegExp(ATTACHED_IMAGE_MARKER_RE.source, "g");
     let match: RegExpExecArray | null;
     while ((match = re.exec(raw)) !== null) {
+      // C2: bound how many stored images are re-sent to the vision model.
+      if (imageCount >= MAX_VISION_IMAGES_PER_TURN) break;
       try {
         const parsed = JSON.parse(match[1]) as { url?: string; data?: string };
         if (typeof parsed.url === "string") {
           const img = await uploadsUrlToBase64(parsed.url);
-          if (img) {
+          if (img && approximateBase64Bytes(img.data) <= MAX_ATTACHMENT_BYTES) {
             images.push({
               type: "image_url",
               image_url: { url: `data:${img.mimeType};base64,${img.data}` },
             });
+            imageCount++;
           }
         } else if (typeof parsed.data === "string" && parsed.data.startsWith("data:image/")) {
-          images.push({ type: "image_url", image_url: { url: parsed.data } });
+          const dataMatch = parsed.data.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+          if (dataMatch && dataMatch[2] && approximateBase64Bytes(dataMatch[2]) <= MAX_ATTACHMENT_BYTES) {
+            images.push({ type: "image_url", image_url: { url: parsed.data } });
+            imageCount++;
+          }
         }
       } catch {
         // Malformed marker — ignore, the message still works as text.
