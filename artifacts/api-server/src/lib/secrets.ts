@@ -34,3 +34,5 @@ function resolveSecret(name: string, devFallback: string): string {
 
 export const SESSION_SECRET = resolveSecret("SESSION_SECRET", "dev-secret");
 export const ADMIN_PASSWORD = resolveSecret("ADMIN_PASSWORD", "admin123");
+export const OPENAI_API_KEY = resolveSecret("OPENAI_API_KEY", "");
+export const GOOGLE_CLIENT_ID = resolveSecret("GOOGLE_CLIENT_ID", "");

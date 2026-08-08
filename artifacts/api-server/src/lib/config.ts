@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { logger } from "./logger";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -105,7 +106,13 @@ export function getConfig(): AppConfig {
     join(process.cwd(), "config.json"),
   ];
   for (const p of candidates) {
-    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf-8")) as AppConfig;
+    if (existsSync(p)) {
+      try {
+        return JSON.parse(readFileSync(p, "utf-8")) as AppConfig;
+      } catch (err) {
+        logger.warn({ path: p, err }, "Failed to parse config.json — falling back to DEFAULT_CONFIG");
+      }
+    }
   }
   return DEFAULT_CONFIG;
 }

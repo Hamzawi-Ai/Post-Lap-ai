@@ -1,4 +1,4 @@
-import jwt from "jsonwebtoken";
+import jwt, { JsonWebTokenError, TokenExpiredError } from "jsonwebtoken";
 import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { SESSION_SECRET } from "../lib/secrets";
@@ -19,8 +19,14 @@ export async function getUserFromToken(authHeader?: string) {
     // as invalid so every token-protected endpoint refuses it.
     if (!user.is_active) return null;
     return user;
-  } catch {
-    return null;
+  } catch (err) {
+    // JWT errors (invalid/expired token) → unauthenticated, not an error.
+    // Anything else (DB outage, network error) → rethrow so the global error
+    // handler returns a 503 rather than silently granting guest access.
+    if (err instanceof JsonWebTokenError || err instanceof TokenExpiredError) {
+      return null;
+    }
+    throw err;
   }
 }
 

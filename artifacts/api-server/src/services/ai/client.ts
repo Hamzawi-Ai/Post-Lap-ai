@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
+import { OPENAI_API_KEY } from "../../lib/secrets";
 
 let _openai: OpenAI | null = null;
 let _gemini: GoogleGenAI | null = null;
@@ -71,10 +72,10 @@ function devStubOpenAI(): OpenAI {
 
 export function getOpenAI(): OpenAI {
   if (!_openai) {
-    if (!isProduction && !process.env.OPENAI_API_KEY) {
+    if (!isProduction && !OPENAI_API_KEY) {
       _openai = devStubOpenAI();
     } else {
-      _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      _openai = new OpenAI({ apiKey: OPENAI_API_KEY });
     }
   }
   return _openai;

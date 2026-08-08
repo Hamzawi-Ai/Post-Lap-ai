@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
@@ -90,5 +90,18 @@ app.use("/uploads", (_req, res, next) => {
 }, express.static(storageRoot));
 
 app.use("/api", router);
+
+// Global error handler — must be the last app.use call and must have exactly
+// four parameters so Express recognises it as an error-handling middleware.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error & { status?: number; statusCode?: number }, _req: Request, res: Response, _next: NextFunction) => {
+  logger.error({ err }, "Unhandled error");
+  const status = (err as { status?: number; statusCode?: number }).status ?? (err as { status?: number; statusCode?: number }).statusCode ?? 500;
+  const body: { error: string; stack?: string } = { error: "internal_error" };
+  if (process.env.NODE_ENV !== "production") {
+    body.stack = err.stack;
+  }
+  res.status(status).json(body);
+});
 
 export default app;

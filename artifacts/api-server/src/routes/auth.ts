@@ -31,8 +31,7 @@ async function getUserPayload(user: typeof usersTable.$inferSelect) {
   };
 }
 
-import { SESSION_SECRET } from "../lib/secrets";
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ?? "";
+import { SESSION_SECRET, GOOGLE_CLIENT_ID } from "../lib/secrets";
 
 // Verify Google credential and upsert user
 router.post("/auth/google", async (req, res): Promise<void> => {
