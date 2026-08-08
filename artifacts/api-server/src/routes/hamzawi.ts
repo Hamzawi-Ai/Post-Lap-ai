@@ -13,6 +13,7 @@ import { MediaService } from "../services/media/MediaService";
 import { getOpenAI } from "../services/ai/client";
 import type OpenAI from "openai";
 import { buildChatContext } from "../services/ai/contextBuilder";
+import { POSTLAB_IDENTITY } from "../services/ai/postlabPersona";
 import { uploadsUrlToBase64 } from "../services/media/assetReader";
 // Side-effect import: registers the beta tool metadata into the ToolRegistry
 // at server start. Registration is idempotent and required by the Reasoner (P1).
@@ -307,7 +308,7 @@ function buildSystemPrompt(
     .map((p) => `${p.name} (${p.price} ${cfg.pricing.currency}/شهر)`)
     .join("، ");
 
-  return `أنت حمزاوي، مساعد تسويقي ذكي متخصص في سياسات إعلانات Meta وTikTok. شخصيتك ودية، محترفة، عملية.
+  return `${POSTLAB_IDENTITY}
 ${identityBlock}
 مستوى خطة المستخدم: ${planCapabilities[level] ?? planCapabilities[1]}
 

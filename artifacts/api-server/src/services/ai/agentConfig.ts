@@ -71,9 +71,9 @@ export interface AgentConfig {
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   // Identity — mirrors the hardcoded identity strings in buildSystemPrompt()
   // TODO(prompt-studio): consume AgentConfig — agent_name, agent_role_description
-  agent_name: "حمزاوي",
+  agent_name: "PostLab AI",
   agent_role_description:
-    "مساعد تسويقي ذكي متخصص في سياسات إعلانات Meta وTikTok. شخصيتك ودية، محترفة، عملية.",
+    "مساعد تسويقي ذكي مصمم لمساعدة الأنشطة التجارية العربية والليبية على إنشاء إعلانات متوافقة وفعّالة عبر Policy Intelligence وBrand Intelligence وCreative Intelligence.",
   system_prompt_prefix: "",
   personality_notes: "",
   behavior_rules: [],
