@@ -1,0 +1,161 @@
+FINAL CORRECTION & VALIDATION — Task #49
+
+Do not close Task #49 yet.
+
+The implementation is already complete. Do NOT rebuild the provider or introduce unrelated changes.
+
+There is one critical architectural clarification that must be verified before closing this task.
+
+IMPORTANT: PostLab has TWO separate AI experiences
+1. Hamzawi — Owner Assistant
+
+This is the private AI assistant for the PostLab account owner/admin.
+
+It is NOT the end-user chatbot.
+
+2. PostLab User Chatbot
+
+This is the AI chatbot used by the actual PostLab customer/end user.
+
+THIS is the primary target of Task #49.
+
+The objective of this task is to restore and verify image generation for the END-USER POSTLAB CHATBOT.
+
+Required Final Audit
+
+Before closing Task #49, trace the actual runtime call graph and answer these questions from the code.
+
+A. End-user chatbot
+
+Identify:
+
+frontend component/route
+API endpoint
+intent detection
+generation marker/tool
+generateBrandedPost
+getImageProvider()
+OpenAIImageProvider
+OpenAI gpt-image-1
+MediaService/storage
+returned image URL
+frontend rendering of the generated image
+
+Confirm whether this exact end-user flow is now:
+
+END-USER
+→ POSTLAB CHATBOT
+→ image-generation intent
+→ generation pipeline
+→ OpenAIImageProvider
+→ gpt-image-1
+→ generated image
+→ MediaService
+→ image URL
+→ POSTLAB CHATBOT UI
+B. Owner Hamzawi
+
+Identify whether the owner Hamzawi assistant uses the same provider abstraction.
+
+If it does, document that the provider-layer change also affects Hamzawi.
+
+If it does not, document that it is unaffected.
+
+Do not modify Hamzawi behavior merely to satisfy this audit.
+
+CRITICAL LIVE TEST
+
+Do not consider this task validated based only on:
+
+TypeScript compilation
+unit/static analysis
+provider registration
+isAvailable()
+a DEV stub
+successful API authentication
+
+We need a real end-to-end test of the END-USER POSTLAB CHATBOT.
+
+Execute one authenticated real image-generation request through the actual end-user chatbot path.
+
+The test must prove:
+
+The end-user chatbot receives a real image-generation request.
+The correct image-generation intent is selected.
+The generation pipeline is invoked.
+OpenAIImageProvider is selected.
+gpt-image-1 is actually called.
+A real image is returned.
+The image is persisted through the existing media/storage pipeline.
+The resulting image URL is returned to the chatbot.
+The generated image is rendered in the end-user chatbot.
+
+Do NOT use the DEV stub for this final test.
+
+REFERENCE IMAGE TEST
+
+Because the implementation now uses:
+
+images.edit()
+
+when reference images are provided, verify one real reference-image scenario through the END-USER POSTLAB CHATBOT.
+
+Example:
+
+Upload a product image.
+Ask the chatbot to create a marketing design using that product.
+Verify that the uploaded image reaches the image-generation pipeline as a reference image.
+Verify that the OpenAI image edit path is actually used.
+Verify that the generated result returns to the end-user chatbot.
+
+If the existing end-user upload flow does NOT currently provide the required reference-image payload to generateBrandedPost, do NOT invent a new feature as part of this task.
+
+Instead report:
+
+REFERENCE IMAGE PATH NOT CURRENTLY WIRED FOR END-USER CHATBOT
+
+and document exactly where the integration gap exists.
+
+IMPORTANT DISTINCTION
+
+Do NOT report:
+
+"Image generation works"
+
+unless the END-USER POSTLAB CHATBOT itself has successfully generated and displayed a real image.
+
+A successful direct provider test is insufficient.
+
+A successful Hamzawi owner-assistant test is insufficient.
+
+The acceptance target is specifically:
+
+PostLab end-user chatbot → real image generation → real image displayed in chatbot
+
+Final Report
+
+Before closing Task #49, update the task/report with:
+
+Provider
+Active provider: openai
+Model: gpt-image-1
+Real API test: PASS/FAIL
+End-user chatbot
+Generation path: PASS/FAIL
+Real image generation: PASS/FAIL
+Image persistence: PASS/FAIL
+Image returned to chatbot: PASS/FAIL
+Image rendered in chatbot: PASS/FAIL
+Reference images
+Upload → generation pipeline: PASS/FAIL/NOT CURRENTLY WIRED
+images.edit() actually exercised: PASS/FAIL
+Owner Hamzawi
+Uses same provider: YES/NO
+Affected by provider change: YES/NO
+Final conclusion
+
+Do not use a generic "Task complete" conclusion.
+
+Explicitly state:
+
+END-USER POSTLAB CHATBOT IMAGE GENERATION: VERIFIED / NOT VERIFIED

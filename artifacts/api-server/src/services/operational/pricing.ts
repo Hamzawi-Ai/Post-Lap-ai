@@ -50,6 +50,18 @@ export const PRICING_REGISTRY: ModelPricing[] = [
     perImage: 0.039,
     note: "Per generated image estimate (Gemini 2.5 Flash Image).",
   },
+  {
+    provider: "openai",
+    model: "gpt-image-1",
+    perImage: 0.04,
+    note: "Per generated image estimate (gpt-image-1, medium quality, 1024×1024).",
+  },
+  {
+    provider: "openai",
+    model: "gpt-image-1-mini",
+    perImage: 0.02,
+    note: "Per generated image estimate (gpt-image-1-mini, medium quality, 1024×1024). Cost-optimised Beta model.",
+  },
 ];
 
 /** Look up configured pricing for a provider/model pair. */

@@ -489,7 +489,7 @@ router.post("/image-gen", async (req, res): Promise<void> => {
       userId: user?.id ?? null,
       companyId: user?.company_id ?? null,
       provider: provider.id,
-      model: "gemini-2.5-flash-image",
+      model: provider.modelId,
       success: !!generated,
       quantity: 1,
       metadata: { source: "image_fix" },

@@ -741,9 +741,13 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           storedContent = reply;
         }
       } catch (e) {
-        logger.error({ e }, "Failed to generate post from Hamzawi marker");
+        const err = e as { status?: number; code?: string; message?: string } | null;
+        logger.error(
+          { errorStatus: err?.status, errorCode: err?.code, errorMessage: err?.message },
+          "Failed to generate post from Hamzawi marker",
+        );
         // Surface a user-visible notice instead of silently returning only text.
-        const isQuota = (e as { status?: number })?.status === 429;
+        const isQuota = err?.status === 429;
         const notice = isQuota
           ? "\n\n⚠️ توليد الصور غير متاح مؤقتاً بسبب تجاوز الحصة المسموح بها. حاول بعد دقيقة."
           : "\n\n⚠️ حدث خطأ أثناء توليد الصورة. حاول مرة أخرى.";
