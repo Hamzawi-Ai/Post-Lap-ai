@@ -1,0 +1,163 @@
+IMPORTANT: This is an AUDIT + TARGETED FIX phase.
+Do not add new features.
+Do not refactor unrelated code.
+Do not change working functionality.
+
+We have TWO priority issues that must be investigated before any other suggested tasks.
+
+==================================================
+PRIORITY 1 — POSTLAB IDENTITY / AI BRAIN
+==================================================
+
+The chatbot inside PostLab is still behaving as if it is "Hamzawi".
+
+This is not acceptable.
+
+PostLab is a product with its own identity and product knowledge.
+Hamzawi may be the underlying AI/chat architecture, but the user-facing assistant inside PostLab must NOT identify itself as Hamzawi and must NOT use Hamzawi's generic identity/behavior as its product persona.
+
+AUDIT THE ACTUAL CODE PATH.
+
+Find:
+
+1. Where the system/developer prompt is constructed for /api/hamzawi/chat.
+2. Where the AI model receives its system instructions.
+3. How the current Hamzawi identity is injected.
+4. Whether PostLab currently has a separate persona/system context.
+5. Whether Brand Brain / Brand Memory / company context is being mixed with the generic Hamzawi identity.
+6. Whether conversation memory can cause PostLab to inherit Hamzawi identity.
+7. Whether there are multiple AI entry points that use the same Hamzawi system prompt.
+
+DO NOT simply add a large prompt inside the React frontend.
+
+We need a clean architectural separation:
+
+HAMZAWI:
+- Generic AI/chat engine and infrastructure.
+
+POSTLAB:
+- Product-specific AI assistant identity and product knowledge.
+- Must understand PostLab's purpose, features, workflow, Policy Intelligence, Brand Intelligence, Creative Intelligence, Business Tools, Brand Profile/Brand Brain, and the rules defined by the product.
+- Must not claim to be Hamzawi.
+- Must not expose or mix unrelated Hamzawi identity/context.
+- Must use PostLab-specific system instructions when operating inside PostLab.
+
+IMPORTANT:
+Do not invent product rules.
+Use the existing project documentation, code, product decisions, and implemented features as the source of truth.
+
+First report:
+A. Where the current Hamzawi identity comes from.
+B. Where it is injected.
+C. What must change to make PostLab have its own identity.
+D. Which files you recommend modifying.
+
+Then implement ONLY the required changes.
+
+After implementation, test:
+1. Open PostLab chat.
+2. Ask: "Who are you?"
+3. Ask: "What is PostLab?"
+4. Ask a PostLab-specific marketing/policy question.
+5. Verify the assistant does NOT identify itself as Hamzawi.
+6. Verify unrelated Hamzawi identity/context is not exposed.
+
+==================================================
+PRIORITY 2 — IMAGE GENERATION IS STILL BROKEN
+==================================================
+
+Image generation still does not work.
+
+The API key for the Nano Banana / configured image-generation provider was changed yesterday.
+
+Do NOT assume the API key is the root cause.
+
+Trace the COMPLETE image-generation pipeline from frontend to provider and back.
+
+AUDIT:
+
+1. The exact frontend action/button/prompt that requests image generation.
+2. The API endpoint called.
+3. Backend route/controller.
+4. Image-generation service.
+5. Provider SDK/API being used.
+6. Exact configured model name.
+7. Environment variable / Replit Secret name being read.
+8. Whether the new API key is actually being read by the running server.
+9. Whether the provider request succeeds.
+10. HTTP status and provider error response.
+11. Response parsing.
+12. Image storage/upload.
+13. Returned image URL/data.
+14. Chat message persistence.
+15. Frontend rendering of the generated image.
+
+DO NOT print or expose the actual API key or any secret.
+
+Use safe diagnostics only:
+- key exists: yes/no
+- key length if useful, but never print the key
+- provider
+- model
+- request status
+- sanitized error
+- response type
+- storage result
+
+IMPORTANT:
+If the provider/model/API combination is invalid, identify the exact incompatibility.
+If the key is valid but the application is reading the wrong environment variable, fix that.
+If the provider request succeeds but the UI does not display the image, fix the downstream issue.
+If the request never reaches the provider, fix the backend path.
+
+Do not replace the provider or introduce a new image-generation system unless the current implementation is demonstrably impossible to operate.
+
+==================================================
+VALIDATION
+==================================================
+
+After fixing, perform real end-to-end tests.
+
+TEST A — POSTLAB IDENTITY
+- New PostLab conversation.
+- Ask who the assistant is.
+- Ask what PostLab does.
+- Confirm PostLab identity is used.
+
+TEST B — IMAGE GENERATION
+- Start a new PostLab conversation.
+- Request a simple image generation.
+- Confirm the backend request reaches the configured provider.
+- Confirm the provider returns a successful image result.
+- Confirm the image appears in the chat.
+- Refresh the page.
+- Confirm the generated image remains visible in conversation history.
+
+TEST C — TEXT + IMAGE
+- Send a request containing both text and image-generation intent.
+- Confirm both the text and generated image survive reload.
+
+IMPORTANT FINAL OUTPUT:
+
+Do NOT give me a generic "implemented successfully".
+
+Report:
+
+1. POSTLAB IDENTITY
+   - Root cause
+   - Files changed
+   - What was changed
+   - Test result
+
+2. IMAGE GENERATION
+   - Root cause
+   - Provider
+   - Model
+   - Secret variable name used (name only, never value)
+   - Failure point
+   - Files changed
+   - Test result
+
+3. Remaining risks, if any.
+
+Do NOT work on Replit's two suggested tasks yet unless they are required to validate these fixes.
