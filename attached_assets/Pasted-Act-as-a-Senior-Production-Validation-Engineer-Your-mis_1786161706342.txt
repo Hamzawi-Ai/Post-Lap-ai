@@ -1,0 +1,170 @@
+Act as a Senior Production Validation Engineer.
+
+Your mission is NOT to improve the application.
+
+Your mission is NOT to redesign anything.
+
+Your mission is to verify that the current MVP actually works in production.
+
+Assume the architecture is final.
+
+==================================================
+
+Perform a real production validation.
+
+Do not perform a code review.
+
+Instead verify runtime behavior.
+
+Check:
+
+1. Build
+- pnpm install
+- pnpm typecheck
+- pnpm build
+
+2. Server startup
+
+- Starts successfully
+- No startup exceptions
+- No missing environment variables
+
+3. Database
+
+- Connection succeeds
+- Migrations compatible
+- Startup queries succeed
+
+4. Authentication
+
+Verify:
+
+- Guest flow
+- Login
+- Google login
+- Session persistence
+- Logout
+
+5. API
+
+Verify every public API actually responds correctly.
+
+Report:
+
+- 200
+- 400
+- 401
+- 403
+- 404
+- 500
+
+where appropriate.
+
+6. Frontend ↔ Backend
+
+Verify:
+
+- Fetch requests
+- JSON parsing
+- Error handling
+- Loading states
+
+7. Upload Flow
+
+Verify:
+
+- Upload endpoint
+- Image processing
+- AI pipeline
+- Returned response
+
+8. OpenAI Integration
+
+Verify that:
+
+- API key loads
+- Client initializes
+- Requests succeed
+- Errors are handled
+
+9. Browser Console
+
+Report:
+
+- JavaScript errors
+- Failed requests
+- React errors
+- Unhandled Promise Rejections
+
+10. Network
+
+Report:
+
+- Failed HTTP requests
+- CORS
+- Timeouts
+- Broken routes
+
+11. Smoke Test
+
+Walk through the complete MVP as a real user.
+
+Guest
+
+↓
+
+Register/Login
+
+↓
+
+Upload
+
+↓
+
+AI Analysis
+
+↓
+
+Image Generation
+
+↓
+
+Conversation
+
+↓
+
+Memory
+
+↓
+
+Logout
+
+==================================================
+
+Only report issues that were actually reproduced.
+
+Do NOT speculate.
+
+Do NOT report theoretical risks.
+
+Do NOT suggest architecture improvements.
+
+Do NOT suggest refactoring.
+
+Do NOT report code smells.
+
+Only report failures that were observed during execution.
+
+For every issue include:
+
+- Steps to reproduce
+- Expected behavior
+- Actual behavior
+- Root cause
+- Exact location
+- Recommended fix
+
+If everything works correctly, explicitly state:
+
+Production Smoke Test: PASSED
+Production Blockers: None
