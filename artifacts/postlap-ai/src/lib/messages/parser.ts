@@ -23,19 +23,35 @@ export function parseStoredContent(content: string): {
   text: string;
   imageUrl?: string;
   generatedDescription?: string;
+  attachedImageUrl?: string;
 } {
-  const match = content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
+  const generatedMatch = content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
+  const attachedMatch = content.match(/%%ATTACHED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
   const text = content
     .replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "")
     .replace(/%%ATTACHED_IMAGE%%[\s\S]*?%%END%%/g, "")
     .trim();
-  if (!match) return { text };
-  try {
-    const parsed = JSON.parse(match[1]) as { url?: string; description?: string };
-    return { text, imageUrl: parsed.url, generatedDescription: parsed.description };
-  } catch {
-    return { text };
+  if (generatedMatch) {
+    try {
+      const parsed = JSON.parse(generatedMatch[1]) as { url?: string; description?: string };
+      return { text, imageUrl: parsed.url, generatedDescription: parsed.description };
+    } catch {
+      return { text };
+    }
   }
+  if (attachedMatch) {
+    try {
+      const parsed = JSON.parse(attachedMatch[1]) as { url?: string; data?: string };
+      // Prefer a hosted URL; fall back to a data-URL blob when that's all that was persisted.
+      const attachedImageUrl = parsed.url ?? parsed.data;
+      if (attachedImageUrl) {
+        return { text, attachedImageUrl };
+      }
+    } catch {
+      // fall through to plain text
+    }
+  }
+  return { text };
 }
 
 export function storedContentToBlock(
@@ -53,6 +69,16 @@ export function storedContentToBlock(
       url: parsed.imageUrl,
       description: parsed.generatedDescription,
       text: parsed.text,
+    };
+  }
+  if (parsed.attachedImageUrl) {
+    return {
+      id: nextBlockId(),
+      from,
+      time,
+      type: "media",
+      text: parsed.text,
+      url: parsed.attachedImageUrl,
     };
   }
   return { id: nextBlockId(), from, time, type: "text", text: parsed.text };
