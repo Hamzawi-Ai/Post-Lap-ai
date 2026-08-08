@@ -17,11 +17,10 @@ test("header sign-in button opens the login modal", async ({ page }) => {
   await expect(page.getByTestId("modal-login")).toBeVisible();
 });
 
-test("'سجّل مجاناً' button opens the login modal", async ({ page }) => {
-  // The register-free button is in the image generation gated section
-  const registerBtn = page.getByTestId("button-register-free-image");
-  await expect(registerBtn).toBeVisible();
-  await registerBtn.click();
+test("chat-first home renders the assistant and the header sign-in opens the login modal", async ({ page }) => {
+  // The home page is now a ChatGPT-style chat — verify the assistant is visible
+  await expect(page.getByTestId("chat-input")).toBeVisible();
+  await page.getByTestId("button-header-signin").click();
   await expect(page.getByTestId("modal-login")).toBeVisible();
 });
 

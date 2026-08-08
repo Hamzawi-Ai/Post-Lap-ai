@@ -1,11 +1,13 @@
-import { useState, useRef, useEffect } from "react";
-import { CheckCircle, XCircle, AlertCircle, Loader2, Check, Shield, Lock, ScanLine, Image as ImageIcon, Download, Store, Sparkles, PenLine, Palette, BrainCircuit } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { CheckCircle, XCircle, Loader2, Shield, Lock, Store, Sparkles, PenLine, Palette, BrainCircuit, Menu } from "lucide-react";
 import { useGetConfig, getGetConfigQueryKey } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/useLanguage";
 import { ui } from "@/lib/i18n";
 import { handleAuthError as authError, clearAuth as clearAuthState, setToken } from "@/lib/utils";
 import { useLocation } from "wouter";
+import HamzawiChat from "@/components/HamzawiChat";
+import HamzawiSidebar, { type Conversation } from "@/components/HamzawiSidebar";
 
 const TRIALS_KEY = "postlap_trials";
 const MAX_VISITOR_TRIALS = 3;
@@ -65,21 +67,14 @@ export default function Home() {
   const t = ui[lang];
 
   const [user, setUser] = useState<LocalUser | null>(getStoredUser);
-  const heroFileInputRef = useRef<HTMLInputElement>(null);
-  const imageFileInputRef = useRef<HTMLInputElement>(null);
   const [checking, setChecking] = useState(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [checkResult, setCheckResult] = useState<{ id?: number; status: CheckStatus; message: string; score: number; frames_checked?: number | null; violations?: Array<{ type: string; reason: string; severity: string }>; suggestions?: string[] } | null>(null);
-  const [uploadedImageBase64, setUploadedImageBase64] = useState<string | null>(null);
   const [trialBlockModal, setTrialBlockModal] = useState(false);
   const [genderModal, setGenderModal] = useState(false);
   const [cookieConsent, setCookieConsent] = useState(() => !!localStorage.getItem(COOKIE_KEY));
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
-  const [imageProduct, setImageProduct] = useState("");
-  const [imageProductName, setImageProductName] = useState("");
-  const [imageGenLoading, setImageGenLoading] = useState(false);
-  const [imageGenResult, setImageGenResult] = useState<string | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [subscribeModal, setSubscribeModal] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
@@ -89,14 +84,6 @@ export default function Home() {
 
   const gender = (user?.gender ?? localStorage.getItem(GENDER_KEY) ?? null) as "male" | "female" | null;
   const discountActive = isDiscountActive();
-
-  function handleHeroFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    handleFile(file);
-  }
-
 
   useEffect(() => {
     if (!showLoginModal) return;
@@ -180,6 +167,82 @@ export default function Home() {
     localStorage.removeItem(USER_KEY);
     setUser(null);
     toast({ title: "تم تسجيل الخروج" });
+  }
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const isAuthenticated = !!user && !!getToken();
+
+  const fetchConversations = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch("/api/hamzawi/conversations", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data.conversations ?? []);
+      }
+    } catch {
+      console.error("Failed to fetch conversations");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchConversations();
+    }
+  }, [isAuthenticated, fetchConversations]);
+
+  function handleSelect(id: string) {
+    setActiveConversationId(id);
+  }
+
+  function handleNew() {
+    setActiveConversationId(null);
+  }
+
+  async function handleRename(id: string, title: string) {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/hamzawi/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title }),
+      });
+      if (res.ok) {
+        await fetchConversations();
+      }
+    } catch {
+      console.error("Failed to rename conversation");
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/hamzawi/conversations/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        if (activeConversationId === id) {
+          setActiveConversationId(null);
+        }
+        await fetchConversations();
+      }
+    } catch {
+      console.error("Failed to delete conversation");
+    }
+  }
+
+  function handleConversationCreated(id: string) {
+    setActiveConversationId(id);
+    fetchConversations();
   }
 
   // First-time onboarding gate: users on Professional (content, level 4+) whose
@@ -293,18 +356,6 @@ export default function Home() {
       setTrialBlockModal(true); return;
     }
 
-    // Store base64 (images only) for level-4 image+description post generation
-    if (file.type !== "video/mp4") {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result;
-        setUploadedImageBase64(typeof result === "string" ? result : null);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setUploadedImageBase64(null);
-    }
-
     setCheckResult(null);
     setChecking(true);
     startCountdown();
@@ -335,53 +386,6 @@ export default function Home() {
     }
   }
 
-
-  function handleImageProductFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    setImageProductName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      setUploadedImageBase64(typeof reader.result === "string" ? reader.result : null);
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function downloadImage(url: string) {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `postlap-post-${Date.now()}.jpg`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }
-
-  async function handleGenerateImage() {
-    if (!imageProduct.trim()) { toast({ title: "أدخل معلومات المنتج", variant: "destructive" }); return; }
-    setImageGenLoading(true);
-    const token = localStorage.getItem(TOKEN_KEY);
-    try {
-      const body: Record<string, string> = { mode: "new_post", productDescription: imageProduct };
-      if (uploadedImageBase64) body.productImageBase64 = uploadedImageBase64;
-      const res = await fetch("/api/image-gen", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (res.status === 401) { logout(); toast({ title: "انتهت الجلسة", variant: "destructive" }); return; }
-      if (!res.ok) throw new Error(data.error);
-      setImageGenResult(data.url);
-    } catch (e: any) {
-      toast({ title: "خطأ", description: e.message, variant: "destructive" });
-    } finally {
-      setImageGenLoading(false);
-    }
-  }
 
   function acceptCookies() {
     localStorage.setItem(COOKIE_KEY, "1");
@@ -471,12 +475,18 @@ export default function Home() {
             <span className="hidden sm:inline text-xs text-muted-foreground border border-border rounded px-2 py-0.5">{lang === "ar" ? "مساعدك التسويقي" : "AI Marketing Assistant"}</span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
-            <a href="/hamzawi" className="hover:text-foreground transition-colors font-semibold text-primary">{lang === "ar" ? "المساعد" : "Assistant"}</a>
-            <a href="#image-gen" className="hover:text-foreground transition-colors">{lang === "ar" ? "توليد الصور" : "Image Generation"}</a>
-            <a href="#check" className="hover:text-foreground transition-colors">{lang === "ar" ? "افحص إعلانك" : "Check My Ad"}</a>
             <a href="#plans" className="hover:text-foreground transition-colors">{lang === "ar" ? "الخطط" : "Plans"}</a>
           </nav>
           <div className="flex items-center gap-2">
+            {isAuthenticated && (
+              <button
+                onClick={() => setSidebarVisible(true)}
+                className="lg:hidden text-muted-foreground hover:text-foreground transition-colors"
+                aria-label="فتح المحادثات"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground hidden sm:inline">{user.name}</span>
@@ -503,228 +513,36 @@ export default function Home() {
         </div>
       </header>
 
+      {/* ChatGPT-style workspace */}
+      <div className="flex h-[calc(100vh-4rem)] bg-background overflow-hidden" dir="rtl">
+        {isAuthenticated && (
+          <HamzawiSidebar
+            conversations={conversations}
+            activeConversationId={activeConversationId}
+            onSelect={handleSelect}
+            onNew={handleNew}
+            onRename={handleRename}
+            onDelete={handleDelete}
+            visible={sidebarVisible}
+            onClose={() => setSidebarVisible(false)}
+          />
+        )}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <HamzawiChat
+            embedded
+            gender={gender}
+            checkResult={checkResult}
+            whatsapp={whatsapp}
+            userPlan={user?.plan}
+            onFileCheck={handleFile}
+            checking={checking}
+            conversationId={activeConversationId}
+            onConversationCreated={handleConversationCreated}
+          />
+        </div>
+      </div>
+
       <main className="max-w-6xl mx-auto px-4 py-8 space-y-16">
-
-        {/* ── 2. AI Image Generation ──────────────────────────────────────── */}
-        <section id="image-gen" className="w-full">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-black text-foreground mb-2">
-              {lang === "ar" ? "توليد صور المنشورات" : "AI Image Generation"}
-            </h2>
-            <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
-              {lang === "ar"
-                ? "صمم منشوراً احترافياً بشعار نشاطك وألوان هويتك من وصف منتجك مباشرةً"
-                : "Design a professional post with your brand's logo and colors directly from your product description"}
-            </p>
-          </div>
-
-          {user && planLevelFrontend(user.plan) >= 4 ? (
-            <div className="max-w-2xl mx-auto space-y-4">
-              {uploadedImageBase64 && (
-                <div className="flex items-center gap-2 text-xs text-primary bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
-                  <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                  <span>{lang === "ar" ? "سيتم استخدام صورة المنتج المرفوعة في التصميم" : "The uploaded product image will be used in the design"}</span>
-                </div>
-              )}
-              <textarea
-                className="w-full bg-card border border-border rounded-xl p-4 text-foreground placeholder:text-muted-foreground resize-none h-28 focus:outline-none focus:ring-2 focus:ring-primary/50 text-right"
-                placeholder={lang === "ar" ? "(اسم المنتج، السعر، العرض...)" : "(product name, price, offer...)"}
-                value={imageProduct}
-                onChange={(e) => setImageProduct(e.target.value)}
-                data-testid="input-image-product"
-              />
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input ref={imageFileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageProductFile} />
-                <button
-                  onClick={() => imageFileInputRef.current?.click()}
-                  className="flex-1 bg-muted border border-dashed border-border rounded-xl px-4 py-2.5 text-sm text-muted-foreground hover:border-primary/50 transition-colors flex items-center justify-center gap-2"
-                >
-                  <ImageIcon className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{imageProductName || (lang === "ar" ? "ارفع صورة المنتج (اختياري)" : "Upload product image (optional)")}</span>
-                </button>
-                <button
-                  onClick={handleGenerateImage}
-                  disabled={imageGenLoading}
-                  className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center gap-2 disabled:opacity-50 justify-center"
-                  data-testid="button-generate-image"
-                >
-                  {imageGenLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                  {lang === "ar" ? "ولّد الصورة" : "Generate Image"}
-                </button>
-              </div>
-              {imageGenResult && (
-                <div className="bg-card border border-border rounded-xl overflow-hidden" data-testid="image-generated-result">
-                  <img src={imageGenResult} alt="generated post" className="w-full" />
-                  <div className="flex items-center justify-between p-3 border-t border-border">
-                    <p className="text-xs text-muted-foreground">{lang === "ar" ? "متوافق مع سياسات Meta ✓" : "Compliant with Meta policies ✓"}</p>
-                    <button
-                      onClick={() => downloadImage(imageGenResult)}
-                      className="flex items-center gap-1.5 text-xs bg-muted text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg transition-colors"
-                      data-testid="button-download-image"
-                    >
-                      <Download className="w-3 h-3" /> {lang === "ar" ? "حمّل الصورة" : "Download"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Non-paid / non-logged users — gated prompt */
-            <div className="max-w-xl mx-auto bg-card border border-primary/20 rounded-2xl p-8 text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
-                <ImageIcon className="w-7 h-7 text-primary" />
-              </div>
-              <div>
-                <p className="text-lg font-black text-foreground">
-                  {!user ? "سجّل الدخول مجاناً للوصول" : "ميزة للمشتركين المدفوعين"}
-                </p>
-                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  {!user
-                    ? "سجل دخولك مجاناً — توليد صور المنشورات متاح لخطط إدارة المحتوى والوكالة."
-                    : <>توليد صور المنشورات بالشعار والهوية متاح لخطط <span className="text-primary font-semibold">إدارة المحتوى</span> وما فوق.</>}
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {!user ? (
-                  <>
-                    <div ref={googleBtnModalRef} className="flex justify-center" />
-                    <button onClick={() => setShowLoginModal(true)} className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors" data-testid="button-register-free-image">
-                      سجّل مجاناً
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => setSubscribeModal(true)}
-                      className="bg-primary text-primary-foreground px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"
-                      data-testid="button-subscribe-start-image"
-                    >
-                      اشترك وابدأ التوليد
-                    </button>
-                    <a href="#plans" className="border border-border text-muted-foreground px-6 py-2.5 rounded-xl text-sm hover:bg-muted/50 transition-colors">
-                      عرض الخطط
-                    </a>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ── 3. Existing Post Check (supporting tool) ─────────────────────── */}
-        <section id="check" className="w-full">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-black text-foreground mb-2">
-              {lang === "ar" ? "افحص إعلانك — أداة مساندة" : "Check Your Ad — Supporting Tool"}
-            </h2>
-            <p className="text-muted-foreground text-sm max-w-lg mx-auto leading-relaxed">
-              {lang === "ar"
-                ? "أداة مساندة من PostLab — ارفع إعلانك (صورة أو فيديو) ليفحص توافقه مع سياسات Meta وتظهر النتيجة في محادثتك مباشرةً"
-                : "A supporting tool from PostLab — upload your ad (image or video) to check Meta compliance and see the result right in your chat"}
-            </p>
-          </div>
-
-          <div className="max-w-xl mx-auto">
-            <input
-              ref={heroFileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,video/mp4"
-              className="hidden"
-              onChange={handleHeroFileUpload}
-            />
-            <button
-              onClick={() => heroFileInputRef.current?.click()}
-              disabled={checking}
-              className="w-full bg-card border-2 border-dashed border-border rounded-2xl p-6 text-center hover:border-primary/50 transition-colors disabled:opacity-70"
-              data-testid="dropzone-check"
-            >
-              {checking ? (
-                <div className="flex flex-col items-center gap-3">
-                  <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                  <p className="text-sm text-muted-foreground animate-pulse">
-                    {lang === "ar" ? "جاري تحليل إعلانك..." : "Analyzing your ad..."}
-                    {countdown !== null && <span className="ml-2">{countdown}s</span>}
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                    <ScanLine className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-base font-black text-foreground">
-                      {lang === "ar" ? "افحص إعلانك" : "Check your ad"}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {lang === "ar" ? "صورة PNG / JPG أو فيديو MP4 — حتى 50 ميجابايت" : "PNG / JPG image or MP4 video — up to 50 MB"}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </button>
-
-            {checkResult && !checking && (
-              <div className="mt-6 bg-card border border-border rounded-2xl overflow-hidden" data-testid="inline-check-result">
-                <div className={`p-5 border-b border-border flex items-center justify-between gap-3 ${checkResult.status === "ممتاز" ? "bg-green-500/10" : checkResult.status === "مرفوض" ? "bg-red-500/10" : "bg-yellow-500/10"}`}>
-                  <div className="flex items-center gap-2">
-                    {checkResult.status === "ممتاز" ? (
-                      <CheckCircle className="w-5 h-5 text-green-400" />
-                    ) : checkResult.status === "مرفوض" ? (
-                      <XCircle className="w-5 h-5 text-red-400" />
-                    ) : (
-                      <AlertCircle className="w-5 h-5 text-yellow-400" />
-                    )}
-                    <p className="font-bold text-foreground">{checkResult.status}</p>
-                  </div>
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">{lang === "ar" ? "النقاط:" : "Score:"}</span>{" "}
-                    <span className="font-black text-primary text-lg">{checkResult.score}</span>
-                  </div>
-                </div>
-                <div className="p-5 space-y-4">
-                  {checkResult.message && (
-                    <p className="text-sm text-foreground leading-relaxed">{checkResult.message}</p>
-                  )}
-                  {checkResult.violations && checkResult.violations.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-muted-foreground mb-2">{lang === "ar" ? "المخالفات" : "Violations"}</p>
-                      <ul className="space-y-2">
-                        {checkResult.violations.map((v, i) => (
-                          <li key={i} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
-                            <XCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-400" />
-                            <span>{v.reason}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {checkResult.suggestions && checkResult.suggestions.length > 0 && (
-                    <div>
-                      <p className="text-xs font-bold text-muted-foreground mb-2">{lang === "ar" ? "الاقتراحات" : "Suggestions"}</p>
-                      <ul className="space-y-2">
-                        {checkResult.suggestions.map((s, i) => (
-                          <li key={i} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
-                            <Check className="w-4 h-4 mt-0.5 shrink-0 text-green-400" />
-                            <span>{s}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {(!user || ["visitor", "registered"].includes(user.plan)) && (
-                    <a
-                      href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(lang === "ar" ? "أريد الاشتراك في Smart Fix" : "I want to subscribe to Smart Fix")}`}
-                      target="_blank" rel="noopener noreferrer"
-                      className="block w-full bg-green-600 text-white text-center text-sm py-2.5 rounded-xl font-bold hover:bg-green-700 transition-colors"
-                    >
-                      📲 {lang === "ar" ? "اشترك في Smart Fix للتحليل التفصيلي" : "Subscribe to Smart Fix for detailed analysis"}
-                    </a>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
 
         {/* ── 4. Features ─────────────────────────────────────────────────── */}
         <section id="why" className="w-full">

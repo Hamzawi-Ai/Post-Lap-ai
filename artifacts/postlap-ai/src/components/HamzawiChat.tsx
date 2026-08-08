@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { X, Send, Loader2, BookmarkPlus, Sparkles, Paperclip, Image as ImageIcon, ScanLine } from "lucide-react";
+import { X, Send, Loader2, Sparkles, Paperclip, ScanLine } from "lucide-react";
 import { brandProfileCompletion, type BrandProfileData } from "@/lib/onboarding";
 import { chatRendererRegistry, type ChatRendererContext } from "@/components/chat";
 import type { ChatBlock, BlockExtra, GeneratedImageBlock } from "@/lib/messages/types";
@@ -28,36 +28,11 @@ const i18n = {
     placeholder: "اكتب رسالتك...",
     loading: "جاري التحميل...",
     thinking: "PostLab يفكر...",
-    saveBrand: "احفظ هوية نشاطي",
-    saveTitle: "هوية النشاط التجاري",
-    businessName: "اسم النشاط",
-    businessType: "نوع النشاط",
-    address: "العنوان / المنطقة",
-    phone: "رقم الهاتف",
-    primaryColors: "الألوان الأساسية",
-    style: "الأسلوب المفضل",
-    notes: "ملاحظات",
-    logoLabel: "شعار النشاط",
-    uploadLogo: "رفع الشعار",
-    save: "حفظ",
-    saving: "جاري الحفظ...",
-    cancel: "إلغاء",
-    upgradeMsg: "حفظ هوية النشاط متاح للمستخدمين المسجّلين فأعلى",
-    newPost: "✦ منشور جديد",
-    newPostTitle: "إنشاء منشور جديد",
-    productDescPlaceholder: "مثال: عرض خاص على برغر الدجاج — 50% خصم اليوم فقط",
-    uploadImage: "رفع صورة المنتج (اختياري)",
-    generatePost: "توليد المنشور",
-    generatingPost: "جاري توليد المنشور...",
     regenerate: "أعد التوليد",
     download: "حمّل الصورة",
     attachFile: "إرفاق صورة",
-    postGenerated: "✅ تم توليد المنشور! يمكنك تنزيله أو إعادة توليده.",
-    postError: "حدث خطأ أثناء توليد المنشور.",
     copy: "نسخ",
     copied: "تم النسخ ✓",
-    uploading: "جاري رفع الملف...",
-    uploadedLogo: "تم رفع الشعار ✓",
     attachTip: "انقر لإرفاق صورة (شعار، تصميم سابق، أو صورة منتج)",
     regeneratePrompt: "ملاحظة للتوليد (اختياري):",
     checkAdTip: "ارفع صورة إعلانك للفحص",
@@ -79,36 +54,11 @@ const i18n = {
     placeholder: "Type your message...",
     loading: "Loading...",
     thinking: "PostLab is thinking...",
-    saveBrand: "Save my brand identity",
-    saveTitle: "Brand Identity",
-    businessName: "Business name",
-    businessType: "Business type",
-    address: "Address / Area",
-    phone: "Phone number",
-    primaryColors: "Primary colors",
-    style: "Preferred style",
-    notes: "Notes",
-    logoLabel: "Business logo",
-    uploadLogo: "Upload logo",
-    save: "Save",
-    saving: "Saving...",
-    cancel: "Cancel",
-    upgradeMsg: "Brand identity is available for registered users and above",
-    newPost: "✦ New Post",
-    newPostTitle: "Create New Post",
-    productDescPlaceholder: "e.g., Special offer on chicken burger — 50% off today only",
-    uploadImage: "Upload product image (optional)",
-    generatePost: "Generate Post",
-    generatingPost: "Generating your post...",
     regenerate: "Regenerate",
     download: "Download Image",
     attachFile: "Attach image",
-    postGenerated: "✅ Post generated! You can download or regenerate it.",
-    postError: "Error generating post.",
     copy: "Copy",
     copied: "Copied ✓",
-    uploading: "Uploading...",
-    uploadedLogo: "Logo uploaded ✓",
     attachTip: "Click to attach an image (logo, design sample, or product photo)",
     regeneratePrompt: "Regeneration note (optional):",
     checkAdTip: "Upload your ad image to check it",
@@ -154,11 +104,6 @@ interface HamzawiChatProps {
  */
 
 // Payload kept for regeneration — never cleared when form resets
-interface GenerationPayload {
-  description: string;
-  imageBase64: string | null;
-}
-
 function now() {
   return new Date().toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" });
 }
@@ -188,38 +133,15 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   const [sessionVersion, setSessionVersion] = useState(0);
   const sessionVersionRef = useRef(0);
   const objectUrlsRef = useRef<string[]>([]);
-  const [showBrandForm, setShowBrandForm] = useState(false);
-  const [brandForm, setBrandForm] = useState({
-    business_name: "",
-    business_type: "",
-    address: "",
-    phone: "",
-    primary_colors: "",
-    preferred_style: "",
-    notes: "",
-    logo_url: "",
-  });
   const [lang, setLang] = useState<"ar" | "en">("ar");
   const [unread, setUnread] = useState(false);
   const [brandMemory, setBrandMemory] = useState<BrandProfileData | null>(null);
 
-  // New Post panel state
-  const [showNewPost, setShowNewPost] = useState(false);
-  const [postDescription, setPostDescription] = useState("");
-  const [postImageBase64, setPostImageBase64] = useState<string | null>(null);
-  const [postImageName, setPostImageName] = useState("");
-  const [generatingPost, setGeneratingPost] = useState(false);
-
-  // Last generation payload — preserved for regeneration even after form changes
-  const lastGenPayloadRef = useRef<GenerationPayload | null>(null);
-
   // Upload state
   const [uploadingAsset, setUploadingAsset] = useState(false);
-  const [savingBrand, setSavingBrand] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
-  const postImageInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const attachInputRef = useRef<HTMLInputElement>(null);
   const checkAdInputRef = useRef<HTMLInputElement>(null);
 
@@ -498,8 +420,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   }, [checkResult]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, showNewPost, generatingPost]);
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, loading]);
 
   async function sendMessage(
     text?: string,
@@ -548,33 +472,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     }
   }
 
-  async function saveBrandMemory() {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) return;
-    setSavingBrand(true);
-    try {
-      const res = await fetch("/api/hamzawi/memory", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...brandForm, source: "settings" }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        addHamzawi((data as { error?: string }).error ?? (lang === "ar" ? "حدث خطأ أثناء الحفظ." : "Error saving brand identity."));
-        return;
-      }
-      setShowBrandForm(false);
-      addHamzawi(lang === "ar"
-        ? `تم حفظ هوية نشاطك التجاري "${brandForm.business_name || "النشاط"}" ✅ سأتذكرها في كل محادثة!`
-        : `Brand identity saved for "${brandForm.business_name || "your business"}" ✅ I'll remember it in every conversation!`
-      );
-    } catch {
-      addHamzawi(lang === "ar" ? "حدث خطأ أثناء الحفظ." : "Error saving brand identity.");
-    } finally {
-      setSavingBrand(false);
-    }
-  }
-
   /**
    * Upload a file to the backend upload-asset endpoint.
    * Returns the public URL or null on failure.
@@ -602,38 +499,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     } finally {
       setUploadingAsset(false);
     }
-  }
-
-  /**
-   * Handle logo upload in the brand form.
-   * Uploads to backend, stores URL in brandForm.logo_url.
-   */
-  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const url = await uploadAsset(file, "logo");
-    if (url) {
-      setBrandForm((f) => ({ ...f, logo_url: url }));
-    } else {
-      addHamzawi(lang === "ar" ? "حدث خطأ أثناء رفع الشعار." : "Error uploading logo.");
-    }
-  }
-
-  /**
-   * Handle product image for new post panel — no backend upload needed;
-   * we read it locally as base64 and pass directly to generate-post.
-   */
-  async function handlePostImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPostImageBase64(reader.result as string);
-      setPostImageName(file.name);
-    };
-    reader.readAsDataURL(file);
   }
 
   /**
@@ -672,7 +537,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   /**
    * Paperclip attachment in main chat.
    * Uploads to backend and saves the returned URL as a Hamzawi message (for context/logo).
-   * If the brand form is open, saves as logo_url.
    */
   async function handleChatAttach(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -680,12 +544,10 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     e.target.value = "";
 
     // Determine category before uploading.
-    // If the brand form is open or we're in onboarding with no logo yet → "logo".
+    // If we're in onboarding with no logo yet → "logo".
     // Otherwise → "portfolio" (design samples and general attachments).
     let attachCategory: "logo" | "portfolio" = "portfolio";
-    if (showBrandForm) {
-      attachCategory = "logo";
-    } else if (level >= 4) {
+    if (level >= 4) {
       // Check if user already has a logo to decide category ahead of upload
       const token = localStorage.getItem(TOKEN_KEY);
       if (token) {
@@ -709,11 +571,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
       return;
     }
 
-    if (showBrandForm) {
-      // Save directly as logo in brand form (manual brand memory editing)
-      setBrandForm((f) => ({ ...f, logo_url: url }));
-      addHamzawi(lang === "ar" ? t.uploadedLogo : t.uploadedLogo);
-    } else if (level >= 4) {
+    if (level >= 4) {
       // During onboarding (step 7) or post-onboarding for level 4+:
       // First upload → logo (if no logo yet); subsequent uploads → design samples
       const token = localStorage.getItem(TOKEN_KEY);
@@ -775,78 +633,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
     }
   }
 
-  /**
-   * Generate (or regenerate) a branded post.
-   * isRegenerate=true reuses lastGenPayloadRef so the form can be cleared/changed safely.
-   */
-  async function handleGeneratePost(isRegenerate = false, regenerateNote?: string) {
-    let description: string;
-    let imageBase64: string | null;
-
-    if (isRegenerate && lastGenPayloadRef.current) {
-      // Use the stored payload from last successful generation
-      description = lastGenPayloadRef.current.description;
-      imageBase64 = lastGenPayloadRef.current.imageBase64;
-    } else {
-      description = postDescription.trim();
-      imageBase64 = postImageBase64;
-    }
-
-    if (!description) return;
-
-    // Save this payload for future regenerations before anything async happens
-    lastGenPayloadRef.current = { description, imageBase64 };
-
-    setGeneratingPost(true);
-
-    if (!isRegenerate) {
-      // Add the user request message immediately when user first clicks Generate
-      setMessages((prev) => [
-        ...prev,
-        chatBlock("user", `${lang === "ar" ? "توليد منشور: " : "Generate post: "}${description}`),
-      ]);
-    }
-
-    try {
-      const token = localStorage.getItem(TOKEN_KEY);
-      const body: Record<string, string> = { productDescription: description };
-      if (imageBase64) body.productImageBase64 = imageBase64;
-      if (regenerateNote) body.regenerateNote = regenerateNote;
-
-      const res = await fetch("/api/image-gen", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ mode: "new_post", ...body }),
-      });
-
-      if (res.ok) {
-        const data = await res.json() as { url: string };
-
-        // Close the new post panel after the first successful generation
-        if (!isRegenerate) {
-          setShowNewPost(false);
-          // Keep postDescription and postImageBase64 — don't clear them so regenerate works
-        }
-
-        addHamzawi(t.postGenerated, {
-          imageUrl: data.url,
-          isGeneratedPost: true,
-        });
-      } else {
-        const errBody = await res.json().catch(() => ({}));
-        addHamzawi((errBody as any).error ?? t.postError);
-        if (!isRegenerate) setShowNewPost(false);
-      }
-    } catch {
-      addHamzawi(t.postError);
-    } finally {
-      setGeneratingPost(false);
-    }
-  }
-
   function downloadImage(url: string) {
     const a = document.createElement("a");
     a.href = url;
@@ -857,10 +643,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
   }
 
   function handleRegenerateClick() {
-    if (lastGenPayloadRef.current) {
-      handleGeneratePost(true);
-      return;
-    }
     // Chat-generated design — ask Hamzawi to regenerate it in a new turn.
     const lastGenMsg = [...messages].reverse().find(
       (m): m is GeneratedImageBlock => m.type === "generated_image" && !!m.description,
@@ -890,13 +672,12 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
         // clipboard unavailable — no-op
       }
     },
-    busy: generatingPost,
   };
 
   return (
-    <div className={`${embedded ? "w-full" : `fixed bottom-20 ${isRTL ? "left-4" : "right-4"} z-40 flex flex-col items-end gap-2`}`} dir={dirAttr}>
+    <div className={`${embedded ? "w-full h-full" : `fixed bottom-20 ${isRTL ? "left-4" : "right-4"} z-40 flex flex-col items-end gap-2`}`} dir={dirAttr}>
       {(open || embedded) && (
-        <div className={`bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden ${embedded ? "w-full" : "w-80 sm:w-96"}`} style={{ height: embedded ? "640px" : "520px" }}>
+        <div className={`bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden ${embedded ? "w-full h-full" : "w-80 sm:w-96"}`} style={{ height: embedded ? "100%" : "520px" }}>
           {/* Header */}
           <div className="bg-primary px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
@@ -909,25 +690,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {level >= 4 && (
-                <button
-                  onClick={() => { setShowNewPost(!showNewPost); setShowBrandForm(false); }}
-                  title={t.newPost}
-                  className={`text-white/70 hover:text-white transition-colors text-xs font-semibold px-2 py-1 rounded-lg border border-white/20 hover:border-white/50 flex items-center gap-1 ${showNewPost ? "bg-white/20 text-white border-white/40" : ""}`}
-                >
-                  <Sparkles className="w-3 h-3" />
-                  {t.newPost}
-                </button>
-              )}
-              {level >= 2 && (
-                <button
-                  onClick={() => { setShowBrandForm(!showBrandForm); setShowNewPost(false); }}
-                  title={t.saveBrand}
-                  className="text-white/70 hover:text-white transition-colors"
-                >
-                  <BookmarkPlus className="w-4 h-4" />
-                </button>
-              )}
               {level >= 2 && brandMemory !== null && completion.percent < 100 && (
                 <a
                   href="/brand"
@@ -943,155 +705,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
             </div>
           </div>
 
-          {/* New Post Panel (level 4+) */}
-          {showNewPost && (
-            <div className="bg-muted/80 border-b border-border px-4 py-3 shrink-0 space-y-2 max-h-56 overflow-y-auto">
-              <p className="text-xs font-bold text-foreground flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-primary" />
-                {t.newPostTitle}
-              </p>
-              <textarea
-                className={`w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none ${isRTL ? "text-right" : "text-left"}`}
-                placeholder={t.productDescPlaceholder}
-                rows={2}
-                value={postDescription}
-                onChange={(e) => setPostDescription(e.target.value)}
-              />
-              <div>
-                <input ref={postImageInputRef} type="file" accept="image/*" className="hidden" onChange={handlePostImageSelect} />
-                <button
-                  onClick={() => postImageInputRef.current?.click()}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-lg px-2 py-1.5 w-full hover:border-primary/50 transition-colors"
-                >
-                  <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">{postImageName || t.uploadImage}</span>
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleGeneratePost(false)}
-                  disabled={generatingPost || !postDescription.trim()}
-                  className="flex-1 bg-primary text-primary-foreground text-xs font-bold py-1.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1"
-                >
-                  {generatingPost
-                    ? <><Loader2 className="w-3 h-3 animate-spin" />{t.generatingPost}</>
-                    : t.generatePost
-                  }
-                </button>
-                <button
-                  onClick={() => { setShowNewPost(false); }}
-                  className="flex-1 bg-muted border border-border text-foreground text-xs py-1.5 rounded-lg hover:bg-muted/80 transition-colors"
-                >
-                  {t.cancel}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Brand memory form */}
-          {showBrandForm && (
-            <div className="bg-muted/80 border-b border-border px-4 py-3 shrink-0 space-y-2 max-h-72 overflow-y-auto">
-              <p className="text-xs font-bold text-foreground">{t.saveTitle}</p>
-              {level < 2 ? (
-                <p className="text-xs text-muted-foreground">{t.upgradeMsg}</p>
-              ) : (
-                <>
-                  <input
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    placeholder={t.businessName}
-                    value={brandForm.business_name}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, business_name: e.target.value }))}
-                  />
-                  <input
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    placeholder={t.businessType}
-                    value={brandForm.business_type}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, business_type: e.target.value }))}
-                  />
-                  <input
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    placeholder={t.address}
-                    value={brandForm.address}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, address: e.target.value }))}
-                  />
-                  <input
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    placeholder={t.phone}
-                    value={brandForm.phone}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, phone: e.target.value }))}
-                  />
-                  <input
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    placeholder={t.primaryColors}
-                    value={brandForm.primary_colors}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, primary_colors: e.target.value }))}
-                  />
-                  <input
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                    placeholder={t.style}
-                    value={brandForm.preferred_style}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, preferred_style: e.target.value }))}
-                  />
-                  <textarea
-                    className="w-full bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
-                    placeholder={t.notes}
-                    rows={2}
-                    value={brandForm.notes}
-                    onChange={(e) => setBrandForm((f) => ({ ...f, notes: e.target.value }))}
-                  />
-                  {/* Logo upload section */}
-                  <div>
-                    <p className="text-[10px] text-muted-foreground mb-1">{t.logoLabel}</p>
-                    <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
-                    {brandForm.logo_url ? (
-                      <div className="flex items-center gap-2">
-                        <img src={brandForm.logo_url} alt="logo" className="w-10 h-10 rounded object-cover border border-border" />
-                        <button
-                          onClick={() => logoInputRef.current?.click()}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          {lang === "ar" ? "تغيير" : "Change"}
-                        </button>
-                        <button
-                          onClick={() => setBrandForm((f) => ({ ...f, logo_url: "" }))}
-                          className="text-xs text-destructive hover:underline"
-                        >
-                          {lang === "ar" ? "حذف" : "Remove"}
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => logoInputRef.current?.click()}
-                        disabled={uploadingAsset}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-dashed border-border rounded-lg px-2 py-1.5 w-full hover:border-primary/50 transition-colors disabled:opacity-50"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        {uploadingAsset ? t.uploading : t.uploadLogo}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={saveBrandMemory}
-                      disabled={savingBrand}
-                      className="flex-1 bg-primary text-primary-foreground text-xs font-bold py-1.5 rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-1"
-                    >
-                      {savingBrand ? <><Loader2 className="w-3 h-3 animate-spin" />{t.saving ?? "..."}</> : t.save}
-                    </button>
-                    <button
-                      onClick={() => setShowBrandForm(false)}
-                      className="flex-1 bg-muted border border-border text-foreground text-xs py-1.5 rounded-lg hover:bg-muted/80 transition-colors"
-                    >
-                      {t.cancel}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-3">
             {messages.length === 0 && !loading && (
               <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
                 {t.loading}
@@ -1136,17 +751,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
                 <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2 flex items-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
                   <span className="text-xs text-muted-foreground">{t.thinking}</span>
-                </div>
-              </div>
-            )}
-            {generatingPost && (
-              <div className="flex gap-2 flex-row">
-                <div className="w-7 h-7 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-sm font-black text-primary shrink-0 mt-1">
-                  P
-                </div>
-                <div className="bg-muted rounded-2xl rounded-tr-none px-3 py-2 flex items-center gap-1.5">
-                  <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-                  <span className="text-xs text-muted-foreground">{t.generatingPost}</span>
                 </div>
               </div>
             )}
@@ -1219,6 +823,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, o
               onKeyDown={(e) => e.key === "Enter" && !loading && sendMessage()}
               placeholder={t.placeholder}
               disabled={loading}
+              data-testid="chat-input"
               className={`flex-1 bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 ${isRTL ? "text-right" : "text-left"} disabled:opacity-60`}
             />
             <button
