@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { getUserFromToken } from "../middleware/auth";
 import { autoCreateCompanyForUser, isBrandProfileComplete } from "../services/brand/brain";
+import { AccountDeletionService } from "../services/account/AccountDeletionService";
 
 const router: IRouter = Router();
 
@@ -244,6 +245,45 @@ router.post("/auth/subscribe", async (req, res): Promise<void> => {
   res.status(501).json({
     ok: false,
     error: "الاشتراك غير متاح حالياً — سيتم تفعيله قريباً",
+  });
+});
+
+// DELETE /users/me — authenticated permanent account deletion.
+// The account is identified ONLY from the authenticated JWT — no client-supplied
+// user ID is ever accepted, so a user can only ever delete their own account.
+// Uses the exact same complete-deletion service as admin hard-delete.
+// After deletion the user row no longer exists, so all existing JWTs stop
+// authorizing on the next request (see getUserFromToken).
+router.delete("/users/me", async (req, res): Promise<void> => {
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    res.status(401).json({ error: "لم تسجل الدخول" });
+    return;
+  }
+
+  const result = await AccountDeletionService.deleteAccount(user.id);
+
+  if (result.status === "partial_failure") {
+    logger.error(
+      { userId: user.id, failedFiles: result.failedFiles.length },
+      "Account self-deletion could not be completed",
+    );
+    res.status(500).json({
+      error:
+        "تعذر إكمال حذف الحساب بالكامل. لم يتم حذف أي بيانات. حاول مرة أخرى أو تواصل معنا عبر الواتساب.",
+    });
+    return;
+  }
+
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "المستخدم غير موجود" });
+    return;
+  }
+
+  res.json({
+    ok: true,
+    deleted: true,
+    ...(result.companyShared ? { companyShared: true } : {}),
   });
 });
 

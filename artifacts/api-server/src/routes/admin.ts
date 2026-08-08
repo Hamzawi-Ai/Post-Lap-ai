@@ -4,6 +4,7 @@ import { db, usersTable, checksTable } from "@workspace/db";
 import { count, eq, gte } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
+import { AccountDeletionService } from "../services/account/AccountDeletionService";
 
 const router: IRouter = Router();
 
@@ -168,19 +169,48 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
   res.json(formatUser(user));
 });
 
-// Delete user
+// Delete user — COMPLETE permanent account deletion.
+// Uses the same shared AccountDeletionService as user self-delete
+// (DELETE /users/me): user row + owned company + brand memory + conversations +
+// messages + checks + media DB rows AND physical files are all removed.
 router.delete("/admin/users/:id", requireAdmin, async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
 
-  const [deleted] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning();
-  if (!deleted) {
-    res.status(404).json({ error: "User not found" });
+  const result = await AccountDeletionService.deleteAccount(id);
+
+  if (result.status === "not_found") {
+    res.status(404).json({ error: "المستخدم غير موجود" });
     return;
   }
 
-  logger.info({ userId: id }, "User deleted by admin");
-  res.json({ success: true });
+  if (result.status === "partial_failure") {
+    logger.error(
+      { userId: id, failedFiles: result.failedFiles.length },
+      "Admin user deletion could not be completed",
+    );
+    res.status(500).json({
+      error: "تعذر إكمال حذف الحساب بالكامل. لم يتم حذف أي بيانات.",
+    });
+    return;
+  }
+
+  logger.info({ userId: id }, "User permanently deleted by admin");
+  res.json({
+    success: true,
+    ...(result.companyShared ? { companyShared: true } : {}),
+  });
+});
+
+// READ-ONLY orphan audit — legacy leftovers from partial deletions.
+// Reports counts and sample paths; never deletes anything.
+router.get("/admin/audit-orphans", requireAdmin, async (_req, res): Promise<void> => {
+  try {
+    res.json(await AccountDeletionService.auditOrphans());
+  } catch (err) {
+    logger.error({ err }, "Orphan audit error");
+    res.status(500).json({ error: "تعذر توليد تقرير الأيتام" });
+  }
 });
 
 // Activate / deactivate user by email

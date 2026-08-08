@@ -13,6 +13,7 @@ import { getOpenAI } from "../services/ai/client";
 import type OpenAI from "openai";
 import { generateBrandedPost, saveGeneratedImage } from "../services/image-gen/brandedPost";
 import { getImageProvider, isImageGenAvailable } from "../services/image-gen/provider";
+import { OperationalEvents } from "../services/operational/events";
 
 const router: IRouter = Router();
 
@@ -117,7 +118,13 @@ interface CheckResult {
   suggestions: string[];
 }
 
-async function checkImage(base64: string, mimeType = "image/jpeg"): Promise<CheckResult> {
+interface CheckOutcome {
+  result: CheckResult;
+  inputTokens: number | null;
+  outputTokens: number | null;
+}
+
+async function checkImage(base64: string, mimeType = "image/jpeg"): Promise<CheckOutcome> {
   const response = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     max_tokens: 500,
@@ -136,18 +143,25 @@ async function checkImage(base64: string, mimeType = "image/jpeg"): Promise<Chec
   });
 
   const text = response.choices[0]?.message?.content ?? "{}";
+  let result: CheckResult;
   try {
     const match = text.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(match?.[0] ?? "{}") as Partial<CheckResult>;
-    return {
+    result = {
       status: parsed.status ?? "جيد",
       score: parsed.score ?? 50,
       violations: parsed.violations ?? [],
       suggestions: parsed.suggestions ?? [],
     };
   } catch {
-    return { status: "جيد", score: 50, violations: [], suggestions: [] };
+    result = { status: "جيد", score: 50, violations: [], suggestions: [] };
   }
+
+  return {
+    result,
+    inputTokens: response.usage?.prompt_tokens ?? null,
+    outputTokens: response.usage?.completion_tokens ?? null,
+  };
 }
 
 // POST /check — main ad inspection endpoint
@@ -171,6 +185,7 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
   try {
     let finalResult: CheckResult;
     let framesChecked: number | null = null;
+    const companyId = user?.company_id ?? null;
 
     if (isVideo) {
       const frames = await extractFrames(filePath, maxFrames);
@@ -183,7 +198,19 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
 
         for (const framePath of frames) {
           const base64 = await imageToBase64(framePath);
-          const result = await checkImage(base64);
+          const { result, inputTokens, outputTokens } = await checkImage(base64);
+
+          await OperationalEvents.record({
+            eventType: "text_generation",
+            userId: user?.id ?? null,
+            companyId,
+            provider: "openai",
+            model: "gpt-4o",
+            success: true,
+            inputTokens,
+            outputTokens,
+            metadata: { source: "policy_check_video_frame" },
+          });
 
           if (result.status === "مرفوض") {
             finalResult = result;
@@ -205,7 +232,21 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
     } else {
       const mtype = mimeType === "image/png" ? "image/png" : "image/jpeg";
       const base64 = await imageToBase64(filePath);
-      finalResult = await checkImage(base64, mtype);
+      const { result, inputTokens, outputTokens } = await checkImage(base64, mtype);
+
+      await OperationalEvents.record({
+        eventType: "text_generation",
+        userId: user?.id ?? null,
+        companyId,
+        provider: "openai",
+        model: "gpt-4o",
+        success: true,
+        inputTokens,
+        outputTokens,
+        metadata: { source: "policy_check_image" },
+      });
+
+      finalResult = result;
     }
 
     const messageMap: Record<string, string> = {
@@ -251,6 +292,19 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
       violations: isGuest ? [] : finalResult.violations,
       suggestions: isGuest ? [] : finalResult.suggestions,
     };
+
+    await OperationalEvents.record({
+      eventType: "policy_check",
+      userId: user?.id ?? null,
+      companyId: user?.company_id ?? null,
+      success: true,
+      quantity: 1,
+      metadata: {
+        status: finalResult.status,
+        frames_checked: framesChecked,
+        rejected: finalResult.status === "مرفوض",
+      },
+    });
 
     res.json(response);
   } catch (err) {
@@ -319,6 +373,17 @@ router.post("/generate-text", async (req, res): Promise<void> => {
     });
 
     const text = response.choices[0]?.message?.content ?? "";
+    await OperationalEvents.record({
+      eventType: "text_generation",
+      userId: user.id,
+      companyId: user.company_id ?? null,
+      provider: "openai",
+      model: useImageMode ? "gpt-4o" : "gpt-4o-mini",
+      success: true,
+      inputTokens: response.usage?.prompt_tokens ?? null,
+      outputTokens: response.usage?.completion_tokens ?? null,
+      metadata: { source: "generate_text", image_mode: useImageMode },
+    });
     res.json({ text });
   } catch (err) {
     logger.error({ err }, "Text generation error");
@@ -417,6 +482,17 @@ router.post("/image-gen", async (req, res): Promise<void> => {
           data: imageBase64.replace(/^data:image\/[a-z]+;base64,/, ""),
         },
       ],
+    });
+
+    await OperationalEvents.record({
+      eventType: generated ? "image_generation" : "image_generation_failure",
+      userId: user?.id ?? null,
+      companyId: user?.company_id ?? null,
+      provider: provider.id,
+      model: "gemini-2.5-flash-image",
+      success: !!generated,
+      quantity: 1,
+      metadata: { source: "image_fix" },
     });
 
     if (generated) {

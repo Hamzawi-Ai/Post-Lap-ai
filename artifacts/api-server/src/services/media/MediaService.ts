@@ -1,4 +1,4 @@
-import { mkdir, writeFile, unlink, access, readFile } from "fs/promises";
+import { mkdir, writeFile, unlink, access, readFile, rm, readdir } from "fs/promises";
 import path from "path";
 import { randomBytes } from "crypto";
 
@@ -142,6 +142,60 @@ export class MediaService {
       await unlink(absolutePath);
     } catch {
       // File already gone or never existed — treat as success
+    }
+  }
+
+  /**
+   * Absolute storage root (<api-server-root>/storage/).
+   * Exposed so deletion/audit tooling never recomputes an incompatible root.
+   */
+  static get storageRoot(): string {
+    return STORAGE_ROOT;
+  }
+
+  /**
+   * Delete a stored asset referenced either by a public `/uploads/…` URL or by
+   * a storage-relative path (the value stored in media_assets.relative_path).
+   * Data-URLs and any other non-upload reference are ignored — there is nothing
+   * on disk to delete. Idempotent and containment-checked.
+   */
+  static async deleteStoredAsset(urlOrPath: string): Promise<void> {
+    const candidate = (urlOrPath ?? "").trim();
+    if (!candidate) return;
+    const relative = candidate.startsWith("/uploads/")
+      ? candidate.slice("/uploads/".length)
+      : candidate;
+    await MediaService.deleteFile(relative);
+  }
+
+  /**
+   * Remove a company's category directories and the company directory itself
+   * ONLY while they are empty. Non-empty directories are left untouched.
+   * This is a cleanup for fully-owned, deleted companies — it never removes a
+   * non-empty directory, so shared/customer data is always preserved.
+   */
+  static async removeEmptyCompanyStorage(companyId: number): Promise<void> {
+    const base = path.join(STORAGE_ROOT, "companies", String(companyId));
+    assertContained(base, STORAGE_ROOT);
+    try {
+      const entries = await readdir(base, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const sub = path.join(base, entry.name);
+        assertContained(sub, STORAGE_ROOT);
+        try {
+          await rm(sub, { recursive: false });
+        } catch {
+          // Not empty (or already gone) — keep it.
+        }
+      }
+      try {
+        await rm(base, { recursive: false });
+      } catch {
+        // Company dir still has content — keep it.
+      }
+    } catch {
+      // Company dir already gone — nothing to remove.
     }
   }
 }

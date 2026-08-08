@@ -5,6 +5,7 @@ import { collectBrandAssets } from "../media/assetReader";
 import { buildGeminiBrandContext } from "../brand/brain";
 import { MediaService } from "../media/MediaService";
 import { logger } from "../../lib/logger";
+import { OperationalEvents } from "../operational/events";
 
 /**
  * Save an AI-generated image buffer via MediaService and insert a media_assets
@@ -107,11 +108,34 @@ export async function generateBrandedPost(params: {
 
   const provider = getImageProvider();
   const generated = await provider.generate({ prompt, referenceImages });
-  if (!generated) return null;
+  if (!generated) {
+    await OperationalEvents.record({
+      eventType: "image_generation_failure",
+      userId,
+      companyId,
+      provider: provider.id,
+      model: "gemini-2.5-flash-image",
+      success: false,
+      quantity: 1,
+      metadata: { source: "branded_post" },
+    });
+    return null;
+  }
 
   const genBuffer = Buffer.from(generated.data, "base64");
   const dataUrl = `data:${generated.mimeType};base64,${generated.data}`;
   const publicUrl = await saveGeneratedImage(userId, companyId, genBuffer, generated.mimeType);
+
+  await OperationalEvents.record({
+    eventType: "image_generation",
+    userId,
+    companyId,
+    provider: provider.id,
+    model: "gemini-2.5-flash-image",
+    success: true,
+    quantity: 1,
+    metadata: { source: "branded_post", saved: !!publicUrl },
+  });
 
   return { url: publicUrl ?? dataUrl, dataUrl };
 }

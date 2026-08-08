@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Loader2, Store, ArrowRight } from "lucide-react";
+import { Loader2, Store, ArrowRight, Trash2 } from "lucide-react";
 import BrandSetupForm from "@/components/BrandSetupForm";
 import { getToken, handleAuthError, clearAuth } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
 
 interface MemoryResponse {
@@ -19,7 +20,9 @@ interface MemoryResponse {
 
 export default function CompanySettings() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [memory, setMemory] = useState<MemoryResponse["memory"]>(null);
 
   useEffect(() => {
@@ -56,6 +59,35 @@ export default function CompanySettings() {
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
       </div>
     );
+  }
+
+  async function handleDeleteAccount() {
+    const token = getToken();
+    if (!token) return;
+    if (
+      !window.confirm(
+        "سيتم حذف حسابك وكل بياناتك نهائياً: نشاطك التجاري، الشعار، التصاميم، المحادثات، والملفات المرفوعة. لا يمكن التراجع عن هذا الإجراء. هل أنت متأكد؟",
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/users/me", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "فشل حذف الحساب");
+      }
+      toast({ title: "تم حذف حسابك وكل بياناتك نهائياً" });
+      clearAuth();
+      window.location.href = "/";
+    } catch (e: any) {
+      toast({ title: "خطأ", description: e.message, variant: "destructive" });
+      setDeleting(false);
+    }
   }
 
   return (
@@ -97,6 +129,36 @@ export default function CompanySettings() {
             initial={memory}
             onSubmit={() => navigate("/")}
           />
+        </div>
+
+        <div className="mt-6 bg-card border border-destructive/30 rounded-2xl p-6">
+          <h2 className="text-sm font-black text-destructive flex items-center gap-2">
+            <Trash2 className="w-4 h-4" />
+            منطقة الخطر
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1.5">
+            حذف الحساب نهائياً يزيل نشاطك التجاري، شعارك، تصاميمك، محادثاتك مع
+            PostLab، وكل الملفات المرفوعة. لا يمكن التراجع.
+          </p>
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            disabled={deleting}
+            className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-destructive border border-destructive/40 rounded-xl px-4 py-2 hover:bg-destructive/10 transition-colors disabled:opacity-50"
+            data-testid="company-delete-account"
+          >
+            {deleting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                جاري حذف الحساب...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                حذف حسابي نهائياً
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
