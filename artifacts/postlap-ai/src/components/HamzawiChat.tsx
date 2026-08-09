@@ -196,6 +196,11 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
       setMessages([]);
       setHistoryLoaded(false);
       setInitialized(false);
+      // Issue 4: forget the previously selected conversation so the
+      // conversationId effect re-runs after an account switch even when the prop
+      // value is unchanged. This prevents a stale conversation id from the
+      // previous account surviving into the new authenticated context.
+      prevConversationIdRef.current = undefined;
       // Increment state version — this causes the open effect to re-run
       // even though `open` itself hasn't changed, triggering history reload
       // and initialization for the now-authenticated user.

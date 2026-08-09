@@ -41,11 +41,13 @@ function detectImageIntent(message: string): boolean {
   if (!m) return false;
 
   const intentPatterns = [
-    /(صمم|صمّم|اصمم|تصميم|تصاميم)(?=\s|$|[،,؟?!.])/i,
+    // Creation verbs always need vision (brand assets attached). Bare design
+    // nouns in definite form ("التصميم") are excluded so conversational
+    // questions that merely mention a design ("شو رأيك بالتصميم؟") do NOT get
+    // routed to the vision model or treated as generation requests.
+    /(صمم|صمّم|اصمم|(?<!ال)تصميم|(?<!ال)تصاميم)(?=\s|$|[،,؟?!.])/i,
     /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|إعلان مرئي)/i,
-    /(منشور|بوست|ستوري|بانر|فلاير|ملصق|بوستر)\b/i,
     /شعار|لوجو|logo/i,
-    /ألوان|الوان|color/i,
     /هوية (بصرية|النشاط|نشاطي)/i,
     /(في|على) (الصورة|المنشور|التصميم|الشعار)/i,
     /ما رأيك (في|ب)/i,
@@ -59,10 +61,13 @@ function detectImageIntent(message: string): boolean {
     if (re.test(m)) return true;
   }
 
+  // Narrow fallback: only clear creation/asset keywords. Generic nouns that
+  // appear in ordinary text questions (بوست، منشور، صورة، ألوان، story، post،
+  // image، photo، color) are intentionally NOT included so a text-only question
+  // about a post never becomes a vision/generation turn.
   const fallbackKeywords = [
-    "صمم", "تصميم", "منشور", "بوست", "ستوري", "شعار", "صورة", "بانر",
-    "فلاير", "بوستر", "ألوان", "هوية", "تصاميم", "انشئ", "اعمل",
-    "design", "post", "story", "banner", "logo", "image", "photo", "picture", "poster",
+    "صمم", "تصميم", "تصاميم", "انشئ", "اعمل", "ستوري", "بانر",
+    "فلاير", "بوستر", "شعار", "لوجو", "هوية", "design", "banner", "flyer", "poster", "logo",
   ];
   return fallbackKeywords.some((k) => m.includes(k));
 }
@@ -77,8 +82,10 @@ const CHECK_AD_PATTERNS = [
 ];
 
 const GENERATE_IMAGE_PATTERNS = [
-  // Arabic design verbs
-  /(صمم|صمّم|اصمم|تصميم|تصاميم)(?=\s|$|[،,؟?!.])/i,
+  // Arabic design verbs — only creation verbs and the bare noun (not the
+  // definite "التصميم") count as generation intent, so a conversational
+  // question like "شو رأيك بالتصميم؟" is never misread as a creation request.
+  /(صمم|صمّم|اصمم|(?<!ال)تصميم|(?<!ال)تصاميم)(?=\s|$|[،,؟?!.])/i,
   // Arabic action verbs + visual nouns
   /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل|اريد|أريد|عايز|احتاج|ابتكر|ابدع|خلّق|خلق|صور).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|صورة|إعلان|تصميم|هوية)/i,
   // Standalone Arabic visual nouns indicating creation intent

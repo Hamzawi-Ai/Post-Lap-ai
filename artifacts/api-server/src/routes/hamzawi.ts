@@ -52,6 +52,18 @@ const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 // (OpenAI cost protection). Newer image markers take precedence.
 const MAX_VISION_IMAGES_PER_TURN = 6;
 
+// A generated image is the actual response to a design request. When the model's
+// raw reply was the %%GENERATE_POST%% marker only (stripped before persistence),
+// the assistant turn must still read as COMPLETED in AI history — never as an
+// unanswered request that would re-trigger generation on every later message.
+const DESIGN_DELIVERED_HISTORY_NOTE = "[تم توليد التصميم وإرساله]";
+// Fallback shown alongside the generated image when the assistant reply carried
+// no visible text of its own (the image itself is the response). Success path only.
+const DESIGN_DELIVERED_REPLY_FALLBACK = "تم توليد التصميم وإرساله ✓";
+// History state for a generation that FAILED — never claim the design was
+// delivered when the image could not actually be produced.
+const DESIGN_GENERATION_FAILED_FALLBACK = "[تعذر توليد التصميم]";
+
 /** Approximate decoded byte length of a base64 string (safe upper bound). */
 function approximateBase64Bytes(base64: string): number {
   return Math.ceil((base64.length * 3) / 4);
@@ -323,6 +335,9 @@ async function buildHistoryForAI(
   let imageCount = 0;
   for (const row of [...rows].reverse()) {
     const raw = row.content ?? "";
+    // Track whether this assistant turn delivered a generated design so the
+    // turn is never represented as empty history (see DESIGN_DELIVERED_*).
+    const deliveredGeneratedImage = /%%GENERATED_IMAGE%%[\s\S]*?%%END%%/.test(raw);
     const text = raw
       .replace(/%%GENERATED_IMAGE%%[\s\S]*?%%END%%/g, "")
       .replace(ATTACHED_IMAGE_MARKER_RE, "")
@@ -358,9 +373,15 @@ async function buildHistoryForAI(
     }
 
     // Only user messages carry image parts — assistant rows stay plain text
-    // (matches OpenAI's per-role content constraints).
+    // (matches OpenAI's per-role content constraints). A completed design
+    // generation must never look like an unanswered request: when the stripped
+    // text is empty but the turn delivered a generated image, inject the
+    // internal completion note instead of an empty assistant message.
     if (row.role === "assistant") {
-      out.push({ role: "assistant", content: text });
+      const assistantText = text.length > 0 || !deliveredGeneratedImage
+        ? text
+        : DESIGN_DELIVERED_HISTORY_NOTE;
+      out.push({ role: "assistant", content: assistantText });
     } else {
       out.push({
         role: "user",
@@ -662,12 +683,17 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // omitted the %%GENERATE_POST%% marker, send one strict follow-up prompt.
     // This is a diagnostic backstop only — the primary path (expanded patterns +
     // stronger system prompt) should handle the common cases without reaching here.
+    // It never overrides a legitimate conversational answer: if the model replied
+    // with a clarifying question (allowed by the design instruction when offer
+    // details are missing), the question is kept and no marker is forced.
+    const replyAsksForMoreInfo = /[?؟]\s*$/.test(rawReply.trim());
     if (
       !isInit &&
       intentDecision.intent === "generate_image" &&
       user &&
       level >= 4 &&
-      !rawReply.includes("%%GENERATE_POST%%")
+      !rawReply.includes("%%GENERATE_POST%%") &&
+      !replyAsksForMoreInfo
     ) {
       const truncatedMsg = (message ?? "").slice(0, 120);
       logger.warn(
@@ -772,6 +798,11 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
         if (generated) {
           generatedImageUrl = generated.url;
           generatedDescription = generateDescription;
+          // The generated image is the actual response. If the model's reply was
+          // marker-only, close the turn with the delivery line so history never
+          // looks like an unanswered request (success path only — the image was
+          // actually produced here).
+          if (!reply.trim()) reply = DESIGN_DELIVERED_REPLY_FALLBACK;
           // Persist the image reference inside the stored content so it survives
           // page reload via the existing messages endpoint (no schema change).
           storedContent = `${reply}\n%%GENERATED_IMAGE%%${JSON.stringify({
@@ -780,7 +811,10 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           })}%%END%%`;
         } else {
           // Provider returned null — surface the failure instead of silently
-          // returning a text reply that looks like a successful response.
+          // returning a text reply that looks like a successful response. Never
+          // claim the design was delivered: history must distinguish a failed
+          // generation from a successful one.
+          if (!reply.trim()) reply = DESIGN_GENERATION_FAILED_FALLBACK;
           const notice = "\n\n⚠️ لم يتمكن النظام من توليد الصورة. حاول مرة أخرى.";
           reply = `${reply}${notice}`;
           storedContent = reply;
@@ -792,6 +826,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           "Failed to generate post from Hamzawi marker",
         );
         // Surface a user-visible notice instead of silently returning only text.
+        // Never claim the design was delivered on failure.
+        if (!reply.trim()) reply = DESIGN_GENERATION_FAILED_FALLBACK;
         const isQuota = err?.status === 429;
         const notice = isQuota
           ? "\n\n⚠️ توليد الصور غير متاح مؤقتاً بسبب تجاوز الحصة المسموح بها. حاول بعد دقيقة."

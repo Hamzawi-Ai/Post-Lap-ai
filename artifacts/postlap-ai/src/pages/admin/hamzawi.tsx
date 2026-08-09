@@ -33,7 +33,7 @@ export default function Hamzawi() {
 
   const { data: config } = useGetConfig({ query: { queryKey: getGetConfigQueryKey() } });
 
-  const [user] = useState<LocalUser | null>(getStoredUser);
+  const [user, setUser] = useState<LocalUser | null>(getStoredUser);
   const isAuthenticated = !!user && !!getToken();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -43,6 +43,32 @@ export default function Hamzawi() {
 
   const whatsapp = config?.whatsapp ?? "218915811115";
   const gender = (user?.gender ?? localStorage.getItem(GENDER_KEY) ?? null) as "male" | "female" | null;
+
+  // Issue 4 isolation: scope the workspace to the authenticated identity and
+  // invalidate it whenever the identity changes (same-tab login/logout, account
+  // switch, or a cross-tab storage change re-synced below). Keeps the existing
+  // owner/control-panel behavior — only the identity source becomes reactive.
+  const currentUserId = user?.id ?? null;
+
+  useEffect(() => {
+    setConversations([]);
+    setActiveConversationId(null);
+  }, [currentUserId]);
+
+  // Cross-tab account switching (Issue 4): the browser `storage` event fires in
+  // OTHER tabs when postlap_token/postlap_user changes in this browser. Re-read
+  // the stored auth state and re-sync the React user so the currentUserId
+  // effects above invalidate the stale workspace and refetch for the new
+  // identity. The tab that made the change is handled by the existing same-tab
+  // login/logout flow — the storage event does not fire there, so no loop.
+  useEffect(() => {
+    function onAuthStorageChange(e: StorageEvent) {
+      if (e.key !== TOKEN_KEY && e.key !== USER_KEY) return;
+      setUser(getStoredUser());
+    }
+    window.addEventListener("storage", onAuthStorageChange);
+    return () => window.removeEventListener("storage", onAuthStorageChange);
+  }, []);
 
   // Fetch conversation list — only when authenticated, no polling.
   const fetchConversations = useCallback(async () => {
@@ -64,12 +90,12 @@ export default function Hamzawi() {
     }
   }, []);
 
-  // Load conversations on mount (authenticated only).
+  // Fetch the current identity's conversations whenever the identity changes.
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user && getToken()) {
       fetchConversations();
     }
-  }, [isAuthenticated, fetchConversations]);
+  }, [currentUserId, fetchConversations]);
 
   // --- Conversation mutation handlers ---
 

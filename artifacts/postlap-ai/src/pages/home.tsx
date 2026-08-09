@@ -167,6 +167,10 @@ export default function Home() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     setUser(null);
+    // Drop the previous account's conversation workspace so no stale titles or
+    // conversation id survive a logout (Issue 4 isolation).
+    setConversations([]);
+    setActiveConversationId(null);
     // Best-effort server-side session cleanup (clears the guest session cookie).
     try {
       fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
@@ -180,6 +184,33 @@ export default function Home() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const isAuthenticated = !!user && !!getToken();
+
+  // Issue 4 isolation: the conversation workspace is scoped to the authenticated
+  // identity. Any identity change invalidates the previous account's conversation
+  // list and active conversation id, so a different account can never reuse or
+  // display the previous account's conversation state.
+  const currentUserId = user?.id ?? null;
+
+  useEffect(() => {
+    setConversations([]);
+    setActiveConversationId(null);
+  }, [currentUserId]);
+
+  // Cross-tab account switching (Issue 4): the browser `storage` event fires in
+  // OTHER tabs when postlap_token/postlap_user changes in this browser. Re-read
+  // the stored auth state and re-sync the React user so the currentUserId
+  // effects above invalidate the stale workspace and refetch for the new
+  // identity. The tab that made the change is handled by the existing same-tab
+  // login/logout flow (setToken/logout) — the storage event does not fire there,
+  // so no update loop is possible.
+  useEffect(() => {
+    function onAuthStorageChange(e: StorageEvent) {
+      if (e.key !== TOKEN_KEY && e.key !== USER_KEY) return;
+      setUser(getStoredUser());
+    }
+    window.addEventListener("storage", onAuthStorageChange);
+    return () => window.removeEventListener("storage", onAuthStorageChange);
+  }, []);
 
   const fetchConversations = useCallback(async () => {
     const token = getToken();
@@ -197,11 +228,13 @@ export default function Home() {
     }
   }, []);
 
+  // Fetch the current identity's conversations whenever the identity changes,
+  // not merely when isAuthenticated flips (Issue 4: account switch / cross-tab).
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user && getToken()) {
       fetchConversations();
     }
-  }, [isAuthenticated, fetchConversations]);
+  }, [currentUserId, fetchConversations]);
 
   function handleSelect(id: string) {
     setActiveConversationId(id);
