@@ -1,0 +1,303 @@
+# DIAGNOSE AND FIX GOOGLE LOGIN FAILURE AFTER BETA ACCESS CHANGE
+
+We are working on the CURRENT Replit runtime of PostLab AI.
+
+After the latest Beta Access implementation, Google Sign-In is now failing for me in the running Replit application.
+
+The UI shows:
+
+"خطأ
+فشل تسجيل الدخول"
+
+This happened when I attempted to sign in with Google.
+
+Your task is to diagnose the REAL runtime cause and fix ONLY the issue responsible for this Google authentication failure.
+
+==================================================
+IMPORTANT — DO NOT WANDER
+==================================================
+
+This is a focused runtime/debugging task.
+
+DO NOT refactor the project.
+
+DO NOT redesign authentication.
+
+DO NOT redesign Beta Access.
+
+DO NOT change unrelated application behavior.
+
+DO NOT touch:
+
+- PostLab Brain
+- Hamzawi
+- Operational Intelligence
+- image generation
+- Gemini
+- Nano Banana
+- OpenAI image generation
+- subscriptions/pricing architecture
+- account deletion
+- database architecture
+- deployment architecture
+- .replit
+- ports
+- proxy
+- domains/DNS
+- database connection configuration
+
+Do NOT change paths or wiring unless the actual Google authentication error proves that such a change is necessary.
+
+==================================================
+CURRENT CONTEXT
+==================================================
+
+Before the latest Beta Access change, Google authentication was working.
+
+After implementing Beta Access for Google-authenticated users, Google Sign-In now fails in the live Replit application.
+
+Therefore:
+
+FIRST determine whether the regression was introduced by the latest Beta Access changes.
+
+Do NOT assume it was.
+
+==================================================
+STEP 1 — READ THE ACTUAL RUNTIME ERROR
+==================================================
+
+Before changing anything, inspect the Replit runtime/server logs generated at the exact time of the failed Google login.
+
+Find the actual backend error.
+
+Do NOT rely only on the frontend message:
+
+"فشل تسجيل الدخول"
+
+Trace the complete flow:
+
+Google OAuth
+→ frontend callback
+→ backend Google auth endpoint
+→ token verification
+→ user lookup/creation
+→ Beta access logic
+→ JWT/session creation
+→ response to frontend
+
+Identify the exact step where the failure occurs.
+
+==================================================
+STEP 2 — INSPECT THE RECENT BETA ACCESS CHANGES
+==================================================
+
+Inspect the files changed by the latest Beta Access implementation.
+
+Compare the current code with the previous Git state if available.
+
+Pay particular attention to:
+
+- Google authentication route
+- auth.ts
+- user creation
+- existing-user login
+- registered plan assignment
+- trials_remaining
+- Beta access logic
+- JWT creation
+- JWT payload
+- response shape
+- frontend Google login handling
+- middleware/auth.ts
+- any schema changes
+- any migration related to Beta access
+
+Determine whether the Beta Access implementation accidentally changed the Google login flow.
+
+==================================================
+STEP 3 — DISTINGUISH AUTH FAILURE FROM ACCESS FAILURE
+==================================================
+
+This distinction is CRITICAL.
+
+Determine whether:
+
+A. Google authentication itself fails
+
+OR
+
+B. Google authentication succeeds, but PostLab rejects the user afterward
+
+OR
+
+C. User creation succeeds, but JWT/session creation fails
+
+OR
+
+D. Backend succeeds, but frontend cannot process the response
+
+OR
+
+E. An environment/configuration issue exists in Replit
+
+Do not treat all of these as the same problem.
+
+==================================================
+STEP 4 — CHECK GOOGLE CONFIGURATION
+==================================================
+
+Inspect configuration references WITHOUT exposing secret values.
+
+Verify the expected Google configuration:
+
+- GOOGLE_CLIENT_ID
+- VITE_GOOGLE_CLIENT_ID
+- Google OAuth redirect URI
+- authorized origin/domain
+- backend callback/verification configuration
+
+Do NOT print secret values.
+
+Do NOT change Google credentials unless the logs prove a configuration problem.
+
+Do NOT create new credentials.
+
+Do NOT change the production domain unless absolutely necessary and explicitly justified.
+
+==================================================
+STEP 5 — CHECK THE BETA ACCESS CHANGE
+==================================================
+
+The intended Beta behavior is:
+
+New Google user
+→ authenticated
+→ registered account
+→ Beta access
+
+Existing active Google user
+→ authenticated
+→ Beta access
+
+Disabled user
+→ remains blocked
+
+Deleted user
+→ cannot authenticate as an existing account
+
+Visitor
+→ remains visitor
+
+IMPORTANT:
+
+Beta access must NOT replace or break Google authentication.
+
+Do not assign a fake paid plan merely to bypass access control.
+
+Do not remove the existing subscription architecture.
+
+==================================================
+STEP 6 — MINIMAL FIX ONLY
+==================================================
+
+Once the exact root cause is established:
+
+Apply the smallest possible fix.
+
+Do NOT make speculative changes.
+
+Do NOT modify unrelated files.
+
+Do NOT redesign the authentication system.
+
+If the issue is caused by the Beta Access implementation, fix that regression.
+
+If the issue is caused by Replit environment/configuration, report and fix only the necessary configuration.
+
+If the issue is caused by Google OAuth configuration outside the codebase and cannot safely be changed from Replit, STOP and tell me exactly what needs to be changed and where.
+
+==================================================
+STEP 7 — VERIFY THE FIX
+==================================================
+
+After applying the minimal fix, verify the authentication flow in the CURRENT Replit runtime.
+
+This time, unlike previous architecture tasks, a focused runtime test of Google Sign-In IS allowed because this task specifically exists to diagnose the live authentication failure.
+
+Test only:
+
+1. Google Sign-In
+2. successful callback
+3. user authentication
+4. creation/lookup of the user
+5. Beta access state
+6. successful redirect into PostLab
+
+DO NOT test unrelated product features.
+
+DO NOT generate images.
+
+DO NOT test Operational Intelligence.
+
+DO NOT test subscriptions beyond confirming that Beta access does not block the authenticated user.
+
+==================================================
+STEP 8 — VERIFY NO REGRESSION
+==================================================
+
+After the fix, confirm:
+
+- Google login works.
+- Existing Google users can log in.
+- New Google users can register.
+- The user remains authenticated.
+- Beta access is granted correctly.
+- Disabled users remain blocked.
+- No paid plan is falsely assigned.
+- Existing subscription architecture remains intact.
+
+==================================================
+STEP 9 — GIT / SOURCE INTEGRITY
+==================================================
+
+Inspect:
+
+git status --short
+git diff --stat
+
+Report exactly which files were changed.
+
+There should be no unrelated changes.
+
+Do NOT revert unrelated pre-existing changes automatically.
+
+==================================================
+FINAL REPORT
+==================================================
+
+Return:
+
+A. Exact root cause
+B. Evidence from runtime logs
+C. Whether Beta Access caused the regression
+D. Exact file/configuration changed
+E. Exact fix applied
+F. Google OAuth configuration status
+G. New Google user behavior
+H. Existing Google user behavior
+I. Beta access behavior
+J. Subscription architecture confirmation
+K. Runtime Google login test result
+L. git status
+M. git diff --stat
+N. Any remaining warnings/issues
+
+IMPORTANT:
+
+Do not say "Google login works" unless you actually verified it in the current Replit runtime.
+
+Do not claim success based only on typecheck/build.
+
+Do not make unrelated changes.
+
+STOP if the root cause cannot be established safely.
