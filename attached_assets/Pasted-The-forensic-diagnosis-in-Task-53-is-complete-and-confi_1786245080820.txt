@@ -1,0 +1,66 @@
+The forensic diagnosis in Task #53 is complete and confirmed.
+
+Now move to the database fix only.
+
+Execute the existing Task #10 database fix:
+apply the missing `users.beta_access` column to the LIVE production database using the project's existing Drizzle schema-push workflow.
+
+IMPORTANT:
+- Do NOT redo Task #53.
+- Do NOT implement Task #54.
+- Do NOT implement Task #55.
+- Do NOT modify authentication code.
+- Do NOT modify frontend code.
+- Do NOT change auth architecture.
+- Do NOT make unrelated changes.
+- Do NOT rotate secrets.
+- Do NOT make destructive database changes.
+
+The confirmed root cause from Task #53 is:
+
+`users.beta_access` exists in the Drizzle schema but is missing from the live production database.
+
+Expected column:
+- name: beta_access
+- type: boolean
+- NOT NULL
+- DEFAULT false
+
+After applying the schema change, VERIFY the LIVE database.
+
+Required verification:
+
+1. Confirm `users.beta_access` exists in the live production database.
+2. Confirm its type is boolean.
+3. Confirm NOT NULL.
+4. Confirm DEFAULT false.
+5. Confirm `user_brand_memory` is still intact.
+6. Confirm no other unintended schema changes were made.
+
+Then perform smoke tests for the two previously failing flows:
+
+ADMIN:
+- POST /api/admin/login
+- GET /api/admin/users
+- GET /api/owner/assistant/overview
+- Confirm the valid admin session remains active and no immediate logout occurs.
+
+GOOGLE:
+- POST /api/auth/google
+- Confirm Google credential verification succeeds.
+- Confirm the user lookup succeeds.
+- Confirm there is no `beta_access` / database schema exception.
+- Confirm the login flow completes successfully.
+
+IMPORTANT:
+Do not implement #54 or #55 even if you notice those issues during testing.
+If a smoke test fails for another reason, STOP and report the exact error instead of fixing it.
+
+Return a concise execution report containing:
+
+1. Database change applied: YES/NO
+2. Exact live schema verification
+3. Admin smoke test result
+4. Google smoke test result
+5. Any remaining errors
+6. Git/deployment status if relevant

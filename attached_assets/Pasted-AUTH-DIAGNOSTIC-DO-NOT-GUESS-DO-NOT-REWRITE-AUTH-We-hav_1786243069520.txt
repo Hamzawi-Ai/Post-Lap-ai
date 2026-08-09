@@ -1,0 +1,105 @@
+AUTH DIAGNOSTIC — DO NOT GUESS, DO NOT REWRITE AUTH
+
+We have two live authentication problems in the production Replit deployment.
+
+PROBLEM 1 — ADMIN PORTAL
+Observed behavior:
+1. Open /khtfa-secure-portal
+2. Enter the correct admin password
+3. The admin dashboard opens successfully
+4. Immediately after navigation, the user is logged out and returned to the admin login page.
+
+This strongly suggests that the login request succeeds, but the authenticated admin session/JWT is not surviving or is rejected by the first protected request.
+
+PROBLEM 2 — GOOGLE LOGIN
+Observed behavior:
+1. Open the normal PostLab login flow.
+2. Google Sign-In button appears correctly.
+3. Attempt Google login.
+4. UI shows "فشل تسجيل الدخول".
+
+TASK:
+
+Do a READ-ONLY forensic diagnosis first.
+
+Do NOT change code yet.
+
+For ADMIN:
+- Trace the complete flow:
+  admin login request
+  -> password verification
+  -> JWT/session creation
+  -> cookie/localStorage/header storage
+  -> redirect to admin dashboard
+  -> first authenticated admin API request
+  -> auth middleware verification
+  -> logout behavior.
+- Identify the exact request that returns 401/403 after successful login.
+- Inspect response headers and Set-Cookie.
+- Verify cookie attributes:
+  Secure
+  HttpOnly
+  SameSite
+  Path
+  Domain
+- Check whether the production reverse proxy / Replit deployment affects the cookie.
+- Verify SESSION_SECRET is present and consistent for the running process.
+- Verify there is no mismatch between admin login token creation and admin auth middleware verification.
+- Check whether frontend automatically logs out on a 401 and identify the exact source line.
+
+For GOOGLE:
+- Trace:
+  Google Identity Services
+  -> frontend callback
+  -> /api/auth/google
+  -> Google token verification
+  -> users lookup/create
+  -> JWT/session creation
+  -> frontend authenticated state.
+- Capture the exact backend error rather than relying on the generic "فشل تسجيل الدخول".
+- Verify GOOGLE_CLIENT_ID in the running production environment.
+- Verify the current production origin is authorized in Google Cloud Console.
+- Verify the Google client ID used by the frontend is the same one expected by the backend.
+- Check whether the backend is rejecting the Google token because of audience/origin/client ID mismatch.
+- Check whether user creation/update fails because of a database schema mismatch or missing column.
+- Specifically verify the current production database schema matches the Drizzle schema, including any recently added auth-related fields such as beta_access.
+- Do not assume this is a frontend problem.
+
+IMPORTANT:
+- First inspect actual production logs and actual network/API responses.
+- Do not fix anything until the root cause is identified.
+- Do not change authentication architecture.
+- Do not rotate secrets.
+- Do not modify the database destructively.
+- Do not make speculative fixes.
+
+DELIVERABLE:
+
+Return a concise forensic report with:
+
+1. ADMIN ROOT CAUSE
+Exact failing request:
+HTTP status:
+Backend error:
+Frontend behavior:
+Root cause:
+Recommended minimal fix:
+
+2. GOOGLE ROOT CAUSE
+Exact failing request:
+HTTP status:
+Backend error:
+Root cause:
+Recommended minimal fix:
+
+3. DEPLOYMENT STATUS
+- Git commit currently running in Replit
+- Whether Replit is actually running the latest GitHub commit
+- Whether the latest deployment was restarted after recent auth/database changes
+- Whether production environment variables/secrets are present
+
+4. DATABASE STATUS
+- Confirm production DB schema against current Drizzle schema
+- Explicitly verify auth-related columns/tables
+
+DO NOT IMPLEMENT FIXES YET.
