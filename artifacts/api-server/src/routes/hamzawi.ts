@@ -6,7 +6,6 @@ import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "../lib/logger";
 import { planLevel } from "@workspace/db";
-import { hasBetaAccess } from "../services/beta/access";
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { readFileSync, unlinkSync, existsSync } from "fs";
 import { getUserFromToken, isAdminToken } from "../middleware/auth";
@@ -533,15 +532,14 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
     // The supervisor is not a paying customer: present the full-capability
     // plan text so no registration/upsell nudge is aimed at the platform owner.
-    const promptPlan = isSupervisor ? "agency" : plan;
+    // Otherwise feed the BETA-AWARE effective level into the prompt: beta users
+    // (registered + beta_access) get level 4+ capability text directly instead of
+    // a runtime-appended Beta override block. composeSystemPrompt() derives the
+    // capability text from planLevel(plan), so a level >= 4 account maps to the
+    // "content" plan text to get full capabilities without any upgrade nudge.
+    const promptPlan = isSupervisor ? "agency" : level >= 4 ? "content" : plan;
     const systemPrompt =
       composeSystemPrompt(promptPlan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName) +
-      // Temporary Beta override: beta users (plan "registered" + beta_access) have
-      // full product access without a subscription — suppress any upgrade nudge
-      // that the plan-level capability text would otherwise produce.
-      (user && hasBetaAccess(user)
-        ? `\n\n[وضع وصول تجريبي (Beta): هذا المستخدم مسجّل عبر Google ويحظى بوصول تجريبي كامل لكل قدرات PostLab — فحص الإعلانات، توليد النصوص، توليد الصور، وتصميم المنشورات بهوية نشاطه — دون اشتراك مدفوع. لا تعرض عليه ترقية ولا تذكره بخطط أو أسعار مدفوعة ولا تحدّ قدراته كمسجّل عادي.]`
-        : "") +
       (isSupervisor
         ? `\n\n[وضع مساعد المالك (Supervisory): المستخدم الحالي هو مالك/مشرف PostLab. يمكنك الإجابة عن بيانات المنصة التشغيلية عند سؤاله عنها.]` +
           (operationalBlock ? `\n\n${operationalBlock}` : "")

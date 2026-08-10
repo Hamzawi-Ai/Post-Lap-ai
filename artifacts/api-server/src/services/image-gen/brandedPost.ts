@@ -89,14 +89,60 @@ export async function generateBrandedPost(params: {
 
   const brandContext = buildGeminiBrandContext(memory ?? null);
 
-  let prompt = `Create a professional social media advertisement image for Meta (Facebook/Instagram) that is fully compliant with Meta advertising policies.\n\n${brandContext}\n\nProduct/Service: ${description}\n\nRequirements:\n- Professional design matching the brand identity\n- Clean layout with brand colors and style\n- Visually appealing composition for social media\n- No text overlays exceeding 20% of the image\n- No misleading claims or before/after comparisons\n- High quality, scroll-stopping visual`;
+  // Layer 1 — BRAND HARD FACTS: official values from the saved brand memory,
+  // passed verbatim. Lightweight validation only: facts that exist in memory
+  // are asserted as immutable; nothing is fabricated and no blanket flags are
+  // raised for optional/absent data (e.g. a missing activity dataset).
+  const hardFacts: string[] = [];
+  if (memory?.business_name?.trim()) hardFacts.push(`Business name: ${memory.business_name.trim()}`);
+  if (memory?.phone?.trim()) hardFacts.push(`Phone: ${memory.phone.trim()}`);
+  if (memory?.address?.trim()) hardFacts.push(`Address: ${memory.address.trim()}`);
+  if (memory?.business_type?.trim()) hardFacts.push(`Business type: ${memory.business_type.trim()}`);
+  if (memory?.primary_colors?.trim()) hardFacts.push(`Brand colors: ${memory.primary_colors.trim()}`);
+  if (memory?.preferred_style?.trim()) hardFacts.push(`Design style: ${memory.preferred_style.trim()}`);
+  const hardFactsBlock = hardFacts.length > 0
+    ? `\n\n[BRAND HARD FACTS — use these values exactly as written; never alter, round, or substitute them:]\n${hardFacts.join("\n")}`
+    : "";
+
+  // Layer 3 — ORIGINAL ASSETS: name the attached images by their real category
+  // so the model uses the relevant original (logo / product / sample) instead
+  // of being told to force the first reference. Empty reference list → no line.
+  const assetCategoryLabels: Array<[string, string]> = [
+    ["logo", "Logo"],
+    ["products", "Product image(s)"],
+    ["portfolio", "Design sample(s)"],
+    ["design_samples", "Reference sample(s)"],
+    ["generated", "Generated design(s)"],
+  ];
+  const assetLabels = brandAssets.assetItems.map((item) => item.category);
+  const attachedCategories = assetCategoryLabels
+    .filter(([cat]) => assetLabels.includes(cat))
+    .map(([, label]) => label);
+  const assetsBlock = brandAssets.images.length > 0
+    ? `\n\n[3. ORIGINAL ASSETS — attached in order: ${attachedCategories.join(", ")} or "mixed". Use the original attached assets (logo, product images, design samples) directly in the design — never rely on textual descriptions of them alone.]`
+    : "";
+
+  // Layered generation prompt: FACTS → TEXT → ASSETS → DIRECTION → LAYOUT →
+  // FORMAT → CONSTRAINTS (per the design-generation protocol).
+  let prompt = `Create a social media advertisement image for Meta (Facebook/Instagram) that is fully compliant with Meta advertising policies.
+
+[1. BRAND FACTS]${hardFactsBlock || "\nNo brand identity saved — use professional defaults with a clean modern style."}
+
+[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested.${assetsBlock}
+
+[4. CREATIVE DIRECTION]
+${brandContext}
+
+Brief: ${description}
+
+[5. LAYOUT] Organise the design in clear layers: background, then text, then logo, then extra elements, then final touches.
+
+[6. OUTPUT FORMAT] Social media post (1080x1350 unless another size is specified in the brief). High quality, scroll-stopping visual. Text overlays must not exceed 20% of the image.
+
+[7. HARD CONSTRAINTS] Never alter any of the BRAND HARD FACTS above. No misleading claims and no before/after comparisons. Only the requested text appears on the design.`;
   if (regenerateNote) prompt += `\n\nAdditional note: ${regenerateNote}`;
 
   const referenceImages: Array<{ mimeType: string; data: string }> = [...brandAssets.images];
-
-  if (brandAssets.images.length > 0) {
-    prompt += `\n\nProvided brand references (logo, design samples, product images) — use the logo in the design and draw inspiration from the style and layout of the design samples.`;
-  }
 
   if (productImageBase64) {
     const productMatch = productImageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
