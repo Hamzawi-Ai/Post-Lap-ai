@@ -414,7 +414,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
 
   // Supervisory context: the owner/admin JWT (role: "admin", signed with
   // SESSION_SECRET — same credential as requireAdmin). An admin token carries
@@ -587,6 +587,10 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     const proOnlyIntent =
       intentDecision.intent === "generate_text" ||
       (intentDecision.intent === "generate_image" && !attachedImage);
+    if (!isInit && message && proOnlyIntent && level < 2) {
+      const toolId = intentDecision.intent === "generate_image" ? "generate_image" : "generate_text";
+      const gatedTool = toolRegistry.get(toolId);
+      if (gatedTool) {
         const access = evaluateToolAccess(gatedTool, {
           user: user
             ? {
@@ -598,7 +602,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           level,
         });
         if (!access.allowed) {
-    let reply = generateReply;
+          const reply = access.message ?? "هذه الميزة متاحة لمشتركي PRO فقط.";
           await db.insert(hamzawiMessagesTable).values({
             user_id: user?.id ?? null,
             session_id: sessionRawId,
@@ -614,7 +618,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
             conversation_id: resolvedConversationId,
           });
           if (resolvedConversationId) {
-      const now = new Date();
+            const now = new Date();
             await db
               .update(hamzawiConversationsTable)
               .set({ updated_at: now, last_message_at: now })
@@ -871,7 +875,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 // List non-archived conversations for the logged-in user, sorted by
 // last_message_at DESC NULLS LAST, then created_at DESC.
 router.get("/hamzawi/conversations", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -902,7 +906,7 @@ router.get("/hamzawi/conversations", async (req, res): Promise<void> => {
 // POST /api/hamzawi/conversations
 // Create a new conversation for the logged-in user. Returns id + title.
 router.post("/hamzawi/conversations", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -927,7 +931,7 @@ router.post("/hamzawi/conversations", async (req, res): Promise<void> => {
 // PATCH /api/hamzawi/conversations/:id
 // Rename a conversation (title only). The conversation must belong to the user.
 router.patch("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -973,7 +977,7 @@ router.patch("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
 // Soft-delete: sets archived_at = now(). The row and its messages are preserved.
 // Archived conversations are excluded from the list endpoint.
 router.delete("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -1016,7 +1020,7 @@ router.delete("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
 // specific conversation (authentication + ownership required). When absent, falls
 // back to the legacy session/user query so existing frontend code works unchanged.
 router.get("/hamzawi/messages", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   const verifiedSessionId = user ? null : getVerifiedSessionId(req);
   const conversationIdRaw = req.query.conversationId as string | undefined;
   const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
@@ -1085,7 +1089,7 @@ router.get("/hamzawi/messages", async (req, res): Promise<void> => {
 
 // GET /api/hamzawi/memory
 router.get("/hamzawi/memory", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -1107,7 +1111,7 @@ router.get("/hamzawi/memory", async (req, res): Promise<void> => {
 
 // PUT /api/hamzawi/memory
 router.put("/hamzawi/memory", async (req, res): Promise<void> => {
-    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
+  const user = await getUserFromToken(req.headers.authorization);
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -1337,7 +1341,3 @@ router.post(
 );
 
 export default router;
-
-      const gatedTool = toolRegistry.get(toolId);
-
-      const toolId = intentDecision.intent === "generate_image" ? "generate_image" : "generate_text";
