@@ -1,0 +1,174 @@
+# #67 — Apply and Verify FREE/PRO Plan Migration
+
+## Goal
+
+Safely apply the already-reviewed FREE/PRO enum migration to the LIVE Production Database.
+
+This is a database-only task.
+
+The commercial subscription model is now exactly two tiers:
+- FREE
+- PRO
+
+Do not reintroduce or preserve the old six-tier subscription model.
+
+## Required migration
+
+Use ONLY this existing file:
+
+lib/db/migrations/plan_enum_free_pro.sql
+
+The migration file has already been reviewed and schema-qualified.
+
+Do not edit it.
+
+## Hard boundaries
+
+Do NOT:
+- modify application code
+- modify Drizzle schema
+- modify post-merge.sh
+- modify any migration file
+- create a new migration
+- run drizzle-kit push
+- run drizzle-kit push --force
+- change subscription logic
+- change plan mapping
+- change prompts
+- change authentication
+- commit
+- push
+
+This task must not produce any file changes.
+
+## Phase 1 — Pre-flight inspection
+
+Before executing the migration:
+
+1. Confirm that the selected database is LIVE PRODUCTION, not Development.
+2. Confirm that:
+   - public.plan currently exists
+   - users.plan and companies.plan exist
+3. Inspect the current enum values.
+4. Inspect the current distinct values and row counts in:
+   - public.users.plan
+   - public.companies.plan
+5. Confirm that the migration file exists and is unchanged.
+
+Do not assume the previously observed production data is still current.
+
+Report the actual pre-migration state.
+
+## Phase 2 — Safety check
+
+Verify that the existing migration covers every legacy enum value currently present.
+
+The intended mapping is:
+
+visitor       → free
+registered    → free
+professional  → pro
+smart_fix     → pro
+content       → pro
+agency        → pro
+
+The final enum must contain exactly:
+
+free
+pro
+
+If the actual Production state contains anything unexpected or unmapped:
+
+STOP.
+
+Do not modify anything.
+Report the discrepancy.
+
+## Phase 3 — Execute
+
+Only after the pre-flight checks pass:
+
+Execute the existing:
+
+lib/db/migrations/plan_enum_free_pro.sql
+
+against LIVE PRODUCTION.
+
+Do not substitute another SQL statement.
+Do not rewrite the migration.
+Do not run drizzle-kit.
+Do not run other migration files.
+
+If execution fails at any point:
+
+STOP immediately.
+
+Do not attempt an automatic repair or second migration.
+Report the exact database error and current database state.
+
+## Phase 4 — Verify
+
+After successful execution, verify LIVE PRODUCTION:
+
+1. public.plan contains exactly:
+   - free
+   - pro
+
+2. public.users.plan contains only:
+   - free
+   - pro
+
+3. public.companies.plan contains only:
+   - free
+   - pro
+
+4. Both columns use type:
+   - public.plan
+
+5. Both defaults are:
+   - 'free'
+
+6. Compare before/after row counts for:
+   - public.users
+   - public.companies
+
+No rows may be lost.
+
+7. Confirm no other tables or columns were modified by this task.
+
+## Important
+
+This migration is intentionally separate from the deployment/publish flow.
+
+Do NOT modify post-merge.sh in this task.
+
+Making future deployments automatically execute manual migrations is a separate task and must not be combined with this one.
+
+## Completion criteria
+
+Mark this task complete only if:
+
+- Production migration succeeded
+- enum is exactly {free, pro}
+- users.plan is correctly typed and mapped
+- companies.plan is correctly typed and mapped
+- defaults are 'free'
+- row counts are preserved
+- no source files changed
+- no commit was created
+- nothing was pushed
+
+## Final report
+
+Report only:
+
+1. Production confirmed: YES/NO
+2. Migration executed: YES/NO
+3. Pre-migration enum/data state
+4. Post-migration enum/data state
+5. Before/after row counts
+6. Column types
+7. Defaults
+8. Errors, if any
+9. Files changed: MUST be NONE
+10. Commit/push: MUST be NO
