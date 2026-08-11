@@ -1,0 +1,422 @@
+POSTLAB — PRODUCTION CHAT CONTINUITY & ROUTING FIX
+==================================================
+
+Goal
+----
+
+PostLab is now published and the immediate goal is simple:
+
+MAKE THE CUSTOMER CHAT RELIABLY WORK FOR REAL USERS.
+
+The current Production app successfully opens the Customer Chat and can produce an initial response, but during real usage we observed that the conversation often fails after the first exchange.
+
+I want you to investigate the actual cause, verify the complete Customer Chat flow, and make only the necessary, low-risk fixes required to get the current chat experience working reliably.
+
+This is a focused production bug-fix task, NOT a redesign or refactor.
+
+
+CURRENT OBSERVED BEHAVIOR
+-------------------------
+
+Production testing showed:
+
+1. A new conversation can receive an initial assistant response.
+
+2. Subsequent messages in the same conversation may fail and return the generic error:
+   "عذرًا، حدث خطأ. حاول مرة أخرى."
+
+3. The failure appears to affect multi-turn conversation continuity.
+
+4. The assistant persona "Nader" (نادر) was recently introduced as an internal creative persona through the Customer Chat prompt system.
+   Nader is intentionally a prompt/persona concept, NOT a separate technical agent, service, route, or architecture.
+
+5. When the user explicitly tried to invoke Nader, the request did not receive the expected response and instead fell into the error/fallback behavior.
+
+6. We also observed that some conversations appear to work on the first message and then fail on later messages.
+
+7. The FREE / PRO two-tier UI is currently visible and appears to be functioning.
+   Do NOT modify the subscription architecture as part of this task unless you prove that it is directly responsible for the current Chat failure.
+
+
+YOUR JOB
+--------
+
+First understand the existing implementation.
+
+Then determine the actual root cause.
+
+Then fix only what is necessary.
+
+Do not assume the cause in advance.
+
+
+INVESTIGATION SCOPE
+-------------------
+
+Trace the real Customer Chat flow end-to-end:
+
+Frontend
+→ request
+→ conversation creation / selection
+→ conversation ID
+→ backend chat route
+→ authentication / user context
+→ conversation lookup
+→ message history
+→ prompt construction
+→ model invocation
+→ response handling
+→ message persistence
+→ frontend state update
+→ next message
+
+Verify that these parts are correctly connected for multi-turn conversations.
+
+Pay particular attention to:
+
+- conversationId creation
+- conversationId propagation
+- request payloads
+- backend route parameters/body
+- conversation lookup
+- conversation ownership
+- message persistence
+- previous-message retrieval
+- prompt/context construction
+- model invocation
+- response persistence
+- frontend state/cache updates
+- continuing an existing conversation
+- reloading a conversation
+- switching between conversations
+
+
+IMPORTANT RECENT AREAS TO REVIEW
+--------------------------------
+
+Because the problem appeared around the recent Customer Chat work, inspect the current implementation and recent changes around:
+
+- routes/hamzawi.ts
+- Customer Chat frontend components
+- conversation handling
+- conversationId handling
+- prompt construction
+- postlab/brain.ts
+- PostLab persona/prompt files
+- Nader persona instructions
+- model invocation
+- message persistence
+- recent FREE/PRO changes
+- any recent changes affecting Customer Chat routing
+
+Use the actual current code and git history/diff where useful.
+
+Do not assume that a recent change is necessarily the cause.
+
+
+KNOWN AUDIT CLUES
+-----------------
+
+A previous audit identified possible runtime issues around conversation IDs in hamzawi.ts, including references involving:
+
+- conversationId
+- conversationIdInput
+- conversationIdRaw
+- req.params.id
+
+The previous audit also reported possible issues around conversation continuation and conversation management.
+
+Treat these as investigation clues only.
+
+Verify them against the current code.
+
+Do not blindly apply the previous audit's recommendations.
+
+
+NADER
+-----
+
+Nader is intentionally a creative persona defined through the PostLab Customer Chat prompt system.
+
+Do NOT create:
+
+- a new Nader agent
+- a new API route
+- a new service
+- a separate model
+- a separate architecture
+
+Instead verify that a request involving Nader correctly passes through the existing Customer Chat prompt/response flow.
+
+The expected behavior is:
+
+User asks for Nader
+→ existing Customer Chat recognizes the creative persona request
+→ appropriate existing prompt/persona instructions are included
+→ model responds normally
+→ response is saved
+→ conversation continues normally
+
+If Nader fails because of a genuine routing, prompt assembly, context, or runtime issue, fix the underlying issue.
+
+Do not redesign the persona.
+
+
+IMAGE GENERATION
+----------------
+
+During Production testing we also observed that image-generation requests did not behave as expected.
+
+Do not redesign or rebuild image generation.
+
+While investigating the Chat flow, determine whether image-generation requests are correctly connected to the existing Customer Chat / creative flow.
+
+If there is a small, clear, directly related bug preventing the current flow from working, it may be fixed.
+
+If the issue requires a larger architectural change, leave it untouched and report it separately.
+
+
+SCOPE BOUNDARY
+--------------
+
+This task is intentionally narrow.
+
+DO NOT:
+
+- redesign Customer Chat
+- rewrite the prompt system
+- redesign Nader
+- redesign FREE / PRO
+- change the subscription model
+- change plan capabilities
+- change database architecture unless absolutely necessary for the direct bug
+- perform a broad refactor
+- clean unrelated technical debt
+- update stale documentation unless required for this fix
+- change deployment architecture
+- change unrelated APIs
+- introduce new features
+- "improve" unrelated code while you are here
+
+If you discover other problems, record them in the final report.
+
+Only fix additional issues if they are:
+
+1. directly related to the current Chat failure,
+2. clearly understood,
+3. low-risk,
+4. small in scope,
+5. necessary for the production flow to work correctly.
+
+
+WORKFLOW
+--------
+
+Before changing code:
+
+1. Inspect the current implementation and relevant recent history.
+2. Identify the most likely failure point(s).
+3. Create a short implementation plan explaining:
+   - what you found,
+   - what you intend to change,
+   - why,
+   - and what you will test.
+
+Do not start a broad refactor.
+
+Keep the plan focused on restoring the existing intended behavior.
+
+Before making meaningful changes, preserve a checkpoint so the current working Production baseline can be recovered if necessary.
+
+Then implement the smallest safe fix.
+
+
+TESTING
+-------
+
+This is a runtime behavior problem.
+
+A successful build alone is NOT sufficient.
+
+Use the available App Testing / real-browser testing capability where possible.
+
+Test the actual user flow.
+
+At minimum verify:
+
+TEST 1
+-------
+Create a new conversation.
+Send one message.
+Confirm a valid assistant response.
+
+TEST 2
+-------
+Send a second message in the SAME conversation.
+Confirm the assistant responds normally.
+
+TEST 3
+-------
+Send a third message in the SAME conversation.
+Confirm the assistant responds normally.
+
+TEST 4
+-------
+Reload the conversation.
+Send another message.
+Confirm the conversation continues normally.
+
+TEST 5
+-------
+Create/switch between conversations.
+Return to the original conversation.
+Continue it.
+Confirm it still works.
+
+TEST 6
+-------
+Ask for the Nader creative persona.
+Confirm the assistant responds normally rather than falling into the generic error/fallback.
+
+TEST 7
+-------
+After the Nader interaction, send a normal Customer Chat request.
+Confirm the conversation continues normally.
+
+TEST 8
+-------
+If practical within the current flow, test an image-generation request.
+Determine whether it works through the existing architecture.
+If it does not, identify the exact remaining blocker without expanding the task.
+
+Also run the appropriate:
+
+- typecheck
+- build
+- relevant automated tests, if available
+
+
+IMPORTANT
+---------
+
+Do not stop at:
+
+"Build passes."
+
+The important acceptance criterion is:
+
+A real user can start a conversation and continue sending multiple messages without the Customer Chat breaking.
+
+
+REGRESSION CHECK
+----------------
+
+After the fix, verify that the change did not break:
+
+- new conversations
+- existing conversation loading
+- message persistence
+- conversation switching
+- authentication/ownership behavior
+- existing prompt/persona behavior
+- FREE / PRO behavior
+
+Do not change behavior that is unrelated to the current bug.
+
+
+FINAL REPORT
+------------
+
+When finished, provide a concise but technically precise report with these sections:
+
+## 1. Root Cause
+
+What actually caused the multi-turn Chat failure?
+
+## 2. What Was Fixed
+
+Explain the exact behavioral/code fix in plain language.
+
+## 3. Files Changed
+
+Provide:
+
+| File | Change | Reason |
+|------|--------|-------|
+
+Only list files actually modified.
+
+## 4. Customer Chat Flow
+
+Briefly explain whether this chain is now correctly connected:
+
+Frontend
+→ Conversation
+→ conversation ID
+→ API
+→ message history
+→ prompt
+→ model
+→ response
+→ persistence
+→ frontend
+
+## 5. Nader
+
+Explain whether the Nader issue was caused by:
+- prompt/persona handling,
+- conversation state,
+- routing,
+- runtime failure,
+- or something else.
+
+Explain what was changed, if anything.
+
+## 6. Testing Results
+
+Report PASS / FAIL for:
+
+- New conversation
+- Second message
+- Third message
+- Reload + continue
+- Switch + continue
+- Nader
+- Normal request after Nader
+- Image generation (if tested)
+- Typecheck
+- Build
+- Relevant automated tests
+
+## 7. Remaining Issues
+
+Only list issues that remain unresolved.
+
+Do not silently fix unrelated issues.
+
+## 8. Out of Scope
+
+List anything you intentionally did not change because it requires a separate task or larger architectural decision.
+
+## 9. Final Verdict
+
+Answer clearly:
+
+CUSTOMER CHAT READY FOR REAL USE: YES / NO
+
+If NO, state the exact remaining blocker.
+
+
+FINAL PRINCIPLE
+---------------
+
+Preserve the existing PostLab architecture and intended behavior.
+
+Diagnose first.
+Make the smallest safe fix.
+Test the real user flow.
+Do not expand the task.
+
+The goal is not to make the code prettier.
+
+The goal is to make the CURRENT PostLab Customer Chat reliably work for real users.
