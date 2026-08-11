@@ -1,0 +1,110 @@
+Before you start building Task #74, make the following corrections and constraints to the plan. Do not change the scope or architecture; these are implementation-safety requirements.
+
+1. BUG 4 — PREVIOUS GENERATED IMAGES / ASSET FLOW
+Do NOT assume that the generated image URL is directly available at the assistant-message DB insert point.
+
+Before modifying persistence, trace the complete existing generated-image flow:
+generation result → asset/storage creation → stored URL/reference → assistant DB message → buildHistoryForAI().
+
+First inspect the existing %%ATTACHED_IMAGE%% marker format and the existing assetReader/contextBuilder implementation. Reuse the exact established marker/parser/storage mechanism wherever possible.
+
+Requirements:
+- Reuse the existing stored asset URL/reference if one already exists.
+- Do NOT create duplicate asset records.
+- Do NOT upload/store the same generated image twice.
+- Do NOT introduce a second image-storage mechanism.
+- Do NOT invent a new marker format if the existing %%ATTACHED_IMAGE%% mechanism can be reused.
+- The final result must allow "عدل التصميم السابق" to provide the actual previously generated image as a multimodal image input to the next AI/generation turn.
+- Preserve the existing user-uploaded-image history behavior.
+- Preserve the existing 6-image cap.
+- If the current architecture stores generated images differently from the assumption in the task description, trust the actual implementation and adapt the fix to the existing architecture. Explain the discrepancy in the final report.
+
+2. BUG 1 — LOADING STATE
+The ~8 second timeout is a guideline, not a requirement to hard-code exactly 8 seconds.
+
+The real acceptance criterion is:
+Customer Chat must ALWAYS transition from the initial state into a usable state, even if history/memory requests fail, timeout, or never resolve.
+
+Do not merely hide "جاري التحميل". Ensure the component's actual initialization state becomes usable and the user can send a message after the fallback.
+
+Use a reasonable timeout and proper cleanup/cancellation where appropriate so the fix does not introduce race conditions, state updates after unmount, or duplicate initialization.
+
+3. PHASE 1 — TRUST THE ACTUAL CODE
+Before editing, inspect and trace the real implementation end-to-end.
+
+For each of the five reported root causes:
+- Confirm whether the root cause exactly matches the task description.
+- If it differs, do NOT blindly implement the described fix.
+- Trust the actual current code and implement the smallest correct fix for the actual behavior.
+- Record any discrepancy in the final engineering report.
+
+4. MINIMAL-DIFF REQUIREMENT
+Keep this task strictly surgical.
+
+Do NOT:
+- refactor unrelated code
+- redesign the architecture
+- rewrite prompts/personas
+- redesign Brand Memory
+- redesign the asset system
+- change subscription/FREE/PRO logic
+- change the AI provider
+- change Arabic image rendering
+- modify unrelated routes/files
+- create duplicate helpers or duplicate persistence logic
+
+Prefer the smallest possible change that fixes each confirmed root cause.
+
+5. REGRESSION SAFETY
+Task #72 multi-turn behavior is already fixed and MUST remain intact.
+
+Before declaring completion, specifically verify:
+- multi-turn chat still works
+- auth still works
+- sidebar rename/delete still work
+- FREE/PRO gating still works
+- existing image generation still works
+- existing user-uploaded image context still works
+- policy-check flow still works
+
+6. GENERATION GUARD
+The server-side %%GENERATE_POST%% gate must be authoritative.
+
+Only execute the generation marker when:
+intentDecision.intent === 'generate_image'
+
+If the model emits %%GENERATE_POST%% for general_chat/advisory intent:
+- do NOT generate
+- strip the marker
+- return the normal text response
+
+Do not weaken or bypass the existing intent classification.
+
+7. REAL BROWSER VERIFICATION IS REQUIRED
+Do not declare the task complete based only on code inspection or TypeScript success.
+
+Actually run the application and test the critical flows in the browser:
+A. Login → open Customer Chat → initial loading resolves and chat becomes usable.
+B. Policy check → follow-up → third turn → actual policy result remains available.
+C. "شو بتقترح؟" → text recommendation only, no generation.
+D. "شو بتنصحني؟" → text recommendation only, no generation.
+E. Explicit design request → generation still works.
+F. Generate design → "عدل التصميم السابق" → verify the previous generated image is actually passed as multimodal input, not merely referenced by text.
+G. "بقدر أحكي مع المصمم مباشرة؟" → PostLab AI identifies itself as the designer and does not say it cannot contact a designer.
+H. Regression: auth, sidebar rename/delete, multi-turn, image generation, and FREE/PRO gating.
+
+If any browser test cannot actually be performed, report it explicitly as NOT VERIFIED. Never claim a test passed based only on static inspection.
+
+8. FINAL REPORT
+The final report must clearly separate:
+- files changed
+- root cause confirmed for each bug
+- exact implementation change
+- typecheck/build result
+- browser test result for each test A–H
+- acceptance criteria passed
+- remaining limitations/concerns
+
+Do not create a follow-up task for anything that is within Task #74 scope. Fix in-scope issues before declaring the task complete.
+
+After incorporating these corrections, show the updated plan briefly, then start implementation.

@@ -1,0 +1,573 @@
+# Customer Chat — Context, Asset & Generation Flow Audit + Minimal Production Fixes
+
+## OBJECTIVE
+
+We have already fixed Task #72 and confirmed that Customer Chat multi-turn conversations now work.
+
+The current production/preview test exposed a SECOND layer of problems.
+
+The goal of this task is NOT to redesign Customer Chat, rewrite the persona, migrate AI providers, or rebuild the prompt architecture.
+
+The goal is:
+
+1. Find why the Customer Chat context is not being used reliably.
+2. Find why saved brand assets / conversation images are apparently not reaching the AI/image-generation flow as actual usable inputs.
+3. Find why the real ad-policy check result is not reliably driving the chat response.
+4. Find why the assistant sometimes starts image generation before the user explicitly asks it to generate.
+5. Fix only confirmed causes with the smallest safe production changes.
+6. Verify the real user flows in Preview.
+
+This is a narrow production-readiness task.
+
+---
+
+# IMPORTANT: WORKING RULES
+
+Follow the project's existing architecture and conventions.
+
+DO NOT:
+- redesign Customer Chat architecture
+- rewrite the entire PostLab prompt system
+- migrate from OpenAI to Gemini
+- change the image-generation provider
+- redesign subscriptions or FREE/PRO
+- redesign Brand Memory
+- redesign the asset system
+- change the generation UI
+- change image-generation permissions
+- modify unrelated TypeScript issues
+- touch pricing/configuration
+- change database schema unless absolutely proven necessary for one of the bugs below
+- make speculative "AI quality" changes
+- broadly rewrite prompts just because the model response was poor
+
+Do not fix symptoms with large prompt additions if the underlying context/data is missing.
+
+Prefer fixing the actual data/context flow.
+
+Keep existing working behavior unchanged, especially:
+- Task #72 multi-turn fix
+- authentication
+- conversation ownership
+- conversation history
+- FREE/PRO behavior
+- image generation permission flow
+- existing image generation pipeline
+- existing Brand Memory
+- existing policy-check endpoint
+
+Use the smallest production-safe change that fixes a confirmed root cause.
+
+---
+
+# FIRST: INSPECT BEFORE MODIFYING
+
+Before changing files, trace the actual Customer Chat request end-to-end.
+
+Follow this chain:
+
+Frontend
+→ POST /hamzawi/chat
+→ request body / conversationId
+→ context loading
+→ Brand Memory loading
+→ assetContext
+→ composeSystemPrompt(...)
+→ message history
+→ reportSummary (when applicable)
+→ model request
+→ tool/image-generation decision
+→ image generation input assets
+→ response
+→ frontend rendering
+
+Do not assume that because an asset is mentioned in text it is actually available to the model.
+
+We need to distinguish between:
+
+A. asset metadata/description being included in text
+
+and
+
+B. the actual image/file being passed to the multimodal model or image-generation model.
+
+That distinction is critical.
+
+---
+
+# AREAS TO INSPECT
+
+## 1. Chat opening / "جاري التحميل"
+
+Observed behavior:
+
+After login, when the Customer Chat box opens, it can remain stuck on:
+
+"جاري التحميل"
+
+before the first usable interaction.
+
+This appears separate from the Task #72 multi-turn bug.
+
+Inspect:
+- artifacts/postlap-ai/src/components/HamzawiChat.tsx
+- conversation loading
+- auth/user readiness
+- initial conversation fetch
+- loading state transitions
+- React Query/request lifecycle
+- any race between authentication and chat initialization
+
+Determine the exact reason the loading state can remain stuck.
+
+Fix only if the cause is confirmed.
+
+Acceptance:
+- login
+- open Customer Chat
+- loading state resolves normally
+- first message can be sent without waiting indefinitely
+- existing multi-turn behavior remains intact
+
+---
+
+# 2. BRAND MEMORY + SAVED ASSETS ARE NOT ACTUALLY BEING USED RELIABLY
+
+The current architecture already contains:
+
+- services/ai/contextBuilder.ts
+- services/media/assetReader.ts
+- collectBrandAssets(...)
+- buildBrandMemoryBlock(...)
+- composeSystemPrompt(...)
+- assetContext
+- assetsBlock
+- assetUsageInstruction
+
+The documented current prompt assembly says that saved assets are included and should be used automatically when relevant.
+
+Do NOT assume this means the actual files reach the model.
+
+Trace:
+
+Brand Memory
+→ assetReader
+→ collectBrandAssets
+→ contextBuilder
+→ assetContext
+→ composeSystemPrompt
+→ actual model request payload
+
+Answer these questions from the code:
+
+1. What exactly does collectBrandAssets() return?
+2. Does assetContext contain only text/metadata, or actual image references?
+3. When an asset is marked as available, where is the actual file/image passed to the model?
+4. Does the OpenAI multimodal request contain the actual asset?
+5. Does image generation receive the actual asset?
+6. If a logo exists in Brand Memory, is the actual logo available to the image-generation request?
+7. If previous design samples exist, are they actually available to the model?
+8. Are generated images from previous turns stored/referenced in a way that allows the next turn to actually use them?
+
+Do not modify the asset architecture yet.
+
+If the current architecture already supports the correct flow, identify the exact broken handoff and fix only that handoff.
+
+---
+
+# 3. IMAGES FROM THE CURRENT CONVERSATION
+
+Observed behavior:
+
+The user previously uploaded/referenced an image in the same conversation.
+
+Later they asked to modify/use that design.
+
+The assistant responded as if it remembered the image, but the generated result was substantially different.
+
+We need to verify whether the model actually receives the previous image.
+
+Trace:
+
+uploaded image
+→ message/attachment record
+→ conversation history
+→ context reconstruction
+→ model message payload
+→ image-generation request
+
+Important:
+
+Conversation history text is NOT equivalent to multimodal image access.
+
+If the previous image is only represented by:
+- a filename
+- a description
+- metadata
+- a URL that is not actually passed to the model
+- or a textual reference
+
+then report that clearly and fix the smallest possible missing handoff.
+
+Acceptance:
+
+If the user says:
+
+"عدّل التصميم السابق"
+
+the generation flow must have access to the previous generated/reference image when the product architecture says that image should be reusable.
+
+Do not redesign the whole asset system.
+
+---
+
+# 4. POLICY CHECK RESULT IS NOT RELIABLY DRIVING CHAT
+
+Observed behavior:
+
+When the user uploads an advertising image, the application performs a check.
+
+The first automatic result can be generic/weak.
+
+After the user explicitly asks the assistant to check it again, the answer can become more specific.
+
+We need to inspect the existing real flow.
+
+Known architecture:
+
+/api/check produces the advertising/policy report.
+
+The current implementation injects reportSummary into the user message in routes/hamzawi.ts.
+
+Inspect exactly how:
+
+/api/check
+→ reportSummary
+→ POST /hamzawi/chat
+→ user message
+→ model context
+
+Determine:
+
+1. Is the complete reportSummary reaching Customer Chat?
+2. Is the report associated with the correct uploaded image?
+3. Is the report lost when the conversation continues?
+4. Is the assistant receiving only a summary instead of the actual report?
+5. Is the model being instructed to treat the actual check result as authoritative?
+6. Is there any path where the user asks for a second check and the system performs a new analysis instead of using the original result?
+
+Do NOT invent a new policy-analysis system.
+
+The existing check endpoint is the source of truth.
+
+If the real report is already available, make Customer Chat use that report correctly.
+
+If the report is NOT actually reaching the chat context, fix that handoff.
+
+Acceptance:
+
+Upload a known policy-problematic advertising image.
+
+The assistant should respond based on the actual check result, not generic marketing-policy advice.
+
+Do not claim that an image is compliant/non-compliant unless the actual check result supports it.
+
+---
+
+# 5. ASSISTANT GENERATES A DESIGN WITHOUT EXPLICIT USER REQUEST
+
+Observed behavior:
+
+User asked:
+
+"شو بتقترح؟"
+
+The assistant immediately started designing.
+
+This is incorrect.
+
+The existing product behavior should distinguish between:
+
+- asking for advice
+- asking for ideas
+- asking what is recommended
+- asking for clarification
+- explicitly requesting generation
+- explicitly requesting modification
+
+Image generation should NOT automatically start merely because the conversation is about design.
+
+Inspect:
+
+- getDesignGenerationInstruction(...)
+- composeSystemPrompt(...)
+- tool/generation decision logic
+- any intent detection
+- image-generation trigger conditions
+
+The expected behavior is:
+
+User:
+"شو بتقترح؟"
+
+Assistant:
+provides options/recommendations and waits.
+
+User:
+"تمام صمم الخيار الثاني"
+
+Assistant:
+generates.
+
+Likewise:
+
+"اعمل لي تصميم..."
+"صمم..."
+"نفذ هذا التصميم..."
+"عدل التصميم السابق..."
+
+are explicit generation/edit requests.
+
+Do not create an oversized new intent system.
+
+Fix the existing generation gate at the smallest appropriate layer.
+
+Acceptance:
+- "شو بتقترح؟" → NO generation
+- "شو بتنصحني؟" → NO generation
+- "كيف ممكن نصممها؟" → NO generation
+- "صممها" → generation allowed
+- "نفذ الخيار الثاني" → generation allowed
+- "عدل التصميم السابق" → generation/edit allowed
+
+---
+
+# 6. GENERATED DESIGN MUST RESPECT ACTUAL BRAND FACTS
+
+Observed behavior:
+
+The assistant knew the phone number in conversation, but generated output did not consistently respect the actual brand identity.
+
+The saved Brand Memory already contains fields such as:
+
+- business name
+- business type
+- address
+- phone
+- colors
+- preferred style
+- logo
+- design samples
+
+Do NOT change Brand Memory.
+
+Instead verify whether the actual generation request receives these facts.
+
+Critical rule:
+
+Brand facts are not creative suggestions.
+
+The image-generation flow must not invent:
+- phone numbers
+- logos
+- business names
+- prices
+- claims
+- English text
+- unrelated brand elements
+
+If the user explicitly requests Arabic-only design, do not add English text.
+
+Do NOT attempt to solve Arabic image-rendering quality in this task.
+
+That is intentionally OUT OF SCOPE.
+
+---
+
+# 7. "TALK TO THE DESIGNER" RESPONSE
+
+Current response:
+
+"لا أستطيع التواصل مباشرة مع المصممين..."
+
+This is technically understandable but not aligned with the product role.
+
+PostLab AI itself is the design assistant.
+
+Make only a small wording correction if this is controlled by an existing prompt/instruction.
+
+Expected concept:
+
+"I am the designer inside PostLab — tell me the change you want and I can help implement it."
+
+Do not redesign the persona.
+
+---
+
+# TEST MATRIX
+
+After confirmed fixes, test the actual flows in Preview.
+
+### Chat initialization
+1. Login
+2. Open Customer Chat
+3. Verify loading resolves
+4. Send first message
+
+### Multi-turn regression
+5. Send second message
+6. Send third message
+7. Reload page
+8. Continue conversation
+9. Switch conversation
+10. Return and continue
+
+### Brand / assets
+11. Verify saved brand identity is available
+12. Verify saved logo can actually reach generation
+13. Verify saved design sample can actually reach generation
+14. Upload/reference an image in the conversation
+15. Ask about that image
+16. Ask to modify that image
+17. Verify the actual image is available to the generation flow
+
+### Policy check
+18. Upload the supplied advertising image
+19. Run the normal automatic check
+20. Inspect the actual result
+21. Ask Customer Chat about the result
+22. Verify response follows the actual report
+
+### Generation gate
+23. Ask "شو بتقترح؟"
+   → NO generation
+24. Ask "شو بتنصحني؟"
+   → NO generation
+25. Say "تمام صمم"
+   → generation
+26. Say "عدل التصميم السابق"
+   → generation using previous design/reference when available
+
+### Brand facts
+27. Verify the real saved phone number is used
+28. Verify the real saved logo is used when requested/relevant
+29. Verify no invented phone number
+30. Verify no invented logo
+31. Verify no unsolicited English text
+
+---
+
+# IMPLEMENTATION RULE
+
+After inspection:
+
+- If the cause is confirmed, implement the smallest safe fix.
+- If multiple files must change, change only files directly involved in the broken flow.
+- Do not rewrite working code.
+- Do not "improve" unrelated behavior.
+- Do not refactor for style.
+- Do not modify architecture unless the current architecture genuinely cannot satisfy the documented behavior.
+- Do not change AI provider.
+- Do not change subscription logic.
+
+If a suspected issue is NOT confirmed by the code, do not modify it. Report it as unconfirmed.
+
+---
+
+# VALIDATION
+
+Run the relevant TypeScript/build checks after changes.
+
+Then test the real application in Preview as a user.
+
+Do not consider "build passes" sufficient.
+
+The success criterion is the actual user flow.
+
+Pay special attention to:
+- browser console
+- network requests
+- request payloads
+- server logs
+- actual model inputs
+- actual image-generation inputs
+- loading state transitions
+
+When possible, use Replit App Testing / real browser interaction rather than relying only on static code inspection.
+
+---
+
+# CHECKPOINT / SAFETY
+
+Create/retain a safe checkpoint before applying the implementation changes.
+
+If the change unexpectedly affects:
+- chat continuity
+- authentication
+- FREE/PRO
+- generation permissions
+- existing image generation
+- conversation history
+
+stop and report the regression instead of expanding the scope.
+
+---
+
+# FINAL REPORT
+
+Return a structured report:
+
+## 1. Root Causes
+For each observed problem:
+- confirmed root cause
+- evidence/file/function
+- whether it was actually a code bug or expected model behavior
+
+## 2. What Was Fixed
+Exact files and minimal changes.
+
+## 3. Context Flow
+Explain:
+- Brand Memory → context
+- saved assets → model
+- conversation images → model
+- generated previous images → next generation
+- policy report → Customer Chat
+
+Clearly distinguish what is actually passed as an image/file versus text/metadata.
+
+## 4. Generation Gate
+Explain why "شو بتقترح؟" did/did not generate and what changed.
+
+## 5. Verification
+List each test above as PASS / FAIL / NOT TESTABLE.
+
+## 6. Remaining Issues
+Only confirmed remaining issues.
+
+Explicitly mention that Arabic image text quality / Gemini migration was NOT changed.
+
+## 7. Files Changed
+Exact list.
+
+## 8. Regression Check
+Confirm:
+- Task #72 still works
+- auth unchanged
+- FREE/PRO unchanged
+- image generation still works
+- existing conversation history still works
+
+## 9. Final Verdict
+
+Use one of:
+
+READY FOR NEXT TEST
+
+or
+
+BLOCKED — [specific reason]
+
+Do not propose unrelated follow-up tasks unless a real blocker was discovered.
+
+This is a production hotfix/verification task, not a redesign.

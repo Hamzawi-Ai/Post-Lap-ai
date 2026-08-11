@@ -1,0 +1,535 @@
+# Task #74 — Fix Customer Chat Context, Asset Flow & Generation Guard
+
+You are working on the production PostLab AI codebase.
+
+This is an implementation + verification task, NOT a planning-only task.
+
+The objective is to fix the confirmed Customer Chat bugs described below while preserving all existing working behavior.
+
+IMPORTANT:
+Do not redesign the architecture.
+Do not refactor unrelated code.
+Do not change the AI provider.
+Do not change subscription logic.
+Do not change Arabic image rendering.
+Do not modify unrelated routes/files.
+
+Before changing anything:
+1. Inspect the current implementation in the relevant files.
+2. Confirm each root cause against the actual code.
+3. Trace the existing data flow end-to-end before editing.
+4. Implement the smallest safe fix for each confirmed issue.
+5. After implementation, run typecheck/build and use browser App Testing to verify the real user flows.
+6. If your initial diagnosis differs from the task description, trust the actual code and explain the discrepancy before making a broader change.
+
+==================================================
+CURRENT PRODUCTION OBSERVATIONS
+==================================================
+
+These are not hypothetical bugs. They were observed during real Customer Chat testing:
+
+1. After login, opening Customer Chat sometimes remains stuck on:
+   "جاري التحميل"
+   The chat does not become usable.
+
+2. The assistant does not reliably retain the actual policy-check result across turns.
+
+3. The assistant can start image generation immediately when the user asks:
+   "شو بتقترح؟"
+   or
+   "شو بتنصحني؟"
+
+   This is wrong. Advisory/general-chat questions must produce a text recommendation only.
+
+4. Previously generated images are not reliably available as visual context when the user asks:
+   "عدل التصميم السابق"
+
+5. The assistant incorrectly said:
+   "لا أستطيع التواصل مباشرة مع المصممين"
+   
+   This is wrong.
+   PostLab AI IS the designer in Customer Chat.
+
+6. During testing, the generation feature itself is working and must remain working.
+
+7. Do NOT change the AI provider. Stay on the current OpenAI implementation.
+
+8. Do NOT attempt to fix Arabic text rendering in generated images in this task.
+
+==================================================
+BUG 1 — CUSTOMER CHAT LOADING STUCK
+==================================================
+
+File:
+artifacts/postlap-ai/src/components/HamzawiChat.tsx
+
+Current problem:
+"جاري التحميل" is displayed when:
+messages.length === 0 && !loading
+
+The `loading` flag only represents active send requests.
+It does not represent the initial history-loading lifecycle.
+
+If loadHistory() or the initial API/memory fetch fails, stalls, or never resolves,
+messages can remain empty while loading remains false.
+
+Required behavior:
+
+- Customer Chat must always resolve into a usable state.
+- "جاري التحميل" must NEVER remain indefinitely.
+- Add a reasonable timeout/error fallback (approximately 8 seconds is acceptable).
+- On history failure/timeout, show the normal welcome message or another existing safe empty-state.
+- Do not create a new complicated loading architecture.
+- Preserve the existing successful history-loading behavior.
+- Make sure initialization failures are handled rather than leaving the UI permanently stuck.
+
+Inspect both:
+- loadHistory()
+- initialization effect / initial `/api/hamzawi/chat` flow
+
+Do not merely hide the loading text.
+Fix the underlying state transition so the component becomes usable.
+
+==================================================
+BUG 2 — POLICY REPORT LOST AFTER FIRST TURN
+==================================================
+
+File:
+artifacts/api-server/src/routes/hamzawi.ts
+
+Current behavior:
+
+`reportSummary` is prepended to `userContent` and sent to OpenAI.
+
+However, the DB insert around the existing user-message persistence currently stores only the raw `message`.
+
+Therefore:
+
+Turn 1:
+AI receives the policy report.
+
+Turn 2:
+buildHistoryForAI() reconstructs the conversation from DB,
+but the policy report is missing.
+
+Required fix:
+
+When `checkReport` / `reportSummary` is present:
+
+stored user message content MUST contain the same combined content that was sent to OpenAI:
+
+reportSummary + "\n\n" + message
+
+Use the already constructed `userContent` if that is the correct existing variable.
+
+When no check report exists:
+keep current message persistence behavior unchanged.
+
+Do NOT duplicate the report.
+Do NOT alter unrelated conversation persistence.
+
+After the fix, verify that a second/third turn can still access:
+- policy status
+- score
+- violations
+- relevant findings
+from the original policy check.
+
+==================================================
+BUG 3 — GENERATION MARKER MUST BE SERVER-GATED
+==================================================
+
+File:
+artifacts/api-server/src/routes/hamzawi.ts
+
+Current problem:
+
+The model can emit:
+%%GENERATE_POST%%
+
+The route currently processes that marker without sufficiently enforcing the
+classified intent.
+
+The classifier can correctly identify:
+"شو بتقترح؟"
+"شو بتنصحني؟"
+
+as:
+general_chat
+
+But if the model violates the prompt and emits the generation marker anyway,
+the backend still starts generation.
+
+This MUST be fixed server-side.
+
+Required rule:
+
+Only process %%GENERATE_POST%% when:
+
+intentDecision.intent === 'generate_image'
+
+If the marker appears while intent is anything else:
+
+- DO NOT generate an image.
+- Strip the marker from the user-visible response.
+- Return the normal text response.
+
+This is a backend safety/consistency guard.
+
+Do not rely only on prompt instructions.
+
+After implementation, manually test at least:
+
+A)
+User:
+"شو بتقترح؟"
+
+Expected:
+Text recommendation.
+NO image generation.
+
+B)
+User:
+"شو بتنصحني؟"
+
+Expected:
+Text recommendation.
+NO image generation.
+
+C)
+An actual explicit image-generation request.
+
+Expected:
+Existing generation flow still works.
+
+==================================================
+BUG 4 — PREVIOUS GENERATED IMAGE MUST BE AVAILABLE
+==================================================
+
+Files to inspect:
+
+artifacts/api-server/src/routes/hamzawi.ts
+artifacts/api-server/src/services/ai/contextBuilder.ts
+artifacts/api-server/src/services/media/assetReader.ts
+
+Current behavior:
+
+Uploaded user images are already reconstructed by buildHistoryForAI()
+from stored /uploads/ URLs and converted to multimodal/base64 inputs.
+
+Previously generated images are different.
+
+Generated images are currently represented only by textual completion/history information,
+so when the user says:
+
+"عدل التصميم السابق"
+
+the model does not actually receive the previous generated image.
+
+Required fix:
+
+When a generated image is persisted in the assistant conversation message,
+persist a reference marker containing the generated image's stored /uploads/ URL,
+using the existing marker pattern if appropriate.
+
+For example, conceptually:
+
+%%ATTACHED_IMAGE%%{url:'/uploads/...'}
+
+IMPORTANT:
+Do NOT blindly copy this exact syntax if the existing parser expects another format.
+First inspect the existing attached-image implementation and reuse its established format.
+
+Then ensure buildHistoryForAI():
+
+- detects generated-image attachment markers
+- resolves the stored URL to the actual image/base64 representation
+- includes it as a multimodal image input for the next AI turn
+- respects the existing 6-image cap
+- does not break existing user-uploaded image handling
+
+The final behavior must be:
+
+Turn 1:
+User requests design → image generated → image stored.
+
+Turn 2:
+User says:
+"عدل التصميم السابق"
+
+AI receives the actual previous image,
+not merely a textual description.
+
+Do NOT introduce a new asset architecture.
+Use the existing /uploads/ and attachment/history mechanisms.
+
+==================================================
+BUG 5 — POSTLAB AI IS THE DESIGNER
+==================================================
+
+File to inspect first:
+
+artifacts/api-server/src/services/ai/postlab/postlabPersona.ts
+
+Also inspect:
+brain.ts
+hamzawi.ts
+
+Current problem:
+
+The model may respond:
+
+"لا أستطيع التواصل مباشرة مع المصممين"
+
+This is incorrect.
+
+Required persona rule:
+
+PostLab AI is the internal creative designer.
+
+It must NEVER:
+- claim that it cannot contact a designer
+- refer the user to an external designer
+- suggest contacting a human designer for the design task
+
+Instead, it should naturally continue the design conversation itself.
+
+Add the smallest targeted instruction to the existing persona/system prompt.
+Do NOT rewrite the entire persona.
+
+==================================================
+CRITICAL CONTEXT / EXISTING PRODUCT RULES
+==================================================
+
+Preserve all existing working behavior from Task #72 and earlier work:
+
+- Customer Chat authentication
+- multi-turn conversation behavior
+- FREE/PRO gating
+- existing image-generation permission checks
+- existing image generation pipeline
+- existing uploaded-image handling
+- existing conversation sidebar
+- existing Brand Memory behavior
+- existing policy-check flow
+- current OpenAI provider
+- current subscription logic
+
+Do not "fix" these by simplifying or bypassing them.
+
+In particular:
+
+DO NOT solve Bug 3 by disabling image generation.
+DO NOT solve Bug 4 by removing multimodal history.
+DO NOT solve Bug 2 by storing unrelated duplicated messages.
+DO NOT solve Bug 1 by permanently hiding the loading state.
+DO NOT solve Bug 5 by making the assistant generic.
+
+==================================================
+IMPORTANT EXISTING POSTLAB CONTEXT
+==================================================
+
+There are already documented prompt and product rules around:
+- Brand Memory
+- original assets
+- design generation
+- policy → safe alternative flow
+- Customer Chat persona
+- asset caps
+- prompt assembly
+
+Do not create a second competing prompt/persona source.
+
+If you discover an existing canonical prompt assembly path,
+modify that path rather than creating another independent system prompt.
+
+Also verify that existing asset handling is reused rather than bypassed.
+
+==================================================
+IMPLEMENTATION PROCESS
+==================================================
+
+PHASE 1 — INSPECT
+
+Before editing:
+
+- inspect HamzawiChat.tsx
+- inspect hamzawi.ts
+- inspect contextBuilder.ts
+- inspect reasoner.ts if relevant
+- inspect brain.ts
+- inspect postlabPersona.ts
+- inspect assetReader.ts
+
+Trace:
+
+1. Customer Chat initialization
+2. History loading
+3. Policy report injection
+4. DB persistence
+5. buildHistoryForAI()
+6. intentDecision
+7. %%GENERATE_POST%% processing
+8. generated-image persistence
+9. multimodal history reconstruction
+10. persona/system prompt assembly
+
+Do not assume the task description is perfectly synchronized with the current code.
+Confirm the actual implementation.
+
+PHASE 2 — IMPLEMENT
+
+Implement only the five fixes above.
+
+Keep the diff focused and minimal.
+
+Avoid unrelated refactoring.
+
+PHASE 3 — STATIC VERIFICATION
+
+Run the appropriate project checks, including at minimum:
+
+- TypeScript typecheck / `tsc --noEmit`
+- existing build command if applicable
+
+Fix any errors introduced by your changes.
+
+Also inspect the final diff for:
+- accidental unrelated edits
+- duplicate logic
+- dead code
+- unsafe null handling
+- incorrect marker parsing
+- broken existing image history behavior
+
+PHASE 4 — REAL BROWSER TESTING
+
+Use Replit App Testing / browser preview and test the actual Customer Chat flow.
+
+Test matrix:
+
+TEST 1 — Initial loading
+--------------------------------
+Log in.
+Open Customer Chat.
+
+Expected:
+- "جاري التحميل" resolves.
+- Chat becomes usable.
+- No permanent blank/loading state.
+
+TEST 2 — Policy report persistence
+--------------------------------
+Start a conversation involving an actual policy check.
+
+Ask a follow-up question about the same checked image.
+
+Expected:
+The second response uses the actual previous report data,
+not generic advice.
+
+Ask another follow-up.
+
+Expected:
+The report context remains available.
+
+TEST 3 — Advisory request
+--------------------------------
+Ask:
+"شو بتقترح؟"
+
+Expected:
+Text recommendation only.
+No image generation.
+
+Ask:
+"شو بتنصحني؟"
+
+Expected:
+Text recommendation only.
+No image generation.
+
+TEST 4 — Explicit generation
+--------------------------------
+Ask for an actual design.
+
+Expected:
+The existing generation flow still works.
+
+TEST 5 — Previous generated image
+--------------------------------
+Generate a design.
+
+Then say:
+"عدل التصميم السابق"
+
+Expected:
+The generation request includes the actual previous generated image
+as multimodal input.
+
+Do not accept a test that only proves the textual description was retained.
+
+TEST 6 — Designer identity
+--------------------------------
+Ask:
+"بقدر أحكي مع المصمم مباشرة؟"
+
+Expected:
+PostLab AI responds as the designer itself.
+It must NOT say:
+"لا أستطيع التواصل مع المصممين"
+
+TEST 7 — Regression
+--------------------------------
+Verify that:
+- auth still works
+- sidebar conversations still work
+- existing multi-turn chat still works
+- image generation still works
+- FREE/PRO gating is unchanged
+
+==================================================
+ACCEPTANCE CRITERIA
+==================================================
+
+The task is NOT complete just because the code compiles.
+
+All of these must be true:
+
+[ ] Customer Chat never remains permanently stuck on "جاري التحميل".
+[ ] Policy-check results survive into subsequent conversation turns.
+[ ] Advisory questions never trigger image generation.
+[ ] Explicit image-generation requests still generate normally.
+[ ] Previously generated images are available as actual multimodal inputs for edits.
+[ ] PostLab AI never claims it cannot contact a designer.
+[ ] Existing authentication remains intact.
+[ ] Existing FREE/PRO gating remains intact.
+[ ] Existing image generation remains intact.
+[ ] TypeScript check passes.
+[ ] Build passes if applicable.
+[ ] Browser verification completed for the critical flows.
+
+==================================================
+FINAL RESPONSE REQUIREMENTS
+==================================================
+
+When finished, do NOT simply say "Task complete".
+
+Give me a concise engineering report containing:
+
+1. Files changed
+2. Root cause confirmed for each bug
+3. Exact fix implemented for each bug
+4. Typecheck/build result
+5. Browser/App Testing result
+6. Which acceptance criteria passed
+7. Any limitation or remaining concern
+
+If any test could not be performed, explicitly say:
+"NOT VERIFIED"
+and explain why.
+
+Do not claim a behavior was tested if you only inspected the code.
+
+Do not create a follow-up task unless there is a genuinely separate issue outside Task #74.
+If you discover an issue within Task #74, fix it before declaring the task complete.
