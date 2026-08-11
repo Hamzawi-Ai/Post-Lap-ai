@@ -21,32 +21,32 @@ BEGIN
     RAISE NOTICE 'Legacy plan values detected — running migration';
 
     -- Step 1: Drop column defaults (they carry the old enum type cast and block ALTER TYPE)
-    ALTER TABLE users     ALTER COLUMN plan DROP DEFAULT;
-    ALTER TABLE companies ALTER COLUMN plan DROP DEFAULT;
+    ALTER TABLE public.users     ALTER COLUMN plan DROP DEFAULT;
+    ALTER TABLE public.companies ALTER COLUMN plan DROP DEFAULT;
 
     -- Step 2: Convert columns to text — breaks all dependency on the plan enum type
-    ALTER TABLE users     ALTER COLUMN plan TYPE text;
-    ALTER TABLE companies ALTER COLUMN plan TYPE text;
+    ALTER TABLE public.users     ALTER COLUMN plan TYPE text;
+    ALTER TABLE public.companies ALTER COLUMN plan TYPE text;
 
     -- Step 3: Migrate data rows (string comparisons on text, no enum involvement)
-    UPDATE users     SET plan = 'pro'  WHERE plan IN ('professional', 'smart_fix', 'content', 'agency');
-    UPDATE users     SET plan = 'free' WHERE plan IN ('visitor', 'registered');
-    UPDATE companies SET plan = 'pro'  WHERE plan IN ('professional', 'smart_fix', 'content', 'agency');
-    UPDATE companies SET plan = 'free' WHERE plan IN ('visitor', 'registered');
+    UPDATE public.users     SET plan = 'pro'  WHERE plan IN ('professional', 'smart_fix', 'content', 'agency');
+    UPDATE public.users     SET plan = 'free' WHERE plan IN ('visitor', 'registered');
+    UPDATE public.companies SET plan = 'pro'  WHERE plan IN ('professional', 'smart_fix', 'content', 'agency');
+    UPDATE public.companies SET plan = 'free' WHERE plan IN ('visitor', 'registered');
 
     -- Step 4: Drop the old enum type (safe — no columns depend on it any more)
-    DROP TYPE plan;
+    DROP TYPE public.plan;
 
     -- Step 5: Create the new enum with only the two commercial tiers
-    CREATE TYPE plan AS ENUM ('free', 'pro');
+    CREATE TYPE public.plan AS ENUM ('free', 'pro');
 
     -- Step 6: Restore columns to the new strongly-typed enum
-    ALTER TABLE users     ALTER COLUMN plan TYPE plan USING plan::plan;
-    ALTER TABLE companies ALTER COLUMN plan TYPE plan USING plan::plan;
+    ALTER TABLE public.users     ALTER COLUMN plan TYPE public.plan USING plan::public.plan;
+    ALTER TABLE public.companies ALTER COLUMN plan TYPE public.plan USING plan::public.plan;
 
     -- Step 7: Restore column defaults
-    ALTER TABLE users     ALTER COLUMN plan SET DEFAULT 'free';
-    ALTER TABLE companies ALTER COLUMN plan SET DEFAULT 'free';
+    ALTER TABLE public.users     ALTER COLUMN plan SET DEFAULT 'free';
+    ALTER TABLE public.companies ALTER COLUMN plan SET DEFAULT 'free';
 
     RAISE NOTICE 'Migration complete — plan enum is now (free, pro)';
 
