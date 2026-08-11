@@ -68,9 +68,19 @@ export async function generateBrandedPost(params: {
   userId: number;
   description: string;
   productImageBase64?: string;
+  /**
+   * The prior generated design to use as the PRIMARY edit source.
+   * When present, this image is placed FIRST in referenceImages so that
+   * the OpenAI provider (which uses referenceImages[0] as the images.edit()
+   * input) and Gemini both receive it as the base design to modify.
+   * Brand assets are included in the prompt description but may be deprioritised
+   * within the provider's image-count cap. Use this for "عدل التصميم السابق"
+   * flows; for product images use productImageBase64 instead.
+   */
+  editSourceImageBase64?: string;
   regenerateNote?: string;
 }): Promise<GenerateBrandedPostResult | null> {
-  const { userId, description, productImageBase64, regenerateNote } = params;
+  const { userId, description, productImageBase64, editSourceImageBase64, regenerateNote } = params;
 
   const [userRow] = await db
     .select({ company_id: usersTable.company_id })
@@ -142,7 +152,26 @@ Brief: ${description}
 [7. HARD CONSTRAINTS] Never alter any of the BRAND HARD FACTS above. No misleading claims and no before/after comparisons. Only the requested text appears on the design.`;
   if (regenerateNote) prompt += `\n\nAdditional note: ${regenerateNote}`;
 
-  const referenceImages: Array<{ mimeType: string; data: string }> = [...brandAssets.images];
+  // Build the ordered reference-image list:
+  //   1. editSourceImageBase64 FIRST (when present) — the OpenAI provider uses
+  //      referenceImages[0] as the images.edit() primary input, so the prior
+  //      generated design must be first for edit requests.
+  //   2. Brand assets (logo, product images, design samples).
+  //   3. productImageBase64 last (extra product context, if any).
+  // Gemini uses all images up to its 6-image cap, so order matters there too.
+  const referenceImages: Array<{ mimeType: string; data: string }> = [];
+
+  if (editSourceImageBase64) {
+    const editMatch = editSourceImageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+    const mimeType = editMatch?.[1] ?? "image/png";
+    const data = editMatch?.[2] ?? editSourceImageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+    // Prepend the source design so it is referenceImages[0] for all providers.
+    referenceImages.push({ mimeType, data });
+    prompt += `\n\n[EDIT SOURCE] The attached image is the previously generated design. Modify it according to the brief above, preserving the brand identity and overall composition while applying the requested changes.`;
+  }
+
+  // Brand assets follow the edit source (or lead when no edit source present).
+  referenceImages.push(...brandAssets.images);
 
   if (productImageBase64) {
     const productMatch = productImageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
@@ -151,6 +180,11 @@ Brief: ${description}
     prompt += `\n\nA product image is also provided — feature it prominently in the advertisement.`;
     referenceImages.push({ mimeType, data });
   }
+
+  // Respect Gemini's 6-image cap at the boundary closest to the provider call.
+  // OpenAI already ignores referenceImages[1+] in its images.edit path — the
+  // cap is enforced there by the provider itself.
+  referenceImages.splice(6);
 
   const provider = getImageProvider();
   const generated = await provider.generate({ prompt, referenceImages });

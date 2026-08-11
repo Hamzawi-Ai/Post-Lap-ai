@@ -322,10 +322,13 @@ function buildAttachmentMarker(attachment: ResolvedAttachment): string {
 }
 
 /**
- * Convert stored conversation rows into OpenAI messages. Generated-image
- * markers are always stripped (never re-sent); attached-image markers are
- * re-expanded into image content parts so the vision model keeps seeing images
- * the user uploaded earlier in the conversation.
+ * Convert stored conversation rows into OpenAI messages. Attached-image
+ * markers in user messages are re-expanded into multimodal image parts.
+ * Previously generated images (%%GENERATED_IMAGE%%) are included as a
+ * synthetic user turn immediately after the assistant turn that delivered
+ * them — this lets the model see the actual image when the user asks to
+ * edit it (Bug 4 fix). OpenAI does not allow image parts in assistant
+ * messages, so the synthetic user turn is the correct transport.
  */
 async function buildHistoryForAI(
   rows: typeof hamzawiMessagesTable.$inferSelect[],
@@ -381,6 +384,36 @@ async function buildHistoryForAI(
         ? text
         : DESIGN_DELIVERED_HISTORY_NOTE;
       out.push({ role: "assistant", content: assistantText });
+
+      // Bug 4 fix: when this assistant turn delivered a generated image, inject
+      // a synthetic user turn carrying the actual image data so the model can
+      // see it on subsequent edit requests ("عدل التصميم السابق").
+      // OpenAI's per-role content constraints prevent image parts in assistant
+      // messages, so the synthetic user turn is the correct transport vehicle.
+      if (deliveredGeneratedImage && imageCount < MAX_VISION_IMAGES_PER_TURN) {
+        const genRe = /%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/g;
+        let genMatch: RegExpExecArray | null;
+        while ((genMatch = genRe.exec(raw)) !== null && imageCount < MAX_VISION_IMAGES_PER_TURN) {
+          try {
+            const genData = JSON.parse(genMatch[1]) as { url?: string; description?: string };
+            if (typeof genData.url === "string" && genData.url.startsWith("/uploads/")) {
+              const img = await uploadsUrlToBase64(genData.url);
+              if (img && approximateBase64Bytes(img.data) <= MAX_ATTACHMENT_BYTES) {
+                out.push({
+                  role: "user",
+                  content: [
+                    { type: "text", text: "[التصميم المولّد السابق — مرفق للرجوع إليه عند التعديل]" },
+                    { type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.data}` } },
+                  ],
+                });
+                imageCount++;
+              }
+            }
+          } catch {
+            // Malformed generated-image marker — ignore.
+          }
+        }
+      }
     } else {
       out.push({
         role: "user",
@@ -548,6 +581,10 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     const historyForAI = await buildHistoryForAI(recentMessages);
 
     let userContent = message ?? "";
+    // dbUserContent is what gets persisted: includes the policy report (so it
+    // survives into subsequent turns via buildHistoryForAI) but NOT the
+    // AI-directive image note (that is a model instruction, not user content).
+    let dbUserContent = message ?? "";
     if (!isInit && checkReport && message) {
       const reportSummary = `[تقرير فحص الإعلان — الحالة: "${checkReport.status}" — النقاط: ${checkReport.score}/100${
         checkReport.violations?.length
@@ -559,6 +596,9 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           : ""
       }]`;
       userContent = `${reportSummary}\n\n${message}`;
+      // Persist the report as part of the user message so subsequent turns
+      // can read it from DB history (Bug 2 fix).
+      dbUserContent = userContent;
     }
 
     // The attached image is passed as an image content part below. Tell the
@@ -774,25 +814,66 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 
     // For isInit: only store the assistant message (no user message shown/stored)
     if (!isInit && message?.trim()) {
+      // Bug 2 fix: persist dbUserContent (includes the policy report when present)
+      // so subsequent turns can read the report from DB history via buildHistoryForAI.
       await db.insert(hamzawiMessagesTable).values({
         user_id: user?.id ?? null,
         session_id: sessionRawId,
         role: "user",
-        content: attachedImage ? `${message}${buildAttachmentMarker(attachedImage)}` : message,
+        content: attachedImage ? `${dbUserContent}${buildAttachmentMarker(attachedImage)}` : dbUserContent,
         conversation_id: resolvedConversationId,
       });
     }
 
     // When Hamzawi emitted a GENERATE_POST marker (level 4+ design request),
     // run the shared image pipeline and return the generated image.
+    // Bug 3 fix: only proceed when the intent classifier also confirmed this is a
+    // generate_image turn. If the model emitted the marker on a general-chat or
+    // advisory turn (prompt non-compliance), the marker is already stripped from
+    // `reply` by parseGeneratePost — we simply skip generation here.
     let storedContent = reply;
     let generatedImageUrl: string | undefined;
     let generatedDescription: string | undefined;
-    if (user && generateDescription && level >= 2) {
+    if (user && generateDescription && level >= 2 && intentDecision.intent === "generate_image") {
+      // Bug 4 fix (generation side): when the user is explicitly requesting an
+      // edit of a previous design (not a fresh creation), find the most recent
+      // generated image and pass it to the image provider as a reference.
+      // Gate on edit-signal words so fresh designs in an existing conversation
+      // are NOT accidentally contaminated with a prior design as "product image".
+      const editSignalRe = /(عدّل|عدل|غيّر|غير|بدّل|بدل|حدّث|حدث|نقّح|عدّله|غيّره|بدّله|السابق|السابقة|القديم|القديمة|نفسه|ذاته|نفسها|edit|modify|update|adjust|revise|change|redo|rework|previous|prior)/i;
+      const isEditRequest = editSignalRe.test(message ?? "");
+
+      let priorGeneratedImageBase64: string | undefined;
+      if (isEditRequest) {
+        for (const row of recentMessages) {
+          if (row.role !== "assistant" || !row.content) continue;
+          const genMatch = row.content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
+          if (genMatch) {
+            try {
+              const genData = JSON.parse(genMatch[1]) as { url?: string };
+              if (typeof genData.url === "string" && genData.url.startsWith("/uploads/")) {
+                const img = await uploadsUrlToBase64(genData.url);
+                if (img && approximateBase64Bytes(img.data) <= MAX_ATTACHMENT_BYTES) {
+                  priorGeneratedImageBase64 = `data:${img.mimeType};base64,${img.data}`;
+                }
+              }
+            } catch {
+              // Malformed marker — skip.
+            }
+            break; // Only the most recent generated image (recentMessages is desc by created_at).
+          }
+        }
+      }
+
       try {
         const generated = await generateBrandedPost({
           userId: user.id,
           description: generateDescription,
+          // editSourceImageBase64 is placed FIRST in referenceImages so that
+          // the OpenAI provider (images.edit uses referenceImages[0] only) and
+          // Gemini both receive the prior design as the primary edit input.
+          // productImageBase64 would append at the end and be ignored by OpenAI.
+          ...(priorGeneratedImageBase64 ? { editSourceImageBase64: priorGeneratedImageBase64 } : {}),
         });
         if (generated) {
           generatedImageUrl = generated.url;
@@ -814,9 +895,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           // claim the design was delivered: history must distinguish a failed
           // generation from a successful one.
           if (!reply.trim()) reply = DESIGN_GENERATION_FAILED_FALLBACK;
-        const notice = isQuota
-          ? "\n\n⚠️ توليد الصور غير متاح مؤقتاً بسبب تجاوز الحصة المسموح بها. حاول بعد دقيقة."
-          : "\n\n⚠️ حدث خطأ أثناء توليد الصورة. حاول مرة أخرى.";
+          // null response is not a quota error; use generic notice.
+          const notice = "\n\n⚠️ حدث خطأ أثناء توليد الصورة. حاول مرة أخرى.";
           reply = `${reply}${notice}`;
           storedContent = reply;
         }

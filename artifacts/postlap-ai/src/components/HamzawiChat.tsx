@@ -244,10 +244,16 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
     // Snapshot the session version at call-time so we can detect a login
     // that fires while this fetch is in-flight and discard stale results.
     const versionAtStart = sessionVersionRef.current;
+    // Timeout guard: covers the full round-trip (headers + body streaming).
+    // The AbortController is kept active until the finally block so a stall
+    // during res.json() body parsing also triggers the abort and the catch.
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), 8000);
     try {
       const token = localStorage.getItem(TOKEN_KEY);
       const res = await fetch("/api/hamzawi/messages", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: controller.signal,
       });
       // If login happened while we were fetching, bail — the open effect
       // will re-run and call a fresh loadHistory with the correct token.
@@ -262,6 +268,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
       }
     } catch {
       console.error("Failed to load chat history");
+    } finally {
+      clearTimeout(timeoutHandle);
     }
   }, [historyLoaded]);
 
@@ -336,10 +344,14 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
     }
 
     let cancelled = false;
+    const controller = new AbortController();
+    // Timeout covers the full round-trip including body streaming (res.json()).
+    const timeoutHandle = setTimeout(() => controller.abort(), 8000);
     (async () => {
       try {
         const res = await fetch(`/api/hamzawi/messages?conversationId=${conversationId}`, {
           headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         });
         if (cancelled) return;
         if (res.ok) {
@@ -349,13 +361,22 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
             return storedContentToBlock(m.content, m.role === "assistant" ? "hamzawi" : "user", time);
           });
           if (!cancelled) setMessages(msgs.length > 0 ? msgs : [chatBlock("hamzawi", t.welcome)]);
+        } else {
+          // Non-OK (4xx/5xx) — fall back to welcome so the chat is usable.
+          if (!cancelled) setMessages([chatBlock("hamzawi", t.welcome)]);
         }
       } catch {
-        if (!cancelled) console.error("Failed to load conversation messages");
+        // Timeout abort or network error — show welcome so the user can type.
+        if (!cancelled) {
+          console.error("Failed to load conversation messages");
+          setMessages([chatBlock("hamzawi", t.welcome)]);
+        }
+      } finally {
+        clearTimeout(timeoutHandle);
       }
     })();
-    // Cleanup: mark as cancelled so a stale request cannot overwrite a newer conversation's messages.
-    return () => { cancelled = true; };
+    // Cleanup: cancel the in-flight request when the conversation changes.
+    return () => { cancelled = true; controller.abort(); clearTimeout(timeoutHandle); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
@@ -379,22 +400,31 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
             return [chatBlock("hamzawi", "...")];
           });
           try {
-            const initRes = await fetch("/api/hamzawi/chat", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ isInit: true }),
-            });
-            if (initRes.ok) {
-              const data = await initRes.json() as { reply?: string | null };
-              if (data.reply) {
-                // Always show the AI onboarding message, even if history already exists.
-                // Remove "..." placeholder, then append (or replace if history was empty).
-                setMessages((prev) => {
-                  const withoutPlaceholder = prev.filter((m) => m.type === "text" && m.text !== "...");
-                  return [...withoutPlaceholder, chatBlock("hamzawi", data.reply!)];
-                });
-                return;
+            const initController = new AbortController();
+            // Timeout covers the full round-trip including body streaming.
+            const initTimeout = setTimeout(() => initController.abort(), 12000);
+            let initRes: Response | undefined;
+            try {
+              initRes = await fetch("/api/hamzawi/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ isInit: true }),
+                signal: initController.signal,
+              });
+              if (initRes.ok) {
+                const data = await initRes.json() as { reply?: string | null };
+                if (data.reply) {
+                  // Always show the AI onboarding message, even if history already exists.
+                  // Remove "..." placeholder, then append (or replace if history was empty).
+                  setMessages((prev) => {
+                    const withoutPlaceholder = prev.filter((m) => m.type === "text" && m.text !== "...");
+                    return [...withoutPlaceholder, chatBlock("hamzawi", data.reply!)];
+                  });
+                  return;
+                }
               }
+            } finally {
+              clearTimeout(initTimeout);
             }
           } catch {
             console.error("Failed to init chat onboarding");

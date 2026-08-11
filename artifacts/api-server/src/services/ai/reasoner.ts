@@ -82,10 +82,21 @@ const CHECK_AD_PATTERNS = [
 ];
 
 const GENERATE_IMAGE_PATTERNS = [
-  // Arabic design verbs — only creation verbs and the bare noun (not the
-  // definite "التصميم") count as generation intent, so a conversational
-  // question like "شو رأيك بالتصميم؟" is never misread as a creation request.
-  /(صمم|صمّم|اصمم|(?<!ال)تصميم|(?<!ال)تصاميم)(?=\s|$|[،,؟?!.])/i,
+  // Arabic design verbs — only a standalone creation verb (imperative,
+  // pronominal, or bare noun) counts as generation intent.
+  //
+  // Two patterns, split for clarity:
+  //   1. Verb forms: صمم / صمّم / اصمم — use Unicode-letter lookbehind
+  //      (?<!\p{L}) so words like نصمم / يصمم embedded in a longer token
+  //      (e.g. "كيف نصممها؟") do not match. Optional pronoun suffix covers
+  //      "صممها" / "صممه" (imperative + direct object) at word-start.
+  //   2. Noun forms: تصميم / تصاميم — (?<!ال) prevents the definite form
+  //      "التصميم" from matching, while standalone "تصميم" still does.
+  //
+  // "بقدر أحكي مع المصمم؟" → no match (مصمم is a noun, صمم is not at word-start).
+  // "صممها" → match.   "كيف نصممها؟" → no match.
+  /((?<!\p{L})(?:صمم|صمّم|اصمم))(?:ه|ها|هم|هما|ي)?(?=[\s،,؟?!.]|$)/iu,
+  /((?<!ال)(?:تصميم|تصاميم))(?=[\s،,؟?!.]|$)/iu,
   // Arabic action verbs + visual nouns
   /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل|اريد|أريد|عايز|احتاج|ابتكر|ابدع|خلّق|خلق|صور).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|صورة|إعلان|تصميم|هوية)/i,
   // Standalone Arabic visual nouns indicating creation intent
@@ -93,6 +104,15 @@ const GENERATE_IMAGE_PATTERNS = [
   // Asset-referencing requests (Arabic): "use the logo I uploaded", etc.
   /(استخدم|استعمل|استخدمي|استعملي).*(الشعار|اللوجو|logo|الصورة|المنشور|التصميم)/i,
   /باستخدام (الشعار|اللوجو|logo|الصورة|الهوية|التصميم|الشعار اللي رفعته)/i,
+  // Arabic edit/modify verbs applied to a design — verb must start at a
+  // word boundary ((?<!\p{L})) so "أعدل"/"تعدل" (imperfect tense prefixes)
+  // in advisory questions like "كيف أعدل التصميم السابق؟" never match.
+  // "عدل التصميم السابق" → generate_image (standalone imperative, no letter before).
+  // "كيف تعدل التصميم السابق؟" → general_chat (letter 'ت' directly before 'عدل').
+  /((?<!\p{L})(?:عدّل|عدل|غيّر|غير|بدّل|بدل|حدّث|حدث|نقّح)).*(تصميم|منشور|بوست|ستوري|الصورة|الصورة السابقة|السابق|القديم)/iu,
+  // Arabic execution/implementation verbs in a design context.
+  // Same word-boundary guard prevents prefix forms from matching.
+  /((?<!\p{L})(?:نفّذ|نفذ|طبّق|طبق|شغّل|شغل)).*(التصميم|الخيار|البوست|المنشور|الستوري|البانر|الفلاير|هذا|الثاني|الثالث|الأول)/iu,
   // English design patterns
   /design (a|this|my)? ?(post|banner|flyer|story|image|graphic|visual|ad)/i,
   /\b(make|create|generate|build|put together|draw up)\b.*(post|banner|flyer|story|image|graphic|visual|ad|design)/i,
@@ -103,6 +123,15 @@ const GENERATE_IMAGE_PATTERNS = [
   /(أريد|اريد|عايز|محتاج|ابغى).*(تصميم|صورة|منشور|بوست)/i,
   // English informal: "put together a visual", "whip up a post"
   /\b(whip up|put together|come up with|make me)\b.*(post|image|graphic|visual|banner|design)/i,
+  // Arabic pronominal edit verbs: "عدّله وخليه أبسط" (edit it, make it simpler).
+  // (?<!\p{L}) prevents prefix forms like "تعدله" / "ستعدله" from matching.
+  // "عدّله" at word-start → generate_image. "تعدله" (letter prefix) → no match.
+  /((?<!\p{L})(?:عدّله|عدّلها|عدله|عدلها|غيّره|غيّرها|غيره|غيرها|بدّله|بدّلها|بدله|بدلها))(?=[\s،,؟?!.]|$)/iu,
+  // English edit/modify — action verb required.
+  // "edit/redo the previous design" → generate_image.
+  // "How can I improve…?" is advisory → general_chat (avoid "improve" here).
+  /\b(edit|modify|update|adjust|revise|change|redo|rework|remake)\b.*(design|image|post|banner|visual|ad)/i,
+  /\b(previous|prior|last|old)\b.*(design|image|post|banner).*(please|again|but|with|more|less|different)/i,
 ];
 
 const GENERATE_TEXT_PATTERNS = [

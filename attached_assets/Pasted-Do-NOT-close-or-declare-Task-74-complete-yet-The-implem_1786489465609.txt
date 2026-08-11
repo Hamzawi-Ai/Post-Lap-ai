@@ -1,0 +1,72 @@
+Do NOT close or declare Task #74 complete yet.
+
+The implementation summary is promising, but I need a final verification pass against the actual code and the acceptance criteria. Do not make assumptions from your previous report.
+
+Perform the following now:
+
+1. Inspect the actual git diff for Task #74 and verify every changed line is directly related to the five confirmed bugs. Report any unrelated change.
+
+2. Bug 4 requires special scrutiny:
+   - Inspect the existing %%ATTACHED_IMAGE%% marker format and the current buildHistoryForAI() implementation.
+   - Verify exactly how previously generated images are now passed back into the AI.
+   - The current implementation reportedly uses a synthetic user turn instead of persisting/resolving the existing attachment marker. Verify that this does NOT:
+     a) duplicate the generated image,
+     b) change conversation ordering,
+     c) incorrectly attribute the image to the user,
+     d) bypass the existing 6-image cap,
+     e) break existing uploaded-user-image handling,
+     f) cause previous generated images to leak into unrelated fresh generations.
+   - Verify that "عدل التصميم السابق" actually causes the previous generated image to be included as a real multimodal image input to the generation provider, not merely as text context.
+   - If the current implementation is behaviorally correct and safer than the originally proposed marker approach, keep it and explain why. If it is incomplete or fragile, fix it now.
+
+3. Bug 3:
+   - Verify the server-side %%GENERATE_POST%% gate is enforced using intentDecision.intent === "generate_image".
+   - Verify advisory messages such as "شو بتقترح؟" and "شو بتنصحني؟" cannot trigger generation even if the model incorrectly emits %%GENERATE_POST%%.
+   - Verify legitimate explicit generation requests still work.
+   - Verify the newly added Arabic edit verbs do not accidentally classify ordinary advisory/general-chat messages as generation requests.
+
+4. Bug 2:
+   - Verify the exact DB content saved for a message containing a policy report.
+   - Confirm the report is stored exactly once, is not duplicated, and remains available on the second and third turns through buildHistoryForAI().
+
+5. Bug 1:
+   - Verify all relevant Customer Chat initialization/history fetch paths have timeout + error fallback behavior.
+   - Confirm no path can leave messages.length === 0 and loading === false indefinitely.
+   - Confirm the fallback does not create duplicate welcome messages when a successful history response arrives.
+
+6. Bug 5:
+   - Verify the new persona instruction is in the canonical system/persona path actually used by Customer Chat.
+   - Confirm it does not merely exist in an unused file/function.
+
+7. Run:
+   - pnpm exec tsc --noEmit
+   - the relevant build/check command if available
+   Fix only errors introduced by Task #74. Do not expand scope into unrelated pre-existing issues.
+
+8. Perform REAL browser verification of these exact flows:
+   A. Login → open Customer Chat → loading resolves and chat becomes usable.
+   B. Perform a policy check → ask a follow-up about the result → verify the response uses the actual policy result.
+   C. Ask "شو بتقترح؟" → verify text only, no image generation.
+   D. Ask "شو بتنصحني؟" → verify text only, no image generation.
+   E. Request an explicit new design → verify generation still works.
+   F. Generate a design → say "عدل التصميم السابق" → verify the actual generation request contains the previous generated image as a multimodal reference.
+   G. Ask "بقدر أحكي مع المصمم مباشرة؟" → verify PostLab AI identifies itself as the designer and does not say it cannot contact a designer.
+   H. Verify auth, sidebar conversations, multi-turn chat, and FREE/PRO gating remain functional.
+
+9. IMPORTANT:
+   Do not report "browser tested" unless you actually performed the browser test.
+   Do not report "typecheck passed" unless you actually ran it.
+   If browser verification is impossible in the current environment, explicitly report:
+   "Browser verification: NOT VERIFIED — [exact reason]"
+   and do NOT claim Task #74 fully complete.
+
+10. Final response must be a concise engineering report with:
+   - Files changed
+   - Root cause confirmed for Bugs 1–5
+   - Exact implementation for each
+   - TypeScript/build result
+   - Browser verification result, with exact tests performed
+   - Acceptance criteria passed/failed/not verified
+   - Any remaining concern
+
+Do not create a follow-up task for anything that is within #74 scope. Fix it now before declaring the task complete.
