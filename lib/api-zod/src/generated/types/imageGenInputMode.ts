@@ -7,7 +7,7 @@
  */
 
 /**
- * new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)
+ * new_post = generate branded post (PRO plan required); omit for fix-existing-ad mode (FREE and PRO)
  */
 export type ImageGenInputMode =
   (typeof ImageGenInputMode)[keyof typeof ImageGenInputMode];

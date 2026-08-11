@@ -414,7 +414,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     return;
   }
 
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
 
   // Supervisory context: the owner/admin JWT (role: "admin", signed with
   // SESSION_SECRET — same credential as requireAdmin). An admin token carries
@@ -460,9 +460,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
         .from(hamzawiConversationsTable)
         .where(
           and(
-            eq(hamzawiConversationsTable.id, conversationIdInput),
-            eq(hamzawiConversationsTable.user_id, user.id),
-            isNull(hamzawiConversationsTable.archived_at)
+            eq(hamzawiConversationsTable.id, conversationId),
+            eq(hamzawiConversationsTable.user_id, user.id)
           )
         )
         .limit(1);
@@ -533,11 +532,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // The supervisor is not a paying customer: present the full-capability
     // plan text so no registration/upsell nudge is aimed at the platform owner.
     // Otherwise feed the BETA-AWARE effective level into the prompt: beta users
-    // (registered + beta_access) get level 4+ capability text directly instead of
-    // a runtime-appended Beta override block. composeSystemPrompt() derives the
-    // capability text from planLevel(plan), so a level >= 4 account maps to the
-    // "content" plan text to get full capabilities without any upgrade nudge.
-    const promptPlan = isSupervisor ? "agency" : level >= 4 ? "content" : plan;
+    // Supervisor (owner) always gets full PRO capabilities in the system prompt.
+    const promptPlan = isSupervisor ? "pro" : plan;
     const systemPrompt =
       composeSystemPrompt(promptPlan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName) +
       (isSupervisor
@@ -583,14 +579,15 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     const intentDecision = await classifyIntent(message ?? "");
     const needsVision = !isInit && !!message && intentDecision.needsVision;
 
-    // P1: Validator-backed upsell gate. Asking Hamzawi to generate a branded
-    // post requires level 4+ (content/agency). If the account can't do it,
-    // answer with a clear upsell instead of an LLM call whose marker would be
-    // ignored downstream (the pipeline below already guards level >= 4).
-    if (!isInit && message && intentDecision.intent === "generate_image") {
-      const imageTool = toolRegistry.get("generate_image");
-      if (imageTool) {
-        const access = evaluateToolAccess(imageTool, {
+    // P1: Validator-backed upsell gate. PRO-only tools require level 2+.
+    // generate_text is always PRO-only.
+    // generate_image is PRO-only ONLY for new-post creation (no image attached).
+    // When the user has an attached image, they are likely repairing a rejected ad —
+    // that is a FREE capability and must not be gated here.
+    const proOnlyIntent =
+      intentDecision.intent === "generate_text" ||
+      (intentDecision.intent === "generate_image" && !attachedImage);
+        const access = evaluateToolAccess(gatedTool, {
           user: user
             ? {
                 id: user.id,
@@ -601,7 +598,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           level,
         });
         if (!access.allowed) {
-          const reply = access.message ?? "هذه الميزة غير متاحة حالياً.";
+    let reply = generateReply;
           await db.insert(hamzawiMessagesTable).values({
             user_id: user?.id ?? null,
             session_id: sessionRawId,
@@ -617,7 +614,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
             conversation_id: resolvedConversationId,
           });
           if (resolvedConversationId) {
-            const now = new Date();
+      const now = new Date();
             await db
               .update(hamzawiConversationsTable)
               .set({ updated_at: now, last_message_at: now })
@@ -689,7 +686,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       !isInit &&
       intentDecision.intent === "generate_image" &&
       user &&
-      level >= 4 &&
+      level >= 2 &&
       !rawReply.includes("%%GENERATE_POST%%") &&
       !replyAsksForMoreInfo
     ) {
@@ -787,7 +784,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     let storedContent = reply;
     let generatedImageUrl: string | undefined;
     let generatedDescription: string | undefined;
-    if (user && generateDescription && level >= 4) {
+    if (user && generateDescription && level >= 2) {
       try {
         const generated = await generateBrandedPost({
           userId: user.id,
@@ -813,7 +810,9 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           // claim the design was delivered: history must distinguish a failed
           // generation from a successful one.
           if (!reply.trim()) reply = DESIGN_GENERATION_FAILED_FALLBACK;
-          const notice = "\n\n⚠️ لم يتمكن النظام من توليد الصورة. حاول مرة أخرى.";
+        const notice = isQuota
+          ? "\n\n⚠️ توليد الصور غير متاح مؤقتاً بسبب تجاوز الحصة المسموح بها. حاول بعد دقيقة."
+          : "\n\n⚠️ حدث خطأ أثناء توليد الصورة. حاول مرة أخرى.";
           reply = `${reply}${notice}`;
           storedContent = reply;
         }
@@ -872,7 +871,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
 // List non-archived conversations for the logged-in user, sorted by
 // last_message_at DESC NULLS LAST, then created_at DESC.
 router.get("/hamzawi/conversations", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -903,7 +902,7 @@ router.get("/hamzawi/conversations", async (req, res): Promise<void> => {
 // POST /api/hamzawi/conversations
 // Create a new conversation for the logged-in user. Returns id + title.
 router.post("/hamzawi/conversations", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -928,13 +927,13 @@ router.post("/hamzawi/conversations", async (req, res): Promise<void> => {
 // PATCH /api/hamzawi/conversations/:id
 // Rename a conversation (title only). The conversation must belong to the user.
 router.patch("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
   }
 
-  const conversationId = parseInt(req.params.id, 10);
+  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
   if (isNaN(conversationId)) {
     res.status(400).json({ error: "معرّف المحادثة غير صالح" });
     return;
@@ -974,13 +973,13 @@ router.patch("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
 // Soft-delete: sets archived_at = now(). The row and its messages are preserved.
 // Archived conversations are excluded from the list endpoint.
 router.delete("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
   }
 
-  const conversationId = parseInt(req.params.id, 10);
+  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
   if (isNaN(conversationId)) {
     res.status(400).json({ error: "معرّف المحادثة غير صالح" });
     return;
@@ -1017,7 +1016,7 @@ router.delete("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
 // specific conversation (authentication + ownership required). When absent, falls
 // back to the legacy session/user query so existing frontend code works unchanged.
 router.get("/hamzawi/messages", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   const verifiedSessionId = user ? null : getVerifiedSessionId(req);
   const conversationIdRaw = req.query.conversationId as string | undefined;
   const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
@@ -1086,7 +1085,7 @@ router.get("/hamzawi/messages", async (req, res): Promise<void> => {
 
 // GET /api/hamzawi/memory
 router.get("/hamzawi/memory", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -1108,7 +1107,7 @@ router.get("/hamzawi/memory", async (req, res): Promise<void> => {
 
 // PUT /api/hamzawi/memory
 router.put("/hamzawi/memory", async (req, res): Promise<void> => {
-  const user = await getUserFromToken(req.headers.authorization);
+    const user = (req as import("express").Request & { uploadUser: Awaited<ReturnType<typeof getUserFromToken>> }).uploadUser!;
   if (!user) {
     res.status(401).json({ error: "يجب تسجيل الدخول" });
     return;
@@ -1116,7 +1115,7 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
 
   const level = planLevel(user.plan);
   if (level < 2) {
-    res.status(403).json({ error: "حفظ هوية النشاط متاح من خطة مسجّل فأعلى" });
+    res.status(403).json({ error: "حفظ هوية النشاط متاح من خطة PRO فأعلى" });
     return;
   }
 
@@ -1173,7 +1172,7 @@ router.put("/hamzawi/memory", async (req, res): Promise<void> => {
       .where(eq(userBrandMemoryTable.user_id, user.id))
       .limit(1);
     const profileComplete = isBrandProfileComplete(existingMemory ?? null);
-    const inGuidedOnboarding = level >= 4 && !profileComplete;
+    const inGuidedOnboarding = level >= 2 && !profileComplete;
     const isSettingsSource = (req.body as { source?: string }).source === "settings";
 
     if (!isSettingsSource && !inGuidedOnboarding) {
@@ -1237,7 +1236,7 @@ async function requireUploadAuth(
   }
   const level = planLevel(user.plan);
   if (level < 2) {
-    res.status(403).json({ error: "رفع الأصول متاح من خطة مسجّل فأعلى" });
+    res.status(403).json({ error: "رفع الأصول متاح من خطة PRO فأعلى" });
     return;
   }
   // Attach to request so the handler doesn't need to re-query
@@ -1338,3 +1337,7 @@ router.post(
 );
 
 export default router;
+
+      const gatedTool = toolRegistry.get(toolId);
+
+      const toolId = intentDecision.intent === "generate_image" ? "generate_image" : "generate_text";

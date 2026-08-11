@@ -113,19 +113,11 @@ function now() {
 
 function planLevel(plan?: string): number {
   const levels: Record<string, number> = {
-    visitor: 1,
-    registered: 2,
-    professional: 3,
-    smart_fix: 3,
-    content: 4,
-    agency: 5,
+    free: 1,
+    pro: 2,
   };
-  return levels[plan ?? "visitor"] ?? 1;
+  return levels[plan ?? "free"] ?? 1;
 }
-
-// Temporary Beta access — full capability level (content-plan equivalent).
-// Mirrors BETA_LEVEL in api-server/src/services/beta/access.ts.
-const BETA_LEVEL = 4;
 
 export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, betaAccess, onFileCheck, checking, heroVisible, forceOpen, embedded, conversationId, onConversationCreated }: HamzawiChatProps) {
   const [open, setOpen] = useState(!!embedded);
@@ -160,8 +152,11 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
   const adCheckFileRef = useRef<File | null>(null);
 
   const t = i18n[lang];
-  // Beta users get full capability level without faking a paid plan.
-  const level = Math.max(planLevel(userPlan), betaAccess ? BETA_LEVEL : 0);
+  // Level is derived solely from plan — betaAccess is no longer used for capability gates.
+  // The backend controls access via plan='pro'; frontend mirrors the same logic.
+  // betaAccess is retained as a prop for backward compat but does not affect level.
+  void betaAccess; // intentionally unused — plan is the single source of truth
+  const level = planLevel(userPlan);
 
   /** Reads a File into a base64 data URL (used to attach ad-check images to chat). */
   function fileToDataUrl(file: File): Promise<string | null> {
@@ -375,9 +370,9 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
       if (!initialized) {
         setInitialized(true);
 
-        // For level 4+ authenticated users with no history, auto-start onboarding
+        // For PRO (level 2+) authenticated users with no history, auto-start onboarding
         const token = localStorage.getItem(TOKEN_KEY);
-        if (level >= 4 && token) {
+        if (level >= 2 && token) {
           setMessages((prev) => {
             if (prev.length > 0) return prev;
             // Temporary loading state — will be replaced by AI response
@@ -602,7 +597,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
     // If we're in onboarding with no logo yet → "logo".
     // Otherwise → "portfolio" (design samples and general attachments).
     let attachCategory: "logo" | "portfolio" = "portfolio";
-    if (level >= 4) {
+    if (level >= 2) {
       // Check if user already has a logo to decide category ahead of upload
       const token = localStorage.getItem(TOKEN_KEY);
       if (token) {
@@ -633,8 +628,8 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
     // Show the uploaded image as a user-side media bubble in the chat.
     setMessages((prev) => [...prev, chatBlock("user", "", { imageUrl: url })]);
 
-    if (level >= 4) {
-      // During onboarding (step 7) or post-onboarding for level 4+:
+    if (level >= 2) {
+      // During onboarding (step 7) or post-onboarding for PRO (level 2+):
       // First upload → logo (if no logo yet); subsequent uploads → design samples
       const token = localStorage.getItem(TOKEN_KEY);
       if (token) {
@@ -816,14 +811,14 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
                 </div>
               </div>
             )}
-            {(checkResult?.status === "مرفوض" || checkResult?.status === "جيد" || checkResult?.status === "rejected" || checkResult?.status === "good") && messages.length > 0 && !loading && !checking && level < 4 && (
+            {(checkResult?.status === "مرفوض" || checkResult?.status === "جيد" || checkResult?.status === "rejected" || checkResult?.status === "good") && messages.length > 0 && !loading && !checking && level < 2 && (
               <a
-                href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(lang === "ar" ? "أريد الاشتراك في Smart Fix" : "I want to subscribe to Smart Fix")}`}
+                href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(lang === "ar" ? "أريد الاشتراك في خطة PRO" : "I want to subscribe to the PRO plan")}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full bg-green-600 text-white text-center text-sm py-2.5 rounded-xl font-bold hover:bg-green-700 transition-colors"
               >
-                📲 {lang === "ar" ? "اشترك في Smart Fix" : "Subscribe to Smart Fix"}
+                📲 {lang === "ar" ? "اشترك في خطة PRO" : "Subscribe to PRO"}
               </a>
             )}
             <div ref={bottomRef} />

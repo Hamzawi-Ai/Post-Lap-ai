@@ -27,7 +27,6 @@ export interface AppConfig {
   pricing: {
     currency: string;
     plans: PricingPlan[];
-    agencyExtraProjectPrice: number;
   };
   whatsapp: string;
   agents: Record<string, string>;
@@ -39,55 +38,23 @@ export const DEFAULT_CONFIG: AppConfig = {
     currency: "د.ل",
     plans: [
       {
-        id: "smart_fix",
-        name: "Smart Fix",
-        nameAr: "الإصلاح الذكي",
-        price: 100,
-        desc: "للمعلنين الأفراد",
-        features: [
-          "تصحيح الإعلانات المرفوضة",
-          "فحوصات غير محدودة",
-          "فيديو حتى 60 ثانية",
-          "دعم أولوية",
-        ],
-        badge: null,
-        cta: "اشترك في Smart Fix",
-        highlight: false,
-      },
-      {
-        id: "content",
-        name: "إدارة المحتوى",
+        id: "pro",
+        name: "احترافي (PRO)",
         nameAr: "للشركات والمتاجر",
         price: 400,
         desc: "للشركات والمتاجر",
         features: [
-          "كل مميزات Smart Fix",
-          "لوحة إدارة المحتوى",
-          "توليد نصوص بالليبي الأصيل",
-          "تصميم منشورات مع الشعار",
+          "كل مميزات المجاني",
+          "توليد نصوص إعلانية بالليبي الأصيل",
+          "توليد صور المنشورات بالذكاء الاصطناعي",
+          "تصميم منشورات بشعار نشاطك وألوانه",
+          "ذاكرة دائمة — حمزاوي يتذكر نشاطك",
         ],
         badge: "الأكثر طلباً",
-        cta: "اشترك في إدارة المحتوى",
+        cta: "اشترك في PRO",
         highlight: true,
       },
-      {
-        id: "agency",
-        name: "خطة الوكالة",
-        nameAr: "للمكاتب الإعلانية",
-        price: 1000,
-        desc: "+ 400 د.ل لكل مشروع إضافي",
-        features: [
-          "كل مميزات إدارة المحتوى",
-          "مشاريع متعددة",
-          "بيانات وهوية مستقلة لكل مشروع",
-          "مدير حساب مخصص",
-        ],
-        badge: null,
-        cta: "اشترك في خطة الوكالة",
-        highlight: false,
-      },
     ],
-    agencyExtraProjectPrice: 400,
   },
   whatsapp: "218915811115",
   agents: {

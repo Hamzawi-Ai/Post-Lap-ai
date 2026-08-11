@@ -6,7 +6,7 @@ import { planEnum } from "./users";
 export const companiesTable = pgTable("companies", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().default(""),
-  plan: planEnum("plan").notNull().default("registered"),
+  plan: planEnum("plan").notNull().default("free"),
   is_active: boolean("is_active").notNull().default(true),
   created_at: timestamp("created_at").defaultNow().notNull(),
   subscription_label: text("subscription_label"),

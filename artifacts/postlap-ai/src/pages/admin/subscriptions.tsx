@@ -8,7 +8,7 @@ export default function Subscriptions() {
   const { insights, loading } = useOwnerInsights(token);
   const { users, usersLoading } = useAdminUsers(token);
 
-  const paidUsers = users.filter((u) => u.plan === "professional" || u.plan === "smart_fix" || u.plan === "content" || u.plan === "agency");
+  const paidUsers = users.filter((u) => u.plan === "pro");
 
   return (
     <div className="space-y-6">

@@ -10,10 +10,6 @@ export type UserUpgradeInputPlan =
   (typeof UserUpgradeInputPlan)[keyof typeof UserUpgradeInputPlan];
 
 export const UserUpgradeInputPlan = {
-  visitor: "visitor",
-  registered: "registered",
-  professional: "professional",
-  smart_fix: "smart_fix",
-  content: "content",
-  agency: "agency",
+  free: "free",
+  pro: "pro",
 } as const;

@@ -10,5 +10,4 @@ import type { PricingPlan } from "./pricingPlan";
 export interface AppPricing {
   currency: string;
   plans: PricingPlan[];
-  agencyExtraProjectPrice: number;
 }

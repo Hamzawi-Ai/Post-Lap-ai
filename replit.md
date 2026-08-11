@@ -14,7 +14,7 @@ PostLapAI is an AI platform that combines Meta/TikTok ad-policy compliance check
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `OPENAI_API_KEY` — for ad checking and Hamzawi AI chat
-- Optional env: `GEMINI_API_KEY` or `NANO_BANANA_API_KEY` — for AI image generation (plan level 3+)
+- Optional env: `GEMINI_API_KEY` or `NANO_BANANA_API_KEY` — for AI image generation (PRO plan)
 
 ## Stack
 
@@ -36,28 +36,29 @@ PostLapAI is an AI platform that combines Meta/TikTok ad-policy compliance check
 
 ## Architecture decisions
 
-- Plan system uses 5 levels: visitor=1, registered=2, professional=3(legacy alias for smart_fix), smart_fix=3, content=4, agency=5. The old `professional` enum value is kept for backward compat and treated as level 3. `planLevel()` in `lib/db/src/schema/users.ts` is the single source of truth.
-- Feature gating by level: ad check (all); brand memory (2+); text generation (3+, level 4+ gets image+description mode); image generation via Gemini (3+); full content/post management (4+); multi-business agency (5).
+- Plan system: two tiers — **FREE** (level 1) and **PRO** (level 2). `planLevel()` in `lib/db/src/schema/users.ts` is the single source of truth.
+- Feature gating by level: ad check/analysis/repair (FREE, level 1); text generation, image generation, post design, Brand Brain (PRO, level 2).
+- `BETA_ACCESS_ENABLED` env var controls new user registration: `true` (default) = new users get `plan='pro'`; `false` = new users get `plan='free'`. Toggling this flag is the only change needed.
+- Beta provenance: users who receive PRO via beta registration get `beta_access=true`. Manually admin-provisioned PRO users have `beta_access=false`. When beta ends, only beta-granted PRO accounts are lazily downgraded to FREE.
 - Hamzawi uses HMAC-signed cookies (`hamzawi_session`) for anonymous visitors (signed with SESSION_SECRET) and JWT auth for registered users, so conversation history persists across page loads. Cookie tampering is rejected server-side.
 - The `/check` endpoint returns structured violations JSON `{ violations: [{type, reason, severity}], suggestions[] }` which is passed directly to Hamzawi's system prompt for contextual responses.
 - Language auto-detection: frontend reads `navigator.language`, stores in `localStorage` (`postlap_lang`), and applies Arabic/English UI via `src/lib/useLanguage.ts` + `src/lib/i18n.ts`. Hamzawi replies in the user's message language automatically via OpenAI.
-- Gemini image generation is gated behind plan level 3 (smart_fix+). Falls back to NANO_BANANA_API_KEY if GEMINI_API_KEY is not set.
 
 ## Product
 
 - **فحص الإعلانات**: رفع صورة أو فيديو يحصل المستخدم على تقرير مفصّل مع نقاط ومخالفات وفق سياسات Meta
 - **حمزاوي AI**: مساعد ذكي يرد بالذكاء الاصطناعي، يتذكر هوية النشاط التجاري، ويفتح تلقائياً للزوار الجدد
-- **ذاكرة النشاط**: المستخدمون المشتركون (مستوى 2+) يحفظون هوية نشاطهم التجاري وحمزاوي يستخدمها في كل محادثة
-- **توليد الصور**: خطة content/agency تولّد صوراً إعلانية بديلة عبر Gemini
-- **توليد النصوص**: نصوص إعلانية باللهجة الليبية عبر OpenAI
+- **ذاكرة النشاط**: المستخدمون المشتركون (PRO) يحفظون هوية نشاطهم التجاري وحمزاوي يستخدمها في كل محادثة
+- **توليد الصور**: خطة PRO تولّد صوراً إعلانية بديلة عبر Gemini
+- **توليد النصوص**: نصوص إعلانية باللهجة الليبية عبر OpenAI (PRO فقط)
 
 ## Gotchas
 
-- After schema changes, always run `pnpm --filter @workspace/db run push` before restarting the API server. In production deployments, this must be run explicitly before releasing — the Hamzawi endpoints depend on `hamzawi_messages`, `user_brand_memory`, and the expanded `plan` enum.
+- After schema changes, always run `pnpm --filter @workspace/db run push` before restarting the API server. In production deployments, run the migration SQL from `lib/db/migrations/plan_enum_free_pro.sql` to migrate legacy plan enum values.
 - After OpenAPI spec changes, run `pnpm --filter @workspace/api-spec run codegen` to regenerate hooks
-- Do NOT add new enum values to the `plan` enum without considering backward compat — PostgreSQL doesn't allow removing enum values easily
+- Do NOT add new enum values to the `plan` enum without running the migration — the enum is now strictly `['free', 'pro']`
 - The `planLevel()` function is the single source of truth for plan-based feature gating — use it everywhere instead of comparing plan strings directly
-- Image generation (`/api/image-gen`) is gated at plan level ≥ 3 (smart_fix+) on both backend and frontend — OpenAPI spec, error messages, and UI copy must all reflect "smart_fix+" not "content+"
+- Image generation (`/api/image-gen`) default fix mode is FREE; `new_post` mode (branded post generation) requires PRO
 
 ## User preferences
 

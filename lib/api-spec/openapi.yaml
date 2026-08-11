@@ -108,7 +108,7 @@ paths:
     post:
       operationId: generateImage
       tags: [ads]
-      summary: Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
+      summary: Generate compliant ad image via Gemini (FREE plan and above for fix mode; PRO plan for new_post mode)
       requestBody:
         required: true
         content:
@@ -430,7 +430,7 @@ components:
 
     AppPricing:
       type: object
-      required: [currency, plans, agencyExtraProjectPrice]
+      required: [currency, plans]
       properties:
         currency:
           type: string
@@ -438,8 +438,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/PricingPlan"
-        agencyExtraProjectPrice:
-          type: number
 
     AppConfig:
       type: object
@@ -537,7 +535,7 @@ components:
         mode:
           type: string
           enum: [new_post]
-          description: "new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)"
+          description: "new_post = generate branded post (PRO plan required); omit for fix-existing-ad mode (FREE and PRO)"
         imageBase64:
           type: string
           description: "Required for fix-existing-ad mode"
@@ -590,7 +588,7 @@ components:
           type: string
         plan:
           type: string
-          enum: [visitor, registered, professional, smart_fix, content, agency]
+          enum: [free, pro]
         trials_remaining:
           type: integer
         total_checks:
@@ -639,7 +637,7 @@ components:
       properties:
         plan:
           type: string
-          enum: [visitor, registered, professional, smart_fix, content, agency]
+          enum: [free, pro]
 
     UsageStats:
       type: object

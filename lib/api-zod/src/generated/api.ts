@@ -33,7 +33,6 @@ export const GetConfigResponse = zod.object({
         highlight: zod.boolean(),
       }),
     ),
-    agencyExtraProjectPrice: zod.number(),
   }),
   whatsapp: zod.string(),
   agents: zod.object({
@@ -89,14 +88,14 @@ export const GenerateAdTextResponse = zod.object({
 });
 
 /**
- * @summary Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
+ * @summary Generate compliant ad image via Gemini (FREE plan and above for fix mode; PRO plan for new_post mode)
  */
 export const GenerateImageBody = zod.object({
   mode: zod
     .enum(["new_post"])
     .optional()
     .describe(
-      "new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)",
+      "new_post = generate branded post (PRO plan required); omit for fix-existing-ad mode (FREE and PRO)",
     ),
   imageBase64: zod
     .string()
@@ -141,14 +140,7 @@ export const AuthGoogleResponse = zod.object({
     id: zod.number(),
     email: zod.string(),
     name: zod.string(),
-    plan: zod.enum([
-      "visitor",
-      "registered",
-      "professional",
-      "smart_fix",
-      "content",
-      "agency",
-    ]),
+    plan: zod.enum(["free", "pro"]),
     trials_remaining: zod.number(),
     total_checks: zod.number(),
     last_check_at: zod.string().nullish(),
@@ -163,14 +155,7 @@ export const GetCurrentUserResponse = zod.object({
   id: zod.number(),
   email: zod.string(),
   name: zod.string(),
-  plan: zod.enum([
-    "visitor",
-    "registered",
-    "professional",
-    "smart_fix",
-    "content",
-    "agency",
-  ]),
+  plan: zod.enum(["free", "pro"]),
   trials_remaining: zod.number(),
   total_checks: zod.number(),
   last_check_at: zod.string().nullish(),
@@ -210,14 +195,7 @@ export const UpgradeUserParams = zod.object({
 });
 
 export const UpgradeUserBody = zod.object({
-  plan: zod.enum([
-    "visitor",
-    "registered",
-    "professional",
-    "smart_fix",
-    "content",
-    "agency",
-  ]),
+  plan: zod.enum(["free", "pro"]),
 });
 
 export const UpgradeUserResponse = zod.object({

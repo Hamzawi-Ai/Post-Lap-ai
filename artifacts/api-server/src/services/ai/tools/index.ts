@@ -6,6 +6,10 @@
  * /api/image-gen, /api/hamzawi/memory, /api/hamzawi/upload-asset) remain the
  * compatibility layer until the orchestrator fully takes over their flows.
  *
+ * Two-level plan system: FREE (level 1) and PRO (level 2).
+ * - Level 1 (FREE): ad checks, violation fix/repair
+ * - Level 2 (PRO): text generation, image generation, post generation, Brand Brain
+ *
  * TODO(prompt-studio): consume AgentConfig — tool_policies
  * After the Studio integration pass, merge AgentConfig.tool_policies into each
  * registration so requiredLevel and enabled() come from the DB row rather than
@@ -25,7 +29,7 @@ toolRegistry.register({
 toolRegistry.register({
   id: "generate_text",
   description: "توليد نص إعلاني باللهجة الليبية لمنتج أو خدمة",
-  requiredLevel: 3,
+  requiredLevel: 2,
   requireAuth: "jwt",
   enabled: () => true,
 });
@@ -33,14 +37,14 @@ toolRegistry.register({
 toolRegistry.register({
   id: "generate_image",
   description: "توليد منشور مصمم بهوية النشاط أو إصلاح صورة إعلان مرفوضة",
-  requiredLevel: 4,
+  requiredLevel: 2,
   requireAuth: "jwt",
   enabled: () => isImageGenAvailable(),
 });
 
 toolRegistry.register({
   id: "save_brand_memory",
-  description: "حفظ معلومات هوية النشاط التجاري",
+  description: "حفظ معلومات هوية النشاط التجاري (Brand Brain)",
   requiredLevel: 2,
   requireAuth: "jwt",
   enabled: () => true,

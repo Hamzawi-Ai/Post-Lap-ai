@@ -50,7 +50,7 @@ export async function buildChatContext(params: {
 }): Promise<ChatContext> {
   const { user, sessionId, conversationId } = params;
 
-  const plan = (user?.plan ?? "visitor") as Plan;
+  const plan = (user?.plan ?? "free") as Plan;
   // Beta-aware capability level (beta users get full access without a plan change).
   const level = effectiveLevel(user);
 
@@ -63,7 +63,7 @@ export async function buildChatContext(params: {
         .then((r) => r[0] ?? null)
     : null;
 
-  const isOnboarding = level >= 4 && !isBrandProfileComplete(memory);
+  const isOnboarding = level >= 2 && !isBrandProfileComplete(memory);
 
   // When a conversationId is supplied (authenticated turn with a known thread),
   // scope recent messages to that conversation only. This isolates AI context

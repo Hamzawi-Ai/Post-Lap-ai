@@ -24,7 +24,7 @@ const ownerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-const PAID_PLANS: Plan[] = ["professional", "smart_fix", "content", "agency"];
+const PAID_PLANS: Plan[] = ["pro"];
 
 // READ-ONLY owner assistant (V1 — data-driven only: aggregate / summarize /
 // report on platform data. No LLM, no tool execution, no writes).

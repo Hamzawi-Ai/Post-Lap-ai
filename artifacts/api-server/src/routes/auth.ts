@@ -73,10 +73,10 @@ router.post("/auth/google", async (req, res): Promise<void> => {
         .values({
           email: payload.email,
           name: payload.name ?? "",
-          plan: "registered",
+          plan: isBetaEnabled() ? "pro" : "free",
           is_active: true,
           beta_access: isBetaEnabled(),
-          trials_remaining: 6,
+          trials_remaining: isBetaEnabled() ? 9999 : 6,
           total_checks: 0,
         })
         .returning();
@@ -84,19 +84,22 @@ router.post("/auth/google", async (req, res): Promise<void> => {
       await autoCreateCompanyForUser(user.id, payload.name ?? "");
     }
 
-    // Temporary Beta access (idempotent): active Google users get the full-access
-    // flag whenever the beta toggle is on. Disabled accounts are never flagged
-    // (and their access is denied by the auth middleware on every endpoint).
-    if (isBetaEnabled() && user.is_active && !user.beta_access) {
+    // Beta-off lazy downgrade: when BETA_ACCESS_ENABLED=false, users who received
+    // PRO via beta registration (beta_access=true) are downgraded to FREE.
+    // Manually provisioned PRO accounts (beta_access=false) are preserved.
+    // No auto-grant of beta_access during beta — beta_access is set only at
+    // registration (new users get plan='pro' + beta_access=true when beta is on).
+    if (!isBetaEnabled() && user.beta_access && user.plan === "pro") {
       try {
         const [updated] = await db
           .update(usersTable)
-          .set({ beta_access: true })
+          .set({ plan: "free", beta_access: false })
           .where(eq(usersTable.id, user.id))
           .returning();
         if (updated) user = updated;
+        logger.info({ userId: user.id }, "Downgraded beta-granted PRO account to FREE on beta-off login");
       } catch (err) {
-        logger.error({ err }, "Failed to grant beta access on login");
+        logger.error({ err }, "Failed to downgrade beta account on login");
       }
     }
 
@@ -106,7 +109,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
     if (
       lastCheck &&
       lastCheck.toDateString() !== today.toDateString() &&
-      user.plan === "registered"
+      user.plan === "free"
     ) {
       await db
         .update(usersTable)
@@ -151,7 +154,7 @@ router.post("/dev/login", async (_req, res): Promise<void> => {
         .values({
           email,
           name: "Dev Tester",
-          plan: "agency",
+          plan: "pro",
           is_active: true,
           trials_remaining: 99999,
           total_checks: 0,
@@ -210,19 +213,22 @@ router.get("/users/me", async (req, res): Promise<void> => {
       return;
     }
 
-    // Temporary Beta access (idempotent lazy grant): any active user gets the
-    // full-access flag while the beta toggle is on — no re-login required.
+    // Beta-off lazy downgrade (/users/me): when BETA_ACCESS_ENABLED=false,
+    // beta-granted PRO users (beta_access=true) are downgraded to FREE.
+    // Manually provisioned PRO (beta_access=false) are preserved.
+    // No auto-grant of beta_access during beta — provenance is set at registration.
     let activeUser = user;
-    if (isBetaEnabled() && !user.beta_access) {
+    if (!isBetaEnabled() && user.beta_access && user.plan === "pro") {
       try {
         const [updatedUser] = await db
           .update(usersTable)
-          .set({ beta_access: true })
+          .set({ plan: "free", beta_access: false })
           .where(eq(usersTable.id, user.id))
           .returning();
         if (updatedUser) activeUser = updatedUser;
+        logger.info({ userId: user.id }, "Downgraded beta-granted PRO account to FREE on beta-off /users/me");
       } catch (err) {
-        logger.error({ err }, "Failed to grant beta access on /users/me");
+        logger.error({ err }, "Failed to downgrade beta account on /users/me");
       }
     }
 

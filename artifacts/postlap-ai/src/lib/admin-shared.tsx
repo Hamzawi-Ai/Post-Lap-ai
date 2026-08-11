@@ -64,9 +64,7 @@ export interface OwnerInsights {
 
 // Fallback until /api/config loads — single source of truth is config.json.
 export const DEFAULT_PLAN_OPTIONS: PlanOption[] = [
-  { label: "Smart Fix — 100 د.ل", value: "smart_fix", plan: "smart_fix" },
-  { label: "إدارة المحتوى — 400 د.ل", value: "content", plan: "content" },
-  { label: "خطة الوكالة — 1000 د.ل", value: "agency", plan: "agency" },
+  { label: "احترافي (PRO) — 400 د.ل", value: "pro", plan: "pro" },
 ];
 
 export const DURATION_OPTIONS = [
@@ -77,34 +75,21 @@ export const DURATION_OPTIONS = [
 ];
 
 export const PLAN_LABEL: Record<string, string> = {
-  visitor: "زائر",
-  registered: "مسجل",
-  professional: "Smart Fix",
-  smart_fix: "Smart Fix",
-  content: "إدارة المحتوى",
-  agency: "وكالة",
+  free: "مجاني (FREE)",
+  pro: "احترافي (PRO)",
 };
 
-export const PAID_PLANS = ["professional", "smart_fix", "content", "agency"];
+export const PAID_PLANS = ["pro"];
 
-// Full plan list used by the quick plan-change controls (matches the old
-// /dashboard-admin-access dashboard). Labels mirror PLAN_LABEL.
+// Full plan list used by the quick plan-change controls.
 export const ALL_PLAN_OPTIONS = [
-  { label: "وكالة", value: "agency" },
-  { label: "إدارة المحتوى", value: "content" },
-  { label: "Smart Fix", value: "smart_fix" },
-  { label: "Smart Fix (قديم)", value: "professional" },
-  { label: "مسجل", value: "registered" },
-  { label: "زائر", value: "visitor" },
+  { label: "احترافي (PRO)", value: "pro" },
+  { label: "مجاني (FREE)", value: "free" },
 ];
 
 export const PLAN_COLORS: Record<string, string> = {
-  visitor: "text-muted-foreground border-border",
-  registered: "text-yellow-400 border-yellow-400/40",
-  professional: "text-primary border-primary/50",
-  smart_fix: "text-primary border-primary/50",
-  content: "text-green-400 border-green-400/40",
-  agency: "text-purple-400 border-purple-400/40",
+  free: "text-muted-foreground border-border",
+  pro: "text-primary border-primary/50",
 };
 
 export function expiryBadge(expiresAt: string | null): ReactNode {

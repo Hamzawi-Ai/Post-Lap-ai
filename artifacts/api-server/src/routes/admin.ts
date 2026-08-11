@@ -87,14 +87,14 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
     duration_days?: number;
   };
 
-  const VALID_PLANS = ["visitor", "registered", "professional", "smart_fix", "content", "agency"];
+  const VALID_PLANS = ["free", "pro"];
   if (!email || !plan || !VALID_PLANS.includes(plan ?? "")) {
     res.status(400).json({ error: "email and valid plan required" });
     return;
   }
 
   const expiresAt = duration_days ? expiryFromDays(duration_days) : undefined;
-  const isPaidPlan = ["professional", "smart_fix", "content", "agency"].includes(plan);
+  const isPaidPlan = plan === "pro";
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
@@ -105,6 +105,10 @@ router.post("/admin/users", requireAdmin, async (req, res): Promise<void> => {
         subscription_label: subscription_label ?? null,
         subscription_expires_at: expiresAt ?? null,
         is_active: true,
+        // Clear beta_access when admin sets plan='pro' so the account is treated
+        // as manually provisioned (not beta-granted) and is not downgraded on beta-off.
+        // When downgrading to 'free', also clear beta_access for consistency.
+        beta_access: false,
       })
       .where(eq(usersTable.email, email))
       .returning();
@@ -140,7 +144,7 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
     duration_days?: number;
   };
 
-  const VALID_PLANS = ["visitor", "registered", "professional", "smart_fix", "content", "agency"];
+  const VALID_PLANS = ["free", "pro"];
   if (!plan || !VALID_PLANS.includes(plan)) {
     res.status(400).json({ error: "Invalid plan" });
     return;
@@ -150,6 +154,9 @@ router.patch("/admin/users/:id/upgrade", requireAdmin, async (req, res): Promise
 
   const updateData: Partial<typeof usersTable.$inferInsert> = {
     plan: plan as typeof usersTable.$inferInsert["plan"],
+    // Clear beta_access so admin-assigned plans are treated as manually provisioned
+    // (not beta-granted) and are not downgraded on beta-off.
+    beta_access: false,
     ...(subscription_label !== undefined && { subscription_label }),
     ...(expiresAt !== undefined && { subscription_expires_at: expiresAt }),
   };
@@ -238,7 +245,7 @@ router.patch("/admin/activate", requireAdmin, async (req, res): Promise<void> =>
 });
 
 // Set plan by email (owner tool)
-const VALID_PLANS = ["visitor", "registered", "professional", "smart_fix", "content", "agency"];
+const VALID_PLANS = ["free", "pro"];
 router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise<void> => {
   const { email, plan } = req.body as { email?: string; plan?: string };
 
@@ -249,7 +256,11 @@ router.patch("/admin/set-plan-by-email", requireAdmin, async (req, res): Promise
 
   const [user] = await db
     .update(usersTable)
-    .set({ plan: plan as typeof usersTable.$inferInsert["plan"] })
+    .set({
+      plan: plan as typeof usersTable.$inferInsert["plan"],
+      // Clear beta_access so this is treated as manually provisioned (not beta-granted).
+      beta_access: false,
+    })
     .where(eq(usersTable.email, email))
     .returning();
 

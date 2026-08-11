@@ -29,7 +29,6 @@ export interface PricingPlan {
 export interface AppPricing {
   currency: string;
   plans: PricingPlan[];
-  agencyExtraProjectPrice: number;
 }
 
 export type AppConfigAgents = {
@@ -110,7 +109,7 @@ export interface TextGenResult {
 }
 
 /**
- * new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+)
+ * new_post = generate branded post (PRO plan required); omit for fix-existing-ad mode (FREE and PRO)
  */
 export type ImageGenInputMode =
   (typeof ImageGenInputMode)[keyof typeof ImageGenInputMode];
@@ -120,7 +119,7 @@ export const ImageGenInputMode = {
 } as const;
 
 export interface ImageGenInput {
-  /** new_post = generate branded post (level 4+); omit for fix-existing-ad mode (level 3+) */
+  /** new_post = generate branded post (PRO plan required); omit for fix-existing-ad mode (FREE and PRO) */
   mode?: ImageGenInputMode;
   /** Required for fix-existing-ad mode */
   imageBase64?: string;
@@ -144,12 +143,8 @@ export interface GoogleAuthInput {
 export type UserPlan = (typeof UserPlan)[keyof typeof UserPlan];
 
 export const UserPlan = {
-  visitor: "visitor",
-  registered: "registered",
-  professional: "professional",
-  smart_fix: "smart_fix",
-  content: "content",
-  agency: "agency",
+  free: "free",
+  pro: "pro",
 } as const;
 
 export interface User {
@@ -192,12 +187,8 @@ export type UserUpgradeInputPlan =
   (typeof UserUpgradeInputPlan)[keyof typeof UserUpgradeInputPlan];
 
 export const UserUpgradeInputPlan = {
-  visitor: "visitor",
-  registered: "registered",
-  professional: "professional",
-  smart_fix: "smart_fix",
-  content: "content",
-  agency: "agency",
+  free: "free",
+  pro: "pro",
 } as const;
 
 export interface UserUpgradeInput {

@@ -1,22 +1,19 @@
 import { planLevel, type Plan } from "@workspace/db";
 
 /**
- * Temporary Beta-access mechanism (open access without a paid subscription).
+ * Beta access mechanism (open access without a paid subscription).
  *
- * While PostLab is in beta, every active Google user (registered plan) gets
- * full product capability — ad checks, text generation, image generation and
- * branded posts — without subscribing.
+ * While PostLab is in beta, every new user automatically receives plan='pro'
+ * when BETA_ACCESS_ENABLED=true (the default). When the flag is off, new
+ * registrations receive plan='free'.
  *
- * This NEVER fakes a paid plan: the user's `plan` stays "registered" and all
- * existing usage/cost tracking (OperationalEvents, trials counters) keeps
- * running untouched. Instead it elevates the *effective capability level* used
- * by the feature gates to BETA_LEVEL.
+ * Toggling BETA_ACCESS_ENABLED is the only change needed to switch behavior
+ * — no other code changes required.
  *
- * Disabling before commercial launch is a one flag flip (BETA_ACCESS_ENABLED=0):
- * `effectiveLevel()` falls back to the plan-based level immediately and the
- * lazy grant in the auth routes stops writing the flag.
+ * BETA_LEVEL matches the PRO level (2) for backward compatibility with the
+ * beta_access flag that may still be set on existing user rows.
  */
-export const BETA_LEVEL = 4; // content-plan capability: text gen + image gen + branded posts
+export const BETA_LEVEL = 2; // PRO capability level
 
 /** Feature toggle. Defaults to ON when the env var is absent/empty. */
 export function isBetaEnabled(): boolean {
@@ -25,18 +22,30 @@ export function isBetaEnabled(): boolean {
   return !["0", "false", "no", "off"].includes(v.trim().toLowerCase());
 }
 
+/**
+ * @deprecated beta_access is no longer used to override plan level. With the
+ * two-tier system, plan='pro' grants PRO access and plan='free' grants FREE
+ * access. BETA_ACCESS_ENABLED only controls the plan assigned at registration
+ * — it does NOT elevate runtime capability for existing users.
+ */
 export function hasBetaAccess(
   user: { beta_access?: boolean | null } | null | undefined,
 ): boolean {
+  // Preserved for system-prompt injection (beta mode note in hamzawi.ts).
+  // Does NOT affect capability level — use effectiveLevel() for that.
   return isBetaEnabled() && !!user?.beta_access;
 }
 
-/** Capability level actually granted to this user (beta-aware). */
+/**
+ * Capability level actually granted to this user.
+ * Uses plan field only — beta_access no longer overrides plan level.
+ * BETA_ACCESS_ENABLED controls the plan assigned at registration, not runtime level.
+ */
 export function effectiveLevel(
   user:
     | { plan?: Plan | string | null; beta_access?: boolean | null }
     | null
     | undefined,
 ): number {
-  return hasBetaAccess(user) ? BETA_LEVEL : planLevel(user?.plan ?? null);
+  return planLevel(user?.plan ?? null);
 }

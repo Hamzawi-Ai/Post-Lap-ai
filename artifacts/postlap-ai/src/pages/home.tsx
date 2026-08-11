@@ -48,10 +48,10 @@ function getToken(): string | null {
 }
 
 // Plan level mapping (mirrors backend planLevel() in lib/db/src/schema/users.ts)
-// visitor=1, registered=2, professional=3(legacy), smart_fix=3, content=4, agency=5
+// free=1, pro=2
 function planLevelFrontend(plan: string): number {
   const levels: Record<string, number> = {
-    visitor: 1, registered: 2, professional: 3, smart_fix: 3, content: 4, agency: 5,
+    free: 1, pro: 2,
   };
   return levels[plan] ?? 1;
 }
@@ -285,14 +285,14 @@ export default function Home() {
     fetchConversations();
   }
 
-  // First-time onboarding gate: users on Professional (content, level 4+) whose
-  // brand profile is not complete are sent to /onboarding. Uses the server-computed
-  // brand_profile_complete (flag + core-data check) so a lost flag never forces re-onboarding.
+  // First-time onboarding gate: PRO users (level 2+) whose brand profile is not
+  // complete are sent to /onboarding. Uses the server-computed brand_profile_complete
+  // (flag + core-data check) so a lost flag never forces re-onboarding.
   // Runs only AFTER the mount refresh completes so a stale localStorage user (with the old
   // brand_profile_complete=false) never re-redirects back to /onboarding after setup is done.
   useEffect(() => {
     if (!user || !userRefreshed) return;
-    if (planLevelFrontend(user.plan) >= 4 && user.brand_profile_complete === false) {
+    if (planLevelFrontend(user.plan) >= 2 && user.brand_profile_complete === false) {
       if (window.location.pathname !== "/onboarding") {
         window.location.href = "/onboarding";
       }
@@ -392,7 +392,7 @@ export default function Home() {
     if (!user) {
       const trials = getTrials();
       if (trials <= 0) { setTrialBlockModal(true); return; }
-    } else if (["visitor", "registered"].includes(user.plan) && user.trials_remaining <= 0 && !user.beta_access) {
+    } else if (user.plan === "free" && user.trials_remaining <= 0 && !user.beta_access) {
       setTrialBlockModal(true); return;
     }
 
@@ -437,7 +437,7 @@ export default function Home() {
     { q: "كيف يعمل PostLapAI؟", a: "عرّف PostLab على نشاطك مرة واحدة، ثم اطلب منه توليد منشوراتك ونصوصك الإعلانية بالليبي الأصيل وتصميم صورها بهوية نشاطك — وكل منشور يُفحص تلقائياً لضمان توافقه مع سياسات Meta قبل النشر." },
     { q: "هل نتائج الفحص دقيقة 100%؟", a: "الدقة 90% لأن سياسات المنصات تتحدث باستمرار. النتيجة مساعدة لكنها لا تضمن قبول المنصة." },
     { q: "هل تخزنون محتواي؟", a: "لا، نحذف جميع الملفات فور انتهاء التحليل. لا نخزن محتواك أبداً." },
-    { q: "ما الفرق بين الخطط؟", a: "Smart Fix للمحتوى النصي والفحص، إدارة المحتوى للشركات التي تريد منشورات مصممة بهويتها وتوليد صور، وخطة الوكالة للمكاتب والمشاريع المتعددة." },
+    { q: "ما الفرق بين الخطط؟", a: "خطة FREE مجانية وتتيح فحص الإعلانات وتحليلها وإصلاح الصور المرفوضة. خطة PRO تضيف توليد النصوص التسويقية وتصميم المنشورات بهوية نشاطك وهوية النشاط التجاري الكاملة (Brand Brain)." },
     { q: "كيف أشترك؟", a: "تواصل معنا عبر واتساب وأرسل اسم الخطة التي تريدها. نقبل الدفع بالتحويل المصرفي." },
     { q: "هل يدعم فيديوهات تيك توك؟", a: "نعم، نقبل ملفات MP4 في فحص الإعلانات. يُرفع الفيديو ويُحلل فريم بفريم وفق سياسات Meta وTikTok." },
   ];
@@ -448,41 +448,30 @@ export default function Home() {
   const currency = config?.pricing?.currency ?? "د.ل";
   const fallbackPlans = [
     {
-      id: "smart_fix",
-      name: "Smart Fix",
-      nameAr: "الإصلاح الذكي",
-      price: 100,
-      desc: "للمعلنين الأفراد",
-      features: ["توليد نصوص إعلانية بالليبي الأصيل", "فحوصات إعلانية غير محدودة", "مقاطع فيديو حتى 60 ثانية", "دعم أولوية"],
-      badge: null,
-      cta: "اشترك في Smart Fix",
+      id: "free",
+      name: "مجاني (FREE)",
+      nameAr: "للأفراد والتجربة",
+      price: 0,
+      desc: "للأفراد والتجربة",
+      features: ["فحص الإعلانات وتحليل المحتوى", "عرض المخالفات والتوصيات", "إصلاح الصور المرفوضة بالذكاء الاصطناعي", "6 فحوصات يومية مجانية"],
+      badge: "",
+      cta: "ابدأ مجاناً",
       highlight: false,
     },
     {
-      id: "content",
-      name: "إدارة المحتوى",
+      id: "pro",
+      name: "احترافي (PRO)",
       nameAr: "للشركات والمتاجر",
       price: 400,
       desc: "للشركات والمتاجر",
-      features: ["كل مميزات Smart Fix", "تصميم منشورات بشعار نشاطك وألوانه", "توليد نصوص بالليبي الأصيل", "توليد صور المنشورات بالذكاء الاصطناعي", "ذاكرة دائمة — PostLab يتذكر نشاطك"],
+      features: ["كل مميزات المجاني", "توليد نصوص إعلانية بالليبي الأصيل", "توليد صور المنشورات بالذكاء الاصطناعي", "تصميم منشورات بشعار نشاطك وألوانه", "ذاكرة دائمة — PostLab يتذكر نشاطك"],
       badge: "الأكثر طلباً",
-      cta: "اشترك في إدارة المحتوى",
+      cta: "اشترك في PRO",
       highlight: true,
-    },
-    {
-      id: "agency",
-      name: "خطة الوكالة",
-      nameAr: "للمكاتب الإعلانية",
-      price: 1000,
-      desc: "+ 400 د.ل لكل مشروع إضافي",
-      features: ["كل مميزات إدارة المحتوى", "مشاريع متعددة", "هوية مستقلة لكل مشروع", "مدير حساب مخصص"],
-      badge: null,
-      cta: "اشترك في خطة الوكالة",
-      highlight: false,
     },
   ];
   const plans = config?.pricing?.plans?.length ? config.pricing.plans : fallbackPlans;
-  const contentPlan = plans.find((p) => p.id === "content") ?? plans.find((p) => p.highlight) ?? plans[1];
+  const contentPlan = plans.find((p) => p.id === "pro") ?? plans.find((p) => p.highlight) ?? plans[0];
 
   const agentsList = [
     {
@@ -530,8 +519,8 @@ export default function Home() {
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground hidden sm:inline">{user.name}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${["professional","smart_fix","content","agency"].includes(user.plan) ? "border-primary/50 text-primary bg-primary/10" : "border-border text-muted-foreground"}`}>
-                  {user.plan === "agency" ? "وكالة" : user.plan === "content" ? "Professional" : user.plan === "smart_fix" || user.plan === "professional" ? "Smart Fix" : user.plan === "registered" ? "مسجل" : "زائر"}
+                <span className={`text-xs px-2 py-0.5 rounded-full border ${user.plan === "pro" ? "border-primary/50 text-primary bg-primary/10" : "border-border text-muted-foreground"}`}>
+                  {user.plan === "pro" ? "PRO" : "FREE"}
                 </span>
                 <a
                   href="/brand"
@@ -831,7 +820,7 @@ export default function Home() {
              <div className="space-y-3">
                <div ref={googleBtnModalRef} className="flex justify-center" />
                <a
-                 href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في Smart Fix - PostLapAI`}
+                 href={`https://wa.me/${whatsapp}?text=أريد الاشتراك في خطة PRO - PostLapAI`}
                  target="_blank"
                  rel="noopener noreferrer"
                  className="block w-full bg-primary text-primary-foreground py-2.5 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity"

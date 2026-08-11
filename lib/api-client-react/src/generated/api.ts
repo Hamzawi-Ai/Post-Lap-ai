@@ -379,7 +379,7 @@ export const useGenerateAdText = <
 };
 
 /**
- * @summary Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
+ * @summary Generate compliant ad image via Gemini (FREE plan and above for fix mode; PRO plan for new_post mode)
  */
 export const getGenerateImageUrl = () => {
   return `/api/image-gen`;
@@ -442,7 +442,7 @@ export type GenerateImageMutationBody = BodyType<ImageGenInput>;
 export type GenerateImageMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Generate compliant ad image via Gemini (plan smart_fix+ / level 3+)
+ * @summary Generate compliant ad image via Gemini (FREE plan and above for fix mode; PRO plan for new_post mode)
  */
 export const useGenerateImage = <
   TError = ErrorType<ErrorResponse>,

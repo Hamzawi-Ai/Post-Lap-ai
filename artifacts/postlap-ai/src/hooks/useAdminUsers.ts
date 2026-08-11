@@ -35,7 +35,7 @@ export function useAdminUsers(token: string | null) {
   const [activating, setActivating] = useState<string | null>(null);
 
   const [byEmailInput, setByEmailInput] = useState("");
-  const [byEmailPlan, setByEmailPlan] = useState("smart_fix");
+  const [byEmailPlan, setByEmailPlan] = useState("pro");
   const [byEmailLoading, setByEmailLoading] = useState(false);
 
   const [unlimitingId, setUnlimitingId] = useState<number | null>(null);

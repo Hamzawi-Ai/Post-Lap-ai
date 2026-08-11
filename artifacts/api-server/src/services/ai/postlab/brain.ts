@@ -36,43 +36,23 @@ import { renderProductRules } from "./rules";
 
 /**
  * Per-level capability description (plan/capability context).
- * Preserved verbatim from the chat route — this is customer/plan context,
- * not global product knowledge.
- *
- * NOTE: this text is capability wording only. Commercial/pricing figures are
- * NEVER hardcoded here — they come from config.json via getConfig() and are
- * injected as the "خطط الترقية المتاحة" line below.
+ * Two-tier system: FREE (level 1) and PRO (level 2).
  */
 const PLAN_CAPABILITIES: Record<number, string> = {
-  1: "زائر (المستوى 1/5) — يكشف فقط: اشرح نتائج الفحص، لكن لا تقدم اقتراحات تصحيح مفصّلة. شجّعه على التسجيل",
-  2: "مسجّل (المستوى 2/5) — يقترح بدائل: قدّم اقتراحات محددة لتحسين الإعلان لكن لا تولّد صوراً",
-  3: "Smart Fix (المستوى 3/5) — يصلح الإعلانات: قدم تصحيحات مفصّلة، أخبره أنه يستطيع طلب توليد صورة بديلة متوافقة عبر الذكاء الاصطناعي",
-  4: "Content (المستوى 4/5) — إدارة المحتوى: قدم كامل الدعم بما فيه توليد منشورات من وصف+صورة، وإنشاء نصوص تسويقية",
-  5: "Agency (المستوى 5/5) — وكالة: كامل الصلاحيات. يدعم أنشطة تجارية متعددة. يمكنه إدارة هويات بصرية متعددة",
+  1: "مجاني FREE (المستوى 1/2) — يكشف ويحلّل: اشرح نتائج الفحص بالتفصيل، قدّم اقتراحات تصحيح محددة، وأخبره أنه يستطيع طلب إصلاح الصورة المرفوضة بالذكاء الاصطناعي",
+  2: "احترافي PRO (المستوى 2/2) — كامل الصلاحيات: توليد النصوص التسويقية، توليد وتصميم المنشورات بهوية النشاط، هوية النشاط التجاري الكاملة (Brand Brain). قدّم كل الدعم بلا قيود",
 };
 
 /**
  * Upgrade nudge injected naturally at end of PostLab AI response per user level.
- * Level 1 → register, Level 2 → smart_fix, Level 3 → content. Level 4+ no nudge.
- * Preserved verbatim from the chat route.
+ * Level 1 (FREE) → upsell to PRO. Level 2 (PRO) → no nudge.
  */
 function getFunnelInstruction(level: number): string {
   if (level === 1) {
     return `
 قاعدة القمع التسويقي:
 بعد الإجابة على أي طلب مكتمل للمستخدم، أضف جملة واحدة طبيعية في نهاية ردك:
-"عشان تشوف ليش مرفوضة بالتفصيل وتحصل على توصيات محددة — سجّل دخولك مجاناً ✨"`;
-  }
-  if (level === 2) {
-    return `
-قاعدة القمع التسويقي:
-بعد الإجابة على أي طلب مكتمل للمستخدم، أضف في نهاية الرد جملة واحدة طبيعية ومناسبة للسياق، تقترح خطوة تالية مفيدة. لا تجعل الاقتراح إعلانًا آليًا أو متكررًا بلا علاقة بالطلب. عند اكتشاف مخالفة أو مشكلة في محتوى إعلاني، اقترح مباشرة الإجراء المناسب لإصلاحها، مع تقديم مقترحات عملية غير مخالفة للسياسات. إذا كان الإصلاح يتطلب تصميمًا أو إعادة تصميم، يمكن أن تكون الدعوة الطبيعية مثل: "تبي تصلح التصميم تلقائياً بالذكاء الاصطناعي 🛠️" بحسب السياق.`;
-  }
-  if (level === 3) {
-    return `
-قاعدة القمع التسويقي:
-بعد الإجابة على أي طلب مكتمل للمستخدم، أضف جملة واحدة طبيعية في نهاية ردك:
-"عشان تصمم منشوراتك بشعار نشاطك وألوانك مباشرة — انتقل لخطة إدارة المحتوى 🎨"`;
+"عشان تولّد نصوص إعلانية وتصمم منشورات بهوية نشاطك مباشرة — انتقل لخطة PRO 🚀"`;
   }
   return "";
 }
@@ -131,14 +111,14 @@ function getPermissionsInstruction(): string {
 }
 
 /**
- * Design generation behaviour (Content plan and above, level 4+).
+ * Design generation behaviour (PRO plan and above, level 2+).
  * Generation is tied to the CURRENT user message, not the conversation history:
  * a previous design request does NOT put the conversation into a permanent
  * generation mode, and a delivered design is never regenerated unless the user
  * explicitly asks for a new one. The model must answer text requests with text.
  */
 function getDesignGenerationInstruction(level: number): string {
-  if (level < 4) return "";
+  if (level < 2) return "";
   return `
 توليد التصاميم (متاح من خطتك):
 - ولّد تصميمًا فقط عندما تطلب رسالة المستخدم الحالية صراحةً إنشاء تصميم/صورة جديد (منشور، بوست، ستوري، بانر، فلاير، بوستر، صورة إعلان، صورة ترويجية...).
@@ -233,7 +213,7 @@ ${identityBlock}
 ${memoryBlock}${assetsBlock}
 
 تعليمات:
-- خطط الترقية المتاحة: مسجّل (مجاني)، ${pricingLine}
+- خطط الترقية المتاحة: مجاني (FREE)، ${pricingLine}
 ${assetUsageInstruction}
 ${funnelInstruction}
 ${onboardingInstruction}

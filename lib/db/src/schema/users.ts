@@ -2,27 +2,20 @@ import { pgTable, serial, text, integer, timestamp, pgEnum, boolean } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const planEnum = pgEnum("plan", [
-  "visitor",
-  "registered",
-  "professional",
-  "smart_fix",
-  "content",
-  "agency",
-]);
+export const planEnum = pgEnum("plan", ["free", "pro"]);
 
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name").notNull().default(""),
-  plan: planEnum("plan").notNull().default("registered"),
+  plan: planEnum("plan").notNull().default("free"),
   company_id: integer("company_id"),
   gender: text("gender"),
   is_active: boolean("is_active").notNull().default(true),
-  // Temporary Beta-access flag: grants full PostLab capability to active Google
+  // Temporary Beta-access flag: grants PRO capability to active Google
   // users while the product is in open beta (gated by BETA_ACCESS_ENABLED).
-  // Never fakes a paid plan — the account's plan stays "registered". See
-  // api-server/src/services/beta/access.ts. Removed with the flag when beta ends.
+  // When BETA_ACCESS_ENABLED=true, new registrations receive plan='pro' directly.
+  // This flag is kept for backward compatibility and removed when beta ends.
   beta_access: boolean("beta_access").notNull().default(false),
   trials_remaining: integer("trials_remaining").notNull().default(6),
   total_checks: integer("total_checks").notNull().default(0),
@@ -36,24 +29,17 @@ export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;
 
-export type Plan = "visitor" | "registered" | "professional" | "smart_fix" | "content" | "agency";
+export type Plan = "free" | "pro";
 
 /**
- * Maps plans to capability levels 1–5:
- * 1 = visitor (reveal only — basic check results)
- * 2 = registered (suggest alternatives — detailed suggestions)
- * 3 = smart_fix (generate clean image via Gemini)
- * 4 = content (create posts from description + image)
- * 5 = agency (multiple business profiles)
+ * Maps plans to capability levels:
+ * 1 = free (check content, view analysis, view violations, fix posts/images)
+ * 2 = pro  (everything in free + text gen, image gen, post gen, Brand Brain)
  */
 export function planLevel(plan: Plan | string | null | undefined): number {
-  const levels: Record<Plan, number> = {
-    visitor: 1,
-    registered: 2,
-    professional: 3, // legacy — maps to smart_fix level
-    smart_fix: 3,
-    content: 4,
-    agency: 5,
+  const levels: Record<string, number> = {
+    free: 1,
+    pro: 2,
   };
-  return levels[(plan ?? "visitor") as Plan] ?? 1;
+  return levels[(plan ?? "free") as string] ?? 1;
 }

@@ -9,10 +9,6 @@
 export type UserPlan = (typeof UserPlan)[keyof typeof UserPlan];
 
 export const UserPlan = {
-  visitor: "visitor",
-  registered: "registered",
-  professional: "professional",
-  smart_fix: "smart_fix",
-  content: "content",
-  agency: "agency",
+  free: "free",
+  pro: "pro",
 } as const;

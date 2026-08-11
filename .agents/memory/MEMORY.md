@@ -1,1 +1,2 @@
 - [Media pipeline architecture](media-pipeline.md) — all uploaded/generated images route through MediaService; /uploads/ static route served from api-server/storage/
+- [Subscription plan system](subscription-plans.md) — two-tier FREE/PRO system; enum in DB and all plan logic

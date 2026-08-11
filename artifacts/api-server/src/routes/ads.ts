@@ -179,7 +179,7 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
   const user = await getUserFromToken(req.headers.authorization);
   const isGuest = !user;
 
-  const plan = (user?.plan ?? "visitor") as Plan;
+  const plan = (user?.plan ?? "free") as Plan;
   const level = planLevel(plan);
   const maxFrames = level >= 2 ? 60 : 11;
 
@@ -275,7 +275,7 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
           total_checks: sql`${usersTable.total_checks} + 1`,
           last_check_at: new Date(),
           trials_remaining:
-            plan === "visitor" || plan === "registered"
+            plan === "free"
               ? sql`GREATEST(${usersTable.trials_remaining} - 1, 0)`
               : usersTable.trials_remaining,
         })
@@ -328,9 +328,9 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   const plan = user.plan as Plan;
   // Beta-aware capability level (beta users get full access without a plan change).
   const level = effectiveLevel(user);
-  // Text generation requires Smart Fix / professional or higher (level 3+)
-  if (level < 3) {
-    res.status(403).json({ error: "توليد النصوص متاح من خطة Smart Fix فأعلى" });
+  // Text generation requires PRO plan (level 2+)
+  if (level < 2) {
+    res.status(403).json({ error: "توليد النصوص متاح لمشتركي خطة PRO فأعلى" });
     return;
   }
 
@@ -352,8 +352,8 @@ router.post("/generate-text", async (req, res): Promise<void> => {
   }
 
   try {
-    // Level 4+ (content/agency): use image + description for richer post generation
-    const useImageMode = level >= 4 && !!imageBase64;
+    // PRO (level 2+): use image + description for richer post generation
+    const useImageMode = level >= 2 && !!imageBase64;
 
     const userContent: Parameters<OpenAI["chat"]["completions"]["create"]>[0]["messages"][number]["content"] = useImageMode
       ? [
@@ -398,7 +398,7 @@ router.post("/generate-text", async (req, res): Promise<void> => {
 // default mode (level 3+): fix existing ad image per policy violations
 router.post("/image-gen", async (req, res): Promise<void> => {
   const user = await getUserFromToken(req.headers.authorization);
-  const plan = (user?.plan ?? "visitor") as Plan;
+  const plan = (user?.plan ?? "free") as Plan;
   // Beta-aware capability level (beta users get full access without a plan change).
   const level = effectiveLevel(user);
 
@@ -429,8 +429,8 @@ router.post("/image-gen", async (req, res): Promise<void> => {
       res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام هذه الميزة" });
       return;
     }
-    if (level < 4) {
-      res.status(403).json({ error: "توليد المنشورات المُبوَّبة متاح من خطة إدارة المحتوى فأعلى" });
+    if (level < 2) {
+      res.status(403).json({ error: "توليد المنشورات متاح لمشتركي خطة PRO فأعلى" });
       return;
     }
     if (!productDescription) {
@@ -459,9 +459,10 @@ router.post("/image-gen", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── default mode: fix existing ad image ────────────────────────────────────
-  if (level < 3) {
-    res.status(403).json({ error: "توليد الصورة متاح من خطة Smart Fix فأعلى" });
+  // ── default mode: fix existing ad image (FREE and PRO) ─────────────────────
+  // Image repair is available to all authenticated users (FREE level 1+).
+  if (!user) {
+    res.status(401).json({ error: "يجب تسجيل الدخول لاستخدام إصلاح الصور" });
     return;
   }
 

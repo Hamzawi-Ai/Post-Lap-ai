@@ -175,7 +175,7 @@ export async function autoCreateCompanyForUser(
   userName: string,
 ): Promise<number> {
   const name = userName || `User ${userId}`;
-  const company = await createCompany({ name, plan: "registered" });
+  const company = await createCompany({ name, plan: "free" });
   await linkUserToCompany(userId, company.id);
   return company.id;
 }
