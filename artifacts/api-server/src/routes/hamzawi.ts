@@ -460,7 +460,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
         .from(hamzawiConversationsTable)
         .where(
           and(
-            eq(hamzawiConversationsTable.id, conversationId),
+            eq(hamzawiConversationsTable.id, conversationIdInput),
             eq(hamzawiConversationsTable.user_id, user.id)
           )
         )
@@ -937,7 +937,8 @@ router.patch("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
+  const conversationIdRaw = req.params.id;
+  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : NaN;
   if (isNaN(conversationId)) {
     res.status(400).json({ error: "معرّف المحادثة غير صالح" });
     return;
@@ -983,7 +984,8 @@ router.delete("/hamzawi/conversations/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : null;
+  const conversationIdRaw = req.params.id;
+  const conversationId = conversationIdRaw ? parseInt(conversationIdRaw, 10) : NaN;
   if (isNaN(conversationId)) {
     res.status(400).json({ error: "معرّف المحادثة غير صالح" });
     return;
