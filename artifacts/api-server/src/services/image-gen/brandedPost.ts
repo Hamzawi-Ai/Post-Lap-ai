@@ -138,7 +138,7 @@ export async function generateBrandedPost(params: {
 
 [1. BRAND FACTS]${hardFactsBlock || "\nNo brand identity saved — use professional defaults with a clean modern style."}
 
-[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested.${assetsBlock}
+[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested. When creating NEW visible text for the design, never write it in English unless the brief explicitly requests English. This applies only to newly generated text. Do not translate, modify, or remove existing text inside original user assets (product photos, user images, packaging, logos). Numbers are exempt from the language rule.${assetsBlock}
 
 [4. CREATIVE DIRECTION]
 ${brandContext}
