@@ -51,7 +51,7 @@ export default function Terms() {
         <section className="space-y-3">
           <h2 className="text-xl font-bold">إخلاء المسؤولية</h2>
           <p className="leading-relaxed text-muted-foreground">
-            دقة فحص الإعلانات حوالي 90% بسبب التحديث المستمر لسياسات Meta وTikTok. ننصح بمراجعة الإعلانات يدوياً قبل النشر. لا نضمن قبول الإعلان بعد الفحص.
+            دقة الفحص تستند إلى سياسات Meta الإعلانية وتُحدَّث وفق تغيّراتها؛ النتيجة مساعدة ولا نضمن بها قبول الإعلان. ننصح بمراجعة الإعلانات يدوياً قبل النشر.
           </p>
         </section>
 

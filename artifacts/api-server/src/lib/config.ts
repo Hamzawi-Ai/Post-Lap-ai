@@ -38,6 +38,22 @@ export const DEFAULT_CONFIG: AppConfig = {
     currency: "د.ل",
     plans: [
       {
+        id: "free",
+        name: "مجاني (FREE)",
+        nameAr: "للأفراد والتجربة",
+        price: 0,
+        desc: "للأفراد والتجربة",
+        features: [
+          "فحص الإعلانات وتحليل المحتوى",
+          "عرض المخالفات والتوصيات",
+          "إصلاح الصور المرفوضة بالذكاء الاصطناعي",
+          "فحص الإعلانات مجاناً"
+        ],
+        badge: "",
+        cta: "ابدأ مجاناً",
+        highlight: false,
+      },
+      {
         id: "pro",
         name: "احترافي (PRO)",
         nameAr: "للشركات والمتاجر",
@@ -62,7 +78,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     jordan: "قريباً",
     saudi: "قريباً",
   },
-  accuracy_text: "النتيجة 90% صحيحة بسبب تحديث سياسات Meta & TikTok باستمرار",
+  accuracy_text: "الفحص يستند إلى سياسات Meta الإعلانية ويُحدَّث وفق تغيّراتها.",
 };
 
 export function getConfig(): AppConfig {
