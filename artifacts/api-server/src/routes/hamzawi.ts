@@ -424,6 +424,58 @@ async function buildHistoryForAI(
   return out;
 }
 
+/**
+ * Recover the most recent successfully generated design for this user/conversation
+ * from the FULL message history — NOT the window-limited recentMessages. The
+ * %%GENERATED_IMAGE%% marker is already persisted in assistant message content,
+ * so this needs no new DB field or migration. This is what keeps edit-continuity
+ * working when the prior design is older than the 10-message AI context window (C1).
+ */
+async function getRecentGeneratedDesigns(params: {
+  userId?: number | null;
+  conversationId?: number | null;
+  sessionId?: string;
+  limit?: number;
+}): Promise<Array<{ url: string; description: string }>> {
+  const { userId, conversationId, sessionId, limit = 5 } = params;
+  if (!userId && !sessionId) return [];
+
+  const where = userId
+    ? conversationId
+      ? and(
+          eq(hamzawiMessagesTable.user_id, userId),
+          eq(hamzawiMessagesTable.conversation_id, conversationId),
+        )
+      : eq(hamzawiMessagesTable.user_id, userId)
+    : eq(hamzawiMessagesTable.session_id, sessionId ?? "");
+
+  // Bounded scan (most-recent first); collect up to `limit` designs so the user
+  // can refer to a SPECIFIC prior design (e.g. "الثاني"/"السابق") — index 0 = latest.
+  const rows = await db
+    .select({ content: hamzawiMessagesTable.content })
+    .from(hamzawiMessagesTable)
+    .where(where)
+    .orderBy(desc(hamzawiMessagesTable.created_at))
+    .limit(50);
+
+  const designs: Array<{ url: string; description: string }> = [];
+  for (const row of rows) {
+    if (!row.content || designs.length >= limit) continue;
+    const m = row.content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
+    if (m) {
+      try {
+        const data = JSON.parse(m[1]) as { url?: string; description?: string };
+        if (typeof data.url === "string") {
+          designs.push({ url: data.url, description: data.description ?? "" });
+        }
+      } catch {
+        // Malformed marker — keep scanning older rows.
+      }
+    }
+  }
+  return designs;
+}
+
 // POST /api/hamzawi/chat
 // Supports isInit: true — proactive first message from Hamzawi, no user input needed.
 // Used to auto-start guided onboarding for level 4+ users on chat open.
@@ -527,6 +579,17 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     const ctx = await buildChatContext({ user, sessionId: sessionRawId, conversationId: resolvedConversationId });
     const { plan, level, memory, isOnboarding, recentMessages, brandAssets, assetContext } = ctx;
 
+    // C1/C4B: recover generated designs from full history (window-independent) so
+    // edit-continuity works even when the prior design is older than the 10-message window.
+    // recentDesigns is most-recent-first; lastDesign is the latest (default edit target).
+    const recentDesigns = await getRecentGeneratedDesigns({
+      userId: user?.id ?? null,
+      conversationId: conversationIdInput ?? null,
+      sessionId: sessionRawId,
+      limit: 5,
+    });
+    const lastDesign = recentDesigns[0] ?? null;
+
     // Resolve the user's uploaded image (if any) BEFORE the turn is built — it
     // unconditionally routes the turn to the vision model below.
     const attachedImage = await resolveAttachment(attachment);
@@ -567,6 +630,11 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // Otherwise feed the BETA-AWARE effective level into the prompt: beta users
     // Supervisor (owner) always gets full PRO capabilities in the system prompt.
     const promptPlan = isSupervisor ? "pro" : plan;
+    const lastDesignHint = lastDesign
+      ? `\n\n[تصميم مولّد سابق متاح${lastDesign.description ? `: ${lastDesign.description.slice(0, 120)}` : ""}. ` +
+        `يمكن الرجوع إلى أي تصميم سابق بذكر ترتيبه (مثل "الثاني" أو "السابق"). ` +
+        `إذا طلب المستخدم تعديله أو الاستمرار عليه حتى بعبارة قصيرة (مثل "نعم" أو "خليه أبسط" أو "غير الخلفية")، أصدر الماركر %%GENERATE_POST%% لتعديل التصميم السابق بدل إنشاء تصميم جديد.]`
+      : "";
     const systemPrompt =
       composeSystemPrompt(promptPlan, memory, isOnboarding, assetContext, ctx.userName, ctx.companyName) +
       (isSupervisor
@@ -574,7 +642,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
           (operationalBlock ? `\n\n${operationalBlock}` : "")
         : operationalQuestion
           ? `\n\n${OPERATIONAL_DECLINE_GUARD}`
-          : "");
+          : "") +
+      lastDesignHint;
 
     // Stored history with attached-image markers re-expanded as image parts
     // (generated-image markers are always stripped).
@@ -617,7 +686,10 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // ambiguous/compound requests). Routing-only: drives vision-model choice
     // and upsell messaging. Tool execution is NOT migrated yet.
     const prevAssistantContent = recentMessages.find((msg) => msg.role === "assistant")?.content;
-    const intentDecision = await classifyIntent(message ?? "", { prevAssistantContent });
+    const intentDecision = await classifyIntent(message ?? "", {
+      prevAssistantContent,
+      prevHadGeneratedDesign: !!lastDesign,
+    });
     const needsVision = !isInit && !!message && intentDecision.needsVision;
 
     // P1: Validator-backed upsell gate. PRO-only tools require level 2+.
@@ -841,28 +913,71 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
       // generated image and pass it to the image provider as a reference.
       // Gate on edit-signal words so fresh designs in an existing conversation
       // are NOT accidentally contaminated with a prior design as "product image".
-      const editSignalRe = /(عدّل|عدل|غيّر|غير|بدّل|بدل|حدّث|حدث|نقّح|عدّله|غيّره|بدّله|السابق|السابقة|القديم|القديمة|نفسه|ذاته|نفسها|edit|modify|update|adjust|revise|change|redo|rework|previous|prior)/i;
-      const isEditRequest = editSignalRe.test(message ?? "");
+      // C1/C4B edit-continuity: decide whether this turn edits a previous generated
+      // design. Designs are recovered from FULL history (recentDesigns), independent of
+      // the 10-message AI window, so edits still work when the prior design is old.
+      // Explicit novelty requests ("جديد"/"ثاني"/...) always start a NEW design instead.
+      const noveltyRe = /(جديد|جديدة|ثاني|ثانية|آخر|أخرى|بوست جديد|تصميم جديد|واحد (?:آخر|ثاني))/i;
+      const isNoveltyRequest = noveltyRe.test(message ?? "");
+      const confirmationRe = /^(نعم|تمام|اوك|أوك|أيوا|إيوا|صح|يلا|ممتاز|اها|ok|yes|yeah|yep)\b?/i;
+      const referenceRe = /(نفس|هذا|هذه|ذا|ذات|السابق|السابقة|القديم|القديمة|اللي|الذي|قبل)/i;
+      const modificationRe = /(عدّل|عدل|غيّر|غير|بدّل|بدل|خليه|خلّيه|ابسط|أبسط|كبّر|صغّر|نقّح|ظبّط|حسّن|حسن)/i;
+      const isShortFollowUp = (message ?? "").trim().length <= 25;
+
+      // Explicit reference to a SPECIFIC prior design (e.g. "الأول"/"الثاني"/"السابق").
+      // recentDesigns is most-recent-first, so index 0 = latest.
+      const ordinalMatch = (message ?? "").match(/(الأول|اول|الثاني|ثاني|الثالث|ثالث|الرابع|رابع|الخامس|خامس|السابق|السابقة|القديم|القديمة|الأخير|الأخيرة)/i);
+      let referencedIndex: number | null = null;
+      if (ordinalMatch) {
+        const w = ordinalMatch[1];
+        if (/(الأول|اول)/i.test(w)) referencedIndex = Math.max(0, recentDesigns.length - 1); // oldest available
+        else if (/(الثاني|ثاني)/i.test(w)) referencedIndex = 1;
+        else if (/(الثالث|ثالث)/i.test(w)) referencedIndex = 2;
+        else if (/(الرابع|رابع)/i.test(w)) referencedIndex = 3;
+        else if (/(الخامس|خامس)/i.test(w)) referencedIndex = 4;
+        else if (/(السابق|السابقة|القديم|القديمة)/i.test(w)) referencedIndex = 1; // the previous one
+        else if (/(الأخير|الأخيرة)/i.test(w)) referencedIndex = 0; // latest
+      }
+      // Prefer the specifically referenced design when it exists; otherwise fall back to
+      // the most recent design (preserves the C1 latest-design default).
+      const targetDesign =
+        referencedIndex !== null && recentDesigns[referencedIndex]
+          ? recentDesigns[referencedIndex]
+          : lastDesign;
+
+      // Tighten bare confirmations using the IMMEDIATELY-PRECEDING assistant turn:
+      // - prevDeliveredDesign: that turn actually delivered a design (in-window marker).
+      // - prevHadFailure: that turn was a failed generation attempt (⚠️ notice).
+      const prevDeliveredDesign = /%%GENERATED_IMAGE%%/.test(prevAssistantContent ?? "");
+      const prevHadFailure = /(⚠️|توليد الصورة غير متاح|حدث خطأ أثناء توليد الصورة)/.test(prevAssistantContent ?? "");
+
+      const isExplicitEdit = /(عدّل|عدل|غيّر|غير|بدّل|بدل|حدّث|حدث|نقّح|عدّله|غيّره|بدّله|السابق|السابقة|القديم|القديمة|نفسه|ذاته|نفسها|edit|modify|update|adjust|revise|change|redo|rework|previous|prior)/i.test(message ?? "");
+      const isBareConfirmation =
+        confirmationRe.test(message ?? "") && !modificationRe.test(message ?? "") && !referenceRe.test(message ?? "");
+      // Contextual edit continuation. A bare confirmation ("نعم") only counts as an edit
+      // when the immediately-preceding turn delivered a design (a real continuation),
+      // never merely because some old design exists somewhere in history.
+      const isContextualEdit =
+        !!lastDesign &&
+        !isNoveltyRequest &&
+        (modificationRe.test(message ?? "") ||
+          referenceRe.test(message ?? "") ||
+          (isBareConfirmation && prevDeliveredDesign));
+      const isEditRequest = (isExplicitEdit || isContextualEdit) && !isNoveltyRequest;
 
       let priorGeneratedImageBase64: string | undefined;
-      if (isEditRequest) {
-        for (const row of recentMessages) {
-          if (row.role !== "assistant" || !row.content) continue;
-          const genMatch = row.content.match(/%%GENERATED_IMAGE%%(\{[\s\S]*?\})%%END%%/);
-          if (genMatch) {
-            try {
-              const genData = JSON.parse(genMatch[1]) as { url?: string };
-              if (typeof genData.url === "string" && genData.url.startsWith("/uploads/")) {
-                const img = await uploadsUrlToBase64(genData.url);
-                if (img && approximateBase64Bytes(img.data) <= MAX_ATTACHMENT_BYTES) {
-                  priorGeneratedImageBase64 = `data:${img.mimeType};base64,${img.data}`;
-                }
-              }
-            } catch {
-              // Malformed marker — skip.
+      // Bind the prior design as the edit source only when this is a genuine edit AND we
+      // are not silently recovering an unrelated older design right after a FAILED attempt.
+      if (isEditRequest && targetDesign && !prevHadFailure) {
+        try {
+          if (typeof targetDesign.url === "string" && targetDesign.url.startsWith("/uploads/")) {
+            const img = await uploadsUrlToBase64(targetDesign.url);
+            if (img && approximateBase64Bytes(img.data) <= MAX_ATTACHMENT_BYTES) {
+              priorGeneratedImageBase64 = `data:${img.mimeType};base64,${img.data}`;
             }
-            break; // Only the most recent generated image (recentMessages is desc by created_at).
           }
+        } catch {
+          // Malformed/inaccessible design — fall back to a fresh generation.
         }
       }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Component, type ReactNode } from "react";
 import { X, Send, Loader2, Sparkles, Paperclip, ScanLine } from "lucide-react";
 import { brandProfileCompletion, type BrandProfileData } from "@/lib/onboarding";
 import { chatRendererRegistry, type ChatRendererContext } from "@/components/chat";
@@ -119,6 +119,59 @@ function planLevel(plan?: string): number {
   return levels[plan ?? "free"] ?? 1;
 }
 
+class ChatErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: unknown) {
+    console.error("HamzawiChat crashed:", error);
+  }
+  render() {
+    if (this.state.hasError) {
+      const rtl =
+        typeof document !== "undefined" &&
+        document.documentElement.getAttribute("dir") === "rtl";
+      return (
+        <div className="fixed bottom-20 right-4 z-40 bg-card border border-border rounded-2xl shadow-2xl p-4 text-sm text-foreground">
+          {rtl
+            ? "تعذر تحميل المحادثة. يرجى تحديث الصفحة."
+            : "Chat failed to load. Please refresh the page."}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function formatCheckResultForChat(report: {
+  status: string;
+  score: number;
+  violations?: Array<{ type: string; reason: string; severity: string }>;
+  suggestions?: string[];
+}): string {
+  const statusLabel: Record<string, string> = {
+    "ممتاز": "ممتاز",
+    "جيد": "جيد",
+    "مرفوض": "مرفوض",
+    "غير معروف": "غير معروف",
+    rejected: "مرفوض",
+    good: "جيد",
+  };
+  const label = statusLabel[report.status] ?? report.status;
+  let text = `نتيجة فحص الإعلان:\n• الحالة: ${label}\n• النقاط: ${report.score}/100`;
+  if (report.violations && report.violations.length > 0) {
+    text += "\n• المخالفات:\n" + report.violations.map((v) => `  - ${v.reason} (${v.severity})`).join("\n");
+  }
+  if (report.suggestions && report.suggestions.length > 0) {
+    text += "\n• التوصيات:\n" + report.suggestions.map((s) => `  - ${s}`).join("\n");
+  }
+  return text;
+}
+
 export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, betaAccess, onFileCheck, checking, heroVisible, forceOpen, embedded, conversationId, onConversationCreated }: HamzawiChatProps) {
   const [open, setOpen] = useState(!!embedded);
   const [messages, setMessages] = useState<ChatBlock[]>([]);
@@ -157,16 +210,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
   // betaAccess is retained as a prop for backward compat but does not affect level.
   void betaAccess; // intentionally unused — plan is the single source of truth
   const level = planLevel(userPlan);
-
-  /** Reads a File into a base64 data URL (used to attach ad-check images to chat). */
-  function fileToDataUrl(file: File): Promise<string | null> {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(file);
-    });
-  }
 
   useEffect(() => {
     setLang(detectLanguage());
@@ -471,21 +514,15 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
     const autoMsg = lang === "ar"
       ? `تحقق من نتيجة فحص الإعلان وأخبرني بتوصياتك`
       : `Check the ad review result and tell me your recommendations`;
-    // Attach the checked ad image to this follow-up turn so Hamzawi can see the
-    // actual ad (the check endpoint analyses it but does not persist it for chat).
-    const file = adCheckFileRef.current;
+    // H7: surface the structured result directly in the chat (it was never shown
+    // before) so the user sees status/score/violations/suggestions in-thread.
+    addHamzawi(formatCheckResultForChat(report));
+    // H7: do NOT re-attach the original ad image on the follow-up turn. The
+    // structured report already carries the analysis, and re-sending a large
+    // base64 payload is what made large ad-checks fail in chat. The model works
+    // from the report text instead.
     adCheckFileRef.current = null;
-    if (file && file.type.startsWith("image/")) {
-      fileToDataUrl(file).then((dataUrl) => {
-        if (dataUrl) {
-          sendMessage(autoMsg, report, { dataUrl });
-        } else {
-          sendMessage(autoMsg, report);
-        }
-      });
-    } else {
-      sendMessage(autoMsg, report);
-    }
+    sendMessage(autoMsg, report);
   }, [checkResult]);
 
   useEffect(() => {
@@ -762,6 +799,7 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
   };
 
   return (
+    <ChatErrorBoundary>
     <div className={`${embedded ? "w-full h-full" : `fixed bottom-20 ${isRTL ? "left-4" : "right-4"} z-40 flex flex-col items-end gap-2`}`} dir={dirAttr}>
       {(open || embedded) && (
         <div className={`bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden ${embedded ? "w-full h-full" : "w-80 sm:w-96"}`} style={{ height: embedded ? "100%" : "520px" }}>
@@ -945,5 +983,6 @@ export default function HamzawiChat({ gender, checkResult, whatsapp, userPlan, b
       </button>
       )}
     </div>
+    </ChatErrorBoundary>
   );
 }

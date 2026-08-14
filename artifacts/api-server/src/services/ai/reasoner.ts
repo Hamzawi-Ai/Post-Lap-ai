@@ -213,26 +213,37 @@ ${toolsSummary}
  * "عدّل" / "حسّنه" after a generated image is treated as an image edit, while
  * "عدّل الكابشن" is treated as a text edit. Returns null when there is no signal.
  */
-function contextualEditIntent(m: string, prev: string): HamzawiIntent | null {
+function contextualEditIntent(m: string, prev: string, prevHadGeneratedDesign = false): HamzawiIntent | null {
   const prevHasDesign = /%%GENERATED_IMAGE%%|%%GENERATE_POST%%/.test(prev);
-  if (!prevHasDesign) return null;
+  const hasAnyDesign = prevHasDesign || prevHadGeneratedDesign;
+  if (!hasAnyDesign) return null;
 
   // Text edit cue (caption is the customer-facing wording).
   if (/(كابشن|caption)/i.test(m)) return "generate_text";
 
   // Image edit cue: bare/pronominal edit verb, or a reference to the design/image.
+  // Uses hasAnyDesign so edits of an out-of-window prior design still resolve (C1).
   if (
     /(عدّل|عدل|غيّر|غير|بدّل|بدل|حسّن|حسن|خليه|خلّيه|ابسط|أبسط|كبّر|صغّر|نقّح|ظبّط|ظبط|عدّله|عدّلها|عدله|عدلها|غيّره|غيّرها|غيره|غيرها|بدّله|بدّلها|بدله|بدلها)/i.test(m) ||
     /(التصميم|الصورة|المنشور|البوست|الستوري|الخلفية|الستايل|اللون)/i.test(m)
   ) {
     return "generate_image";
   }
+
+  // Bare confirmation ("نعم"/"تمام"/...) is an image edit ONLY when the immediately
+  // preceding turn actually delivered a design (in-window marker) — never merely
+  // because some older design exists in history (Phase 4B / P0-2).
+  const isBareConfirmation = /^(نعم|تمام|اوك|أوك|أيوا|إيوا|صح|يلا|ممتاز|اها|ok|yes|yeah|yep)\b?/i.test(m);
+  if (isBareConfirmation && prevHasDesign) return "generate_image";
+
   return null;
 }
 
 export interface ClassifyOptions {
   /** Content of the previous assistant message, used for context-aware edit intent. */
   prevAssistantContent?: string;
+  /** True when a prior generated design is recoverable from full history (C1), even if outside the AI window. */
+  prevHadGeneratedDesign?: boolean;
 }
 
 /**
@@ -257,7 +268,7 @@ export async function classifyIntent(
 
   const matched = ruleIntent(m);
   if (matched.length === 0) {
-    const ctx = contextualEditIntent(m, opts.prevAssistantContent ?? "");
+    const ctx = contextualEditIntent(m, opts.prevAssistantContent ?? "", opts.prevHadGeneratedDesign ?? false);
     if (ctx) {
       return { intent: ctx, source: "rule", needsVision };
     }
