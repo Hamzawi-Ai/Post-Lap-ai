@@ -1,6 +1,7 @@
 import { db, usersTable, userBrandMemoryTable, mediaAssetsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getImageProvider } from "./provider";
+import { selectReferenceImages, type ReferenceImage } from "./referenceImages";
 import { collectBrandAssets } from "../media/assetReader";
 import { buildGeminiBrandContext } from "../brand/brain";
 import { MediaService } from "../media/MediaService";
@@ -129,7 +130,7 @@ export async function generateBrandedPost(params: {
     .filter(([cat]) => assetLabels.includes(cat))
     .map(([, label]) => label);
   const assetsBlock = brandAssets.images.length > 0
-    ? `\n\n[3. ORIGINAL ASSETS — attached in order: ${attachedCategories.join(", ")} or "mixed". Use the original attached assets (logo, product images, design samples) directly in the design — never rely on textual descriptions of them alone.]`
+    ? `\n\n[3. ORIGINAL ASSETS — attached in order: ${attachedCategories.join(", ")} or "mixed". The supplied logo is an original brand asset, not a visual reference to recreate — use the supplied logo itself. Use the original attached assets (logo, product images, design samples) directly in the design — never rely on textual descriptions of them alone. Preserve the logo's original proportions, lettering, colors, shapes, and details; proportional resizing for placement is allowed. Never stretch, distort, redraw, recreate, recolor, or modify the logo.]`
     : "";
 
   // Layered generation prompt: FACTS → TEXT → ASSETS → DIRECTION → LAYOUT →
@@ -138,7 +139,7 @@ export async function generateBrandedPost(params: {
 
 [1. BRAND FACTS]${hardFactsBlock || "\nNo brand identity saved — use professional defaults with a clean modern style."}
 
-[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested. When creating NEW visible text for the design, never write it in English unless the brief explicitly requests English. This applies only to newly generated text. Do not translate, modify, or remove existing text inside original user assets (product photos, user images, packaging, logos). Numbers are exempt from the language rule.${assetsBlock}
+[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested, and preserve exactly any price, currency, product name, offer, date, or expiry the user provides in the brief — never invent, alter, round, or substitute such facts. When creating NEW visible text for the design, never write it in English unless the brief explicitly requests English. This applies only to newly generated text. Do not translate, modify, or remove existing text inside original user assets (product photos, user images, packaging, logos). Numbers are exempt from the language rule.${assetsBlock}
 
 [4. CREATIVE DIRECTION]
 ${brandContext}
@@ -149,42 +150,51 @@ Brief: ${description}
 
 [6. OUTPUT FORMAT] Social media post (1080x1350 unless another size is specified in the brief). High quality, scroll-stopping visual. Text overlays must not exceed 20% of the image.
 
-[7. HARD CONSTRAINTS] Never alter any of the BRAND HARD FACTS above. No misleading claims and no before/after comparisons. Only the requested text appears on the design.`;
+[7. HARD CONSTRAINTS] Never alter any of the BRAND HARD FACTS above. No misleading claims and no before/after comparisons. Only the requested text appears on the design. Never stretch, distort, redraw, recreate, recolor, or modify the supplied logo — preserve its original proportions, lettering, colors, shapes, and details (proportional resizing for placement is allowed).`;
   if (regenerateNote) prompt += `\n\nAdditional note: ${regenerateNote}`;
 
-  // Build the ordered reference-image list:
-  //   1. editSourceImageBase64 FIRST (when present) — the OpenAI provider uses
-  //      referenceImages[0] as the images.edit() primary input, so the prior
-  //      generated design must be first for edit requests.
-  //   2. Brand assets (logo, product images, design samples).
-  //   3. productImageBase64 last (extra product context, if any).
-  // Gemini uses all images up to its 6-image cap, so order matters there too.
-  const referenceImages: Array<{ mimeType: string; data: string }> = [];
+  // Build the ordered reference-image list. The OpenAI provider now sends ALL
+  // reference images to images.edit (up to its cap), and Gemini sends all up to
+  // its 6-image cap, so order matters: edit source first, then the logo, then
+  // the product image, then remaining brand assets. Critical brand visuals
+  // (edit source, logo, product) are protected from the cap by stable flags in
+  // selectReferenceImages so they are never dropped or reduced to text.
+  const referenceImages: ReferenceImage[] = [];
 
+  let editSourceInput: ReferenceImage | null = null;
   if (editSourceImageBase64) {
     const editMatch = editSourceImageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
     const mimeType = editMatch?.[1] ?? "image/png";
     const data = editMatch?.[2] ?? editSourceImageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
-    // Prepend the source design so it is referenceImages[0] for all providers.
-    referenceImages.push({ mimeType, data });
+    editSourceInput = { mimeType, data };
     prompt += `\n\n[EDIT SOURCE] The attached image is the previously generated design. Modify it according to the brief above, preserving the brand identity and overall composition while applying the requested changes.`;
   }
 
-  // Brand assets follow the edit source (or lead when no edit source present).
-  referenceImages.push(...brandAssets.images);
+  // Locate the logo by category (stable identity) so it is always treated as a
+  // real visual reference, not described from text. brandAssets.images is
+  // logo-first, but we resolve it explicitly to avoid positional assumptions.
+  const logoIndex = brandAssets.assetItems.findIndex((a) => a.category === "logo");
+  const logoInput: ReferenceImage | null =
+    logoIndex >= 0 ? (brandAssets.images[logoIndex] ?? null) : null;
+  const otherBrandImages = brandAssets.images.filter((_, i) => i !== logoIndex);
 
+  let productInput: ReferenceImage | null = null;
   if (productImageBase64) {
     const productMatch = productImageBase64.match(/^data:(image\/[a-z]+);base64,(.+)$/);
     const mimeType = productMatch?.[1] ?? "image/jpeg";
     const data = productMatch?.[2] ?? productImageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+    productInput = { mimeType, data };
     prompt += `\n\nA product image is also provided — feature it prominently in the advertisement.`;
-    referenceImages.push({ mimeType, data });
   }
 
-  // Respect Gemini's 6-image cap at the boundary closest to the provider call.
-  // OpenAI already ignores referenceImages[1+] in its images.edit path — the
-  // cap is enforced there by the provider itself.
-  referenceImages.splice(6);
+  const selected = selectReferenceImages({
+    editSource: editSourceInput,
+    logo: logoInput,
+    product: productInput,
+    otherBrandImages,
+    cap: 6,
+  });
+  referenceImages.push(...selected);
 
   const provider = getImageProvider();
   const generated = await provider.generate({ prompt, referenceImages });

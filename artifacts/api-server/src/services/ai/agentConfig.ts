@@ -19,7 +19,7 @@ import { desc } from "drizzle-orm";
 // ── Typed config interface ────────────────────────────────────────────────────
 
 export interface AgentConfig {
-  /** Display name of the agent (currently hardcoded as "حمزاوي"). */
+  /** Display name of the agent (default: "PostLab AI"). */
   agent_name: string;
   /** One-line role description injected at the top of the system prompt. */
   agent_role_description: string;

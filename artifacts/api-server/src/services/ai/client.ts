@@ -56,7 +56,7 @@ function devStubOpenAI(): OpenAI {
                 "استخدم ألواناً أوضح للنص لزيادة التباين.",
               ],
             });
-          } else if (prompt.includes("نادر") || prompt.includes("PostLab AI") || prompt.includes("أنت حمزاوي")) {
+          } else if (prompt.includes("نادر") || prompt.includes("PostLab AI")) {
             content = "أهلاً بك! أنا نادر، موظف خدمة المحادثة في منصة PostLab. اطلب مني تحليل إعلانك أو اكتب سؤالك وسأجيبك مباشرة.";
           } else if (prompt.includes("اكتب نص إعلاني") || prompt.includes("بناءً على صورة المنتج")) {
             content = "إعلانك جاهز ✨\n\nمنتجك يستحق أن يراه الجميع — جودة مميزة، خدمة موثوقة، وسعر مناسب. اطلب اليوم وتوصيل سريع لجميع المدن. 📦🔥";

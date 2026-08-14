@@ -114,19 +114,24 @@ class OpenAIImageProvider implements ImageProvider {
     const openai = getOpenAI();
 
     // When reference images are provided (ad repair, branded post with logo/product),
-    // use images.edit() so the model can incorporate the visual reference.
-    // Only the first reference image is sent as the primary input; subsequent
-    // references are synthesised from the prompt description.
+    // use images.edit() so the model can incorporate the visual references. GPT Image
+    // models (gpt-image-1 / gpt-image-1-mini) accept up to 16 reference images as an
+    // array; each is sent as a real visual input (logo, product, samples, edit source)
+    // rather than being described from text — this is what protects logo integrity and
+    // on-asset text. The first image remains the primary edit subject.
     if (referenceImages.length > 0) {
-      const primary = referenceImages[0];
-      const imageFile = await toFile(
-        Buffer.from(primary.data, "base64"),
-        "reference.png",
-        { type: primary.mimeType },
+      const imageFiles = await Promise.all(
+        referenceImages.slice(0, 16).map((img, i) =>
+          toFile(
+            Buffer.from(img.data, "base64"),
+            `reference-${i}.png`,
+            { type: img.mimeType },
+          ),
+        ),
       );
       const editResult = await (openai.images.edit({
         model,
-        image: imageFile,
+        image: imageFiles,
         prompt,
         n: 1,
         size: "1024x1024",

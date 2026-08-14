@@ -36,7 +36,7 @@ there; the DB table mirrors this shape.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `agent_name` | `string` | `"حمزاوي"` | Display name of the agent |
+| `agent_name` | `string` | `"PostLab AI"` | Display name of the agent |
 | `agent_role_description` | `string` | (see default) | One-line role injected at top of system prompt |
 | `system_prompt_prefix` | `string` | `""` | Freeform text prepended to the generated system prompt |
 | `personality_notes` | `string` | `""` | Extra tone/personality instructions |
@@ -91,7 +91,7 @@ Current list:
 | `VISION_MODEL = "gpt-4o"` | `vision_model` (future) |
 | `TEXT_MODEL = "gpt-4o-mini"` | `text_model` (future) |
 | `buildSystemPrompt()` body | `system_prompt_prefix`, `agent_name`, `agent_role_description`, `personality_notes`, `behavior_rules`, `safety_rules` |
-| `getFunnelInstruction()` | `behavior_rules` (funnel copy override) |
+| `getFunnelInstruction()` | removed in Phase 2 — funnel copy is no longer injected into the prompt |
 | `getOnboardingInstruction()` | `behavior_rules` (onboarding steps override) |
 | `getPermissionsInstruction()` | `behavior_rules` (permissions block override) |
 

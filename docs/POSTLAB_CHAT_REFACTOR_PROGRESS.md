@@ -174,10 +174,50 @@ Re-order conversation priority so the current user request wins over prior modes
 - Policy Intelligence architecture.
 - Design-generation architecture (provider choice, aspect ratio, token budget).
 - Permissions architecture (incl. `permissionsInstruction` gated on `brand_onboarded` while `isBrandProfileComplete` keys off core data).
-- Plan/knowledge cleanup الشامل — **note**: `config.ts` PRO feature copy still contains `"ذاكرة دائمة — حمزاوي يتذكر نشاطك"`; it is **not** rendered into the customer prompt (the pricing line uses only name/price/currency), so Nader stays the sole customer identity — but the leftover `حمزاوي` copy and the `hamzawi_notes` DB field name remain deferred cleanup.
-- Memory architecture; AdminLayout nav label `حمزاوي`.
+- Plan/knowledge cleanup الشامل — `config.ts`/`config.json` PRO feature copy (`"ذاكرة دائمة — حمزاوي يتذكر نشاطك"`) **resolved in Phase 3B** (now `PostLab يتذكر نشاطك`). Remaining deferred cleanup: the `hamzawi_notes` DB field name (technical identifier, not customer-facing).
+- Memory architecture; AdminLayout nav label `حمزاوي` — **intentionally kept** (admin/supervisor-only UI, not customer-facing; per the Hamzawi-leakage boundary).
 - Wiring `agentConfig` prompt fields (agent_name / role description / prefixes) — defined but not consumed.
 
-## 9. Note
+## 9. Phase 3 — Safe Creative Execution (Tracks 1+2) & Phase 3B (Hard Facts, Prompt Hygiene, Legacy Cleanup)
+
+> Status: **Implemented and verified (static). All changes uncommitted; awaiting user approval to commit. No tests/Vitest (infra removed at user request).**
+
+### 9.1 Phase 3A — Tracks 1+2: Logo Integrity & On-Asset Text Protection
+
+Goal: prevent brand-logo visual drift and on-asset text hallucination/alteration during AI image generation.
+
+| File | Change |
+|---|---|
+| `services/image-gen/provider.ts` | OpenAI `images.edit` now sends **all** reference images as an array (`imageFiles = referenceImages.slice(0,16).map(...)`); removed the old "only first reference" comment and the single-`image` path. |
+| `services/image-gen/brandedPost.ts` | Reference list rebuilt via `selectReferenceImages` (logo selected by stable category index; editSource + logo + product protected from the cap). `[3. ORIGINAL ASSETS]` rewritten in place with the logo no-redraw rule: treat the logo as an **original brand asset** — proportional resizing allowed, never stretch/distort/redraw/recreate/recolor/modify. `[7. HARD CONSTRAINTS]` gained an explicit logo-preservation line. |
+| `services/image-gen/referenceImages.ts` | **NEW** pure `selectReferenceImages` with a `critical` flag; avoids `Array.includes` object-identity pitfalls. |
+
+### 9.2 Phase 3B — Hard Facts, Prompt Hygiene & Legacy/Plan Cleanup
+
+Goal: (a) protect **Hard Facts** the user states (prices, offers, expiry, product names, claims) from invention/alteration; (b) finish prompt-source hygiene at the **root causes**; (c) remove legacy Phase 2/3 plan strings; (d) remove `حمزاوي` from all **customer-facing** config/text.
+
+| File | Change |
+|---|---|
+| `config.json` (live runtime config) | Line 32 PRO feature copy `"ذاكرة دائمة — حمزاوي يتذكر نشاطك"` → `"ذاكرة دائمة — PostLab يتذكر نشاطك"`. This is the string the pricing UI actually renders (config.json is loaded at request time and overrides `DEFAULT_CONFIG`). |
+| `lib/config.ts` | `DEFAULT_CONFIG` PRO feature copy fixed to match (fallback only; config.json wins at runtime). |
+| `services/ai/client.ts` | Removed `|| prompt.includes("أنت حمزاوي")` from the dev-stub identity condition (old test shim). |
+| `services/ai/agentConfig.ts` | Comment `currently hardcoded as "حمزاوي"` → `default: "PostLab AI"`. |
+| `services/ai/PROMPT_STUDIO.md` | Line 39 `agent_name` default `"حمزاوي"` → `"PostLab AI"`; line 94 `getFunnelInstruction()` row → `removed in Phase 2 — funnel copy is no longer injected into the prompt`. |
+| `services/ai/postlab/brain.ts` | `HARD FACTS` step (126) **rewritten in place**: hard facts = saved brand data **OR** user-stated prices/offers/expiry/product-names/claims; never alter/substitute/invent. |
+| `services/image-gen/brandedPost.ts` | `[2. EXACT VISIBLE TEXT]` (141) **rewritten in place**: preserve **exactly** any price/currency/product name/offer/date/expiry the user provides in the brief; never invent/alter/round/substitute such facts; new text stays in the user's language. |
+
+### 9.3 Verification
+
+- `أنت حمزاوي` → **NONE** anywhere in the repo.
+- `حمزاوي` (Arabic) remains **only** in: `AdminLayout.tsx:20` (admin/supervisor nav label — intentionally kept; not customer-facing) and the compiled `dist` bundle (same admin label; generated artifact, not source, will be rebuilt).
+- No duplicate/stacked instructions: old text rewritten **in place**, not appended over.
+- `pnpm typecheck` (api-server): **no new errors** in changed files; only pre-existing `Plan`-type errors in untouched `auth.ts`/`owner.ts`/`brand/brain.ts`.
+- Phase 1/2/3A integrity confirmed: `postlabPersona.ts`, `rules.ts`, `knowledge.ts`, Phase 2 onboarding, and the Phase 3A logo blocks (`[3. ORIGINAL ASSETS]`/`[7. HARD CONSTRAINTS]`) are **untouched**; `provider.ts` retains only its Phase 3A change.
+
+### 9.4 Test-infra note
+
+Phase 3A added Vitest tests + script, then they were **removed at user request** (no test dependency/infra). Verification was static (typecheck + grep + bundle/diff inspection). `pnpm-lock.yaml` residual `vitest` entries are pre-existing (from `postlap-ai/package.json`), not added by this work.
+
+## 10. Note
 
 This file is the canonical progress tracker. Update it at the end of each phase before starting the next.
