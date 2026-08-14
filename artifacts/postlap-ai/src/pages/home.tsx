@@ -16,7 +16,7 @@ const USER_KEY = "postlap_user";
 const GENDER_KEY = "postlap_gender";
 const COOKIE_KEY = "postlap_cookie_consent";
 
-type CheckStatus = "ممتاز" | "جيد" | "مرفوض";
+type CheckStatus = "ممتاز" | "جيد" | "مرفوض" | "غير معروف";
 
 interface LocalUser {
   id: number;
@@ -453,7 +453,7 @@ export default function Home() {
       nameAr: "للأفراد والتجربة",
       price: 0,
       desc: "للأفراد والتجربة",
-      features: ["فحص الإعلانات وتحليل المحتوى", "عرض المخالفات والتوصيات", "إصلاح الصور المرفوضة بالذكاء الاصطناعي", "6 فحوصات يومية مجانية"],
+      features: ["فحص الإعلانات وتحليل المحتوى", "عرض المخالفات والتوصيات", "إصلاح الصور المرفوضة بالذكاء الاصطناعي",           "فحص الإعلانات مجاناً"],
       badge: "",
       cta: "ابدأ مجاناً",
       highlight: false,

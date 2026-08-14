@@ -835,7 +835,7 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     let storedContent = reply;
     let generatedImageUrl: string | undefined;
     let generatedDescription: string | undefined;
-    if (user && generateDescription && level >= 2 && intentDecision.intent === "generate_image") {
+    if (user && generateDescription && intentDecision.intent === "generate_image" && (level >= 2 || !!attachedImage)) {
       // Bug 4 fix (generation side): when the user is explicitly requesting an
       // edit of a previous design (not a fresh creation), find the most recent
       // generated image and pass it to the image provider as a reference.

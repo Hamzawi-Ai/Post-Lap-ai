@@ -113,7 +113,7 @@ async function cleanupDir(dir: string) {
 }
 
 interface CheckResult {
-  status: "ممتاز" | "جيد" | "مرفوض";
+  status: "ممتاز" | "جيد" | "مرفوض" | "غير معروف";
   score: number;
   violations: Array<{ type: string; reason: string; severity: string }>;
   suggestions: string[];
@@ -193,7 +193,7 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
       framesChecked = frames.length;
 
       if (frames.length === 0) {
-        finalResult = { status: "جيد", score: 50, violations: [], suggestions: [] };
+        finalResult = { status: "غير معروف", score: 0, violations: [], suggestions: ["جرّب رفع صورة للإعلان بدل الفيديو"] };
       } else {
         finalResult = { status: "ممتاز", score: 100, violations: [], suggestions: [] };
 
@@ -250,11 +250,12 @@ router.post("/check", checkRateLimit, upload.single("file"), async (req, res): P
       finalResult = result;
     }
 
-    const messageMap: Record<string, string> = {
-      "ممتاز": "ممتاز انطلق",
-      "جيد": "جيد لكن وصوله ضعيف",
-      "مرفوض": `سوف يتم رفضه${finalResult.violations[0] ? ` بسبب: ${finalResult.violations[0].reason}` : ""}`,
-    };
+  const messageMap: Record<string, string> = {
+    "ممتاز": "ممتاز انطلق",
+    "جيد": "جيد لكن وصوله ضعيف",
+    "مرفوض": `سوف يتم رفضه${finalResult.violations[0] ? ` بسبب: ${finalResult.violations[0].reason}` : ""}`,
+    "غير معروف": "تعذّر تحليل الفيديو بشكل موثوق؛ لا يمكن تأكيد توافقه مع السياسات. جرّب رفع صورة للإعلان للحصول على تحليل أدق.",
+  };
 
     const reason = finalResult.violations.map((v) => v.reason).join(". ") || "";
 

@@ -25,6 +25,8 @@ export interface BrandAssets {
   assetItems: AssetItem[];
   /** Counts per category across all assets (not just capped images). */
   categoryCounts: Record<string, number>;
+  /** Resolved images paired with their source category (parallel to `images`, same order). */
+  labeledImages: Array<{ mimeType: string; data: string; category: string }>;
 }
 
 function mimeFromExt(ext: string): string {
@@ -148,9 +150,13 @@ export async function collectBrandAssets(params: {
   });
 
   const images: ImageData[] = [];
+  const labeledImages: Array<{ mimeType: string; data: string; category: string }> = [];
   for (const item of uniqueItems.slice(0, cap)) {
     const img = await toImageData(item.url);
-    if (img) images.push(img);
+    if (img) {
+      images.push(img);
+      labeledImages.push({ mimeType: img.mimeType, data: img.data, category: item.category });
+    }
   }
 
   // Build category counts from the full (uncapped) unique list.
@@ -170,5 +176,5 @@ export async function collectBrandAssets(params: {
     ? parts.join("، ") + (images.length < uniqueItems.length ? " (+ المزيد في مكتبة الوسائط)" : "")
     : "";
 
-  return { images, summary, assetItems: uniqueItems, categoryCounts };
+  return { images, summary, assetItems: uniqueItems, categoryCounts, labeledImages };
 }

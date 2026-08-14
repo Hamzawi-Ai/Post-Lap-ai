@@ -15,6 +15,7 @@ import { DEV_STUB_IMAGE } from "./devStub";
 export interface GenerateImageParams {
   prompt: string;
   referenceImages?: Array<{ mimeType: string; data: string }>;
+  size?: string;
 }
 
 export interface GeneratedImage {
@@ -105,7 +106,7 @@ class OpenAIImageProvider implements ImageProvider {
     return hasKey || !isProd;
   }
 
-  async generate({ prompt, referenceImages = [] }: GenerateImageParams): Promise<GeneratedImage | null> {
+  async generate({ prompt, referenceImages = [], size }: GenerateImageParams): Promise<GeneratedImage | null> {
     if (process.env.NODE_ENV !== "production" && !process.env.OPENAI_API_KEY) {
       return { mimeType: DEV_STUB_IMAGE.mimeType, data: DEV_STUB_IMAGE.data };
     }
@@ -121,20 +122,21 @@ class OpenAIImageProvider implements ImageProvider {
     // on-asset text. The first image remains the primary edit subject.
     if (referenceImages.length > 0) {
       const imageFiles = await Promise.all(
-        referenceImages.slice(0, 16).map((img, i) =>
-          toFile(
+        referenceImages.slice(0, 16).map((img, i) => {
+          const ext = (img.mimeType.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "");
+          return toFile(
             Buffer.from(img.data, "base64"),
-            `reference-${i}.png`,
+            `reference-${i}.${ext}`,
             { type: img.mimeType },
-          ),
-        ),
+          );
+        }),
       );
       const editResult = await (openai.images.edit({
         model,
         image: imageFiles,
         prompt,
         n: 1,
-        size: "1024x1024",
+        size: size ?? "1024x1024",
       } as Parameters<typeof openai.images.edit>[0]) as Promise<{ data?: Array<{ b64_json?: string | null }> }>);
 
       const editB64 = editResult.data?.[0]?.b64_json;
@@ -147,7 +149,7 @@ class OpenAIImageProvider implements ImageProvider {
       model,
       prompt,
       n: 1,
-      size: "1024x1024",
+      size: size ?? "1024x1024",
       quality: "medium",
       output_format: "png",
     } as Parameters<typeof openai.images.generate>[0]) as Promise<{ data?: Array<{ b64_json?: string | null }> }>);

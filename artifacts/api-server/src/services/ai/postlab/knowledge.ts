@@ -51,7 +51,7 @@ export const PRODUCT_KNOWLEDGE: {
       status: "A",
       implementedIn: "POST /api/check (routes/ads.ts)",
       description:
-        "فحص إعلان (صورة/فيديو) للتحقق من توافقه مع سياسات Meta وTikTok وإرجاع تقرير منظم بالمخالفات والاقتراحات.",
+        "فحص إعلان (صورة/فيديو) للتحقق من توافقه مع سياسات Meta وإرجاع تقرير منظم بالمخالفات والاقتراحات.",
       runtimeNotes: "التحليل الحقيقي يتطلب OPENAI_API_KEY.",
     },
     {

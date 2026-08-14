@@ -139,7 +139,7 @@ export async function generateBrandedPost(params: {
 
 [1. BRAND FACTS]${hardFactsBlock || "\nNo brand identity saved — use professional defaults with a clean modern style."}
 
-[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested, and preserve exactly any price, currency, product name, offer, date, or expiry the user provides in the brief — never invent, alter, round, or substitute such facts. When creating NEW visible text for the design, never write it in English unless the brief explicitly requests English. This applies only to newly generated text. Do not translate, modify, or remove existing text inside original user assets (product photos, user images, packaging, logos). Numbers are exempt from the language rule.${assetsBlock}
+[2. EXACT VISIBLE TEXT] Only the text explicitly requested in the brief below may appear on the design. Do not add extra captions, contact details, prices, or claims that were not requested, and preserve exactly any price, currency, product name, offer, date, expiry, or claim the user provides in the brief — never invent, alter, round, or substitute such facts. When creating NEW visible text for the design, never write it in English unless the brief explicitly requests English. This applies only to newly generated text. Do not translate, modify, or remove existing text inside original user assets (product photos, user images, packaging, logos). Numbers are exempt from the language rule.${assetsBlock}
 
 [4. CREATIVE DIRECTION]
 ${brandContext}
@@ -148,7 +148,7 @@ Brief: ${description}
 
 [5. LAYOUT] Organise the design in clear layers: background, then text, then logo, then extra elements, then final touches.
 
-[6. OUTPUT FORMAT] Social media post (1080x1350 unless another size is specified in the brief). High quality, scroll-stopping visual. Text overlays must not exceed 20% of the image.
+[6. OUTPUT FORMAT] Social media post (1024x1536 unless another size is specified in the brief). High quality, scroll-stopping visual. Text overlays must not exceed 20% of the image.
 
 [7. HARD CONSTRAINTS] Never alter any of the BRAND HARD FACTS above. No misleading claims and no before/after comparisons. Only the requested text appears on the design. Never stretch, distort, redraw, recreate, recolor, or modify the supplied logo — preserve its original proportions, lettering, colors, shapes, and details (proportional resizing for placement is allowed).`;
   if (regenerateNote) prompt += `\n\nAdditional note: ${regenerateNote}`;
@@ -173,10 +173,14 @@ Brief: ${description}
   // Locate the logo by category (stable identity) so it is always treated as a
   // real visual reference, not described from text. brandAssets.images is
   // logo-first, but we resolve it explicitly to avoid positional assumptions.
-  const logoIndex = brandAssets.assetItems.findIndex((a) => a.category === "logo");
-  const logoInput: ReferenceImage | null =
-    logoIndex >= 0 ? (brandAssets.images[logoIndex] ?? null) : null;
-  const otherBrandImages = brandAssets.images.filter((_, i) => i !== logoIndex);
+  const labeled = brandAssets.labeledImages ?? [];
+  const logoEntry = labeled.find((a) => a.category === "logo");
+  const logoInput: ReferenceImage | null = logoEntry
+    ? { mimeType: logoEntry.mimeType, data: logoEntry.data }
+    : null;
+  const otherBrandImages = labeled
+    .filter((a) => a.category !== "logo")
+    .map((a) => ({ mimeType: a.mimeType, data: a.data }));
 
   let productInput: ReferenceImage | null = null;
   if (productImageBase64) {
@@ -197,7 +201,7 @@ Brief: ${description}
   referenceImages.push(...selected);
 
   const provider = getImageProvider();
-  const generated = await provider.generate({ prompt, referenceImages });
+  const generated = await provider.generate({ prompt, referenceImages, size: "1024x1536" });
   if (!generated) {
     await OperationalEvents.record({
       eventType: "image_generation_failure",
