@@ -128,17 +128,56 @@ Re-ran the verifiable suite after the previous session stopped before finishing:
 
 Route handler `hamzawi.ts` (routing/Supervisor/marker pipeline) confirmed **unchanged** — no Phase 1 diff touches it.
 
-## 7. Deferred — Phase 2 (candidates, NOT started)
+## 7. Phase 2 — Conversation Priority & Flow (implemented)
 
-- Intent routing (reasoner gating, retry-on-missing-marker logic).
-- Funnel / upsell frequency and placement.
-- Onboarding flow (marker reliability, relaunch-alt loop on incomplete profiles).
+> Status: **Implemented and verified.** Nader remains the only customer-facing identity; Hamzawi remains bound to owner/admin/supervisor technical paths.
+
+### 7.1 Goal
+Re-order conversation priority so the current user request wins over prior modes (onboarding / funnel / persistent design mode). Upsell becomes contextual only (triggered by an actual plan limitation). Onboarding can be served around and cleanly ended. Design-edit intent after a prior design is correctly classified.
+
+### 7.2 Files changed
+| File | Change |
+|---|---|
+| `services/ai/postlab/brain.ts` | **Removed** `getFunnelInstruction` (function + both call sites + doc comment). **Rewrote** `getOnboardingInstruction` as the single authoritative onboarding block: added (a) priority clause — serve a clear other request first, no onboarding question in the same reply; (b) explicit-end clause emitting `%%ONBOARDING_COMPLETE%%` on clear skip/end intent, with the `خلاص صمملي البوست` counterexample so a generic word does not end onboarding. |
+| `services/ai/postlab/rules.ts` | Added `conversation_priority` rule (the single priority ordering). Rewrote `upsell_once` as the **only** upsell rule: contextual, once, only when the user requests an out-of-plan feature — replacing the old automatic per-turn funnel behavior. |
+| `services/ai/postlab/knowledge.ts` | Fixed stale plan statements: `creative_text` runtimeNotes `3+` → `2` (PRO); `creative_image` runtimeNotes now state PRO plan requirement. No capability is promised that code does not grant. |
+| `services/ai/reasoner.ts` | Context-aware `classifyIntent(message, { prevAssistantContent })`: (a) extended dialect imperative suffix (`صمملي`) and design-noun list (`الخلفية`, `الستايل`, `اللون`, …); (b) added context-aware edit resolution — a bare/pronominal edit after a prior generated design → `generate_image`, while `كابشن`/`caption` → `generate_text`; (c) extended `GENERATE_TEXT_PATTERNS` so caption/text requests classify as text. |
+| `routes/hamzawi.ts` | Passes the previous assistant message content (`recentMessages` last `assistant`) into `classifyIntent` as `prevAssistantContent`. Supervisor/admin path untouched. |
+| `docs/POSTLAB_CHAT_REFACTOR_PROGRESS.md` | This section. |
+
+### 7.3 Obsolete prompt logic removed (verified, not merely disabled)
+- `getFunnelInstruction` function deleted entirely — no dead/disabled funnel code remains.
+- Old automatic upsell ("بعد الإجابة على أي طلب مكتمل") removed; only the unified `upsell_once` rule remains.
+- Onboarding rewrite replaces the old block in place (no duplicate/stacked instruction).
+
+### 7.4 New behavior (per scenario A–I)
+- **A** (onboarding + "صمملي بوست"): priority clause → Nader executes the design, no onboarding question.
+- **B** (post-design + "اكتبلي كابشن"): already covered by Phase 1 design instruction (no permanent mode).
+- **C** (post-design + "ما عجبني، عدله"): context-aware classifier → `generate_image` → marker + execution.
+- **D** (FREE normal question): no upsell (funnel removed).
+- **E** (FREE blocked feature): validator gate returns contextual upsell (`upsell: true`) — code decides access.
+- **F** ("تخطّ"): skip to next step; "تخطّ الكل/إنهاء" → `%%ONBOARDING_COMPLETE%%`.
+- **G** (partial onboarding + topic change): priority clause serves the new topic.
+- **H** (clarifying question after ad check): no upsell, normal reply.
+- **I** (full topic switch): no permanent mode (Phase 1) + priority rule.
+
+### 7.5 Tests run
+- [x] `pnpm --filter @workspace/api-server build` (esbuild) — **PASS**
+- [x] `pnpm --filter @workspace/api-server typecheck` — only pre-existing plan-type errors in `auth.ts`/`owner.ts`/`brand/brain.ts` (untouched; unrelated)
+- [x] `pnpm --filter @workspace/postlap-ai typecheck` + `build` — **PASS**
+- [x] Bundle assertion (19 checks on `dist/index.mjs`) — **PASS**: funnel function + text removed; `conversation_priority`, onboarding priority/end clauses, `upsell_once` contextual, knowledge PRO-level fixes present; **Phase 1 strings preserved** (Nader identity, post-design block, language rule, no `نادر الإبداعي`/`الشريك الذكي`).
+- [x] Classifier unit test (9 cases, bundled from source) — **PASS**: `عدّل التصميم`, `غيّر الخلفية`, `صمملي البوست`, `عدّل الكابشن`→text, bare `عدّل` (prev design)→image, `خلاص صمملي البوست`→image, `ساعدني أكتب كابشن`→text, `ما عجبني التصميم، عدله`→image, `كيف أحسّن مبيعاتي؟`→general.
+- [x] Hamzawi boundary verified at source: prompt-feeding modules (`postlab/*.ts`, `postlabPersona.ts`) contain **no** Arabic `حمزاوي` and no presented Hamzawi identity.
+
+## 8. Remaining / Deferred — Phase 3+
+
 - Policy Intelligence architecture.
 - Design-generation architecture (provider choice, aspect ratio, token budget).
-- Plan logic and stale plan-level references (e.g. `knowledge.ts` "level 3+", status-B image capability).
-- Memory, permissions, pricing text (incl. leftover "حمزاوي" in `config.json`/`config.ts` feature copy and `AdminLayout` nav label).
-- Wiring `agentConfig` prompt fields (agent_name / role description / prefixes) — currently defined but not consumed.
+- Permissions architecture (incl. `permissionsInstruction` gated on `brand_onboarded` while `isBrandProfileComplete` keys off core data).
+- Plan/knowledge cleanup الشامل — **note**: `config.ts` PRO feature copy still contains `"ذاكرة دائمة — حمزاوي يتذكر نشاطك"`; it is **not** rendered into the customer prompt (the pricing line uses only name/price/currency), so Nader stays the sole customer identity — but the leftover `حمزاوي` copy and the `hamzawi_notes` DB field name remain deferred cleanup.
+- Memory architecture; AdminLayout nav label `حمزاوي`.
+- Wiring `agentConfig` prompt fields (agent_name / role description / prefixes) — defined but not consumed.
 
-## 8. Note
+## 9. Note
 
 This file is the canonical progress tracker. Update it at the end of each phase before starting the next.

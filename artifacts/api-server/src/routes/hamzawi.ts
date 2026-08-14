@@ -616,7 +616,8 @@ router.post("/hamzawi/chat", chatLimiter, async (req, res): Promise<void> => {
     // P1: Reasoner — rule-first intent classification (LLM only for
     // ambiguous/compound requests). Routing-only: drives vision-model choice
     // and upsell messaging. Tool execution is NOT migrated yet.
-    const intentDecision = await classifyIntent(message ?? "");
+    const prevAssistantContent = recentMessages.find((msg) => msg.role === "assistant")?.content;
+    const intentDecision = await classifyIntent(message ?? "", { prevAssistantContent });
     const needsVision = !isInit && !!message && intentDecision.needsVision;
 
     // P1: Validator-backed upsell gate. PRO-only tools require level 2+.

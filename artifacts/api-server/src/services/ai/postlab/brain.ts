@@ -44,20 +44,6 @@ const PLAN_CAPABILITIES: Record<number, string> = {
 };
 
 /**
- * Upgrade nudge injected naturally at end of PostLab AI response per user level.
- * Level 1 (FREE) → upsell to PRO. Level 2 (PRO) → no nudge.
- */
-function getFunnelInstruction(level: number): string {
-  if (level === 1) {
-    return `
-قاعدة القمع التسويقي:
-بعد الإجابة على أي طلب مكتمل للمستخدم، أضف جملة واحدة طبيعية في نهاية ردك:
-"عشان تولّد نصوص إعلانية وتصمم منشورات بهوية نشاطك مباشرة — انتقل لخطة PRO 🚀"`;
-  }
-  return "";
-}
-
-/**
  * Onboarding instructions for level 4+ users who haven't completed brand setup.
  * Uses two markers:
  * - %%PARTIAL_SAVE%%{field:value,...}%%END%% — emitted after each step to save incrementally
@@ -67,28 +53,36 @@ function getFunnelInstruction(level: number): string {
 function getOnboardingInstruction(): string {
   return `
 وضع خاص — إعداد هوية النشاط التجاري (ONBOARDING MODE):
-المستخدم لم يُكمل إعداد هوية نشاطه بعد. ابدأ الآن جلسة الإعداد الموجّهة خطوة بخطوة.
+المستخدم لم يكمل إعداد هوية نشاطه بعد. تبدأ جلسة الإعداد الموجّهة خطوة بخطوة بس لو ما عنده مهمة ثانية واضحة في نفس الرد.
 
-الخطوات مرتّبة، لكن لا تسأل المستخدم عن أي معلومة موجودة بالفعل في Brand Memory أو أصول النشاط. افحص المعلومات المحفوظة قبل كل سؤال، وتجاوز الحقول المكتملة تلقائيًا. اسأل سؤالًا واحدًا فقط في كل رد وانتظر:
+أولوية المحادثة في وضع الإعداد:
+لو المستخدم طلب في نفس الرد مهمة ثانية واضحة (تصميم، فحص إعلان، كتابة نص، سؤال)، خدمها أول شي ورجّع للمحادثة الطبيعية — ما تسألش سؤال إعداد في نفس الرد بعد ما تخدم الطلب الآخر.
+
+الخطوات مرتّبة، وما تسألش المستخدم عن أي معلومة موجودة بالفعل في Brand Memory أو أصول النشاط. افحص المحفوظ قبل كل سؤال، وتجاوز الحقول المكملة تلقائياً. اسأل سؤال واحد بس في كل رد وانتظر:
 1. اسم النشاط التجاري
 2. نوع النشاط (مطعم، متجر، عيادة، شركة خدمات، ...)
 3. العنوان أو المنطقة
 4. رقم الهاتف للتواصل
 5. الألوان الأساسية للهوية البصرية (مثلاً: أزرق وأبيض)
 6. الأسلوب المفضل في التصاميم (بسيط، حيوي، فاخر، ...)
-7. الشعار والتصاميم السابقة: قل للمستخدم "يمكنك رفع شعار نشاطك باستخدام زر المشبك 📎 — سيُحفظ تلقائياً كشعار. وإذا كان لديك تصاميم إعلانية سابقة أعجبتك، ارفعها واحدة واحدة وستُضاف كنماذج مرجعية نستخدمها في التصميم. هذه الخطوة اختيارية — أخبرني عندما تنتهي أو اكتب 'تخط'". إذا كان الشعار أو النماذج موجودة بالفعل، لا تطلب رفعها مرة أخرى إلا إذا كان المستخدم يريد استبدالها أو إضافة أصول جديدة.
-ملاحظة: الرفعة الأولى عبر المشبك تُحفظ كشعار (logo)، وكل رفعة لاحقة تُضاف كنموذج تصميم سابق (design_samples). للتمييز: ارفع الشعار أولاً.
+7. الشعار والتصاميم السابقة: قل للمستخدم "تقدر ترفع شعار نشاطك من زر المشبك 📎 — يتحفظ تلقائياً كشعار. وإذا عندك تصاميم إعلانية سابقة عجبتك، ارفعها وحدة وحدة وتنضاف كنماذج مرجعية نستخدمها في التصميم. هالخطوة اختيارية — قول لي لما تخلص أو اكتب 'تخطّ'". إذا الشعار أو النماذج موجودة أصلًا، ما تطلبش رفعها مرة ثانية إلا لو المستخدم يبي يبدّلها أو يضيف أصول جديدة.
+ملاحظة: الرفعة الأولى عبر المشبك تتحفظ كشعار (logo)، وكل رفعة بعدها تنضاف كنموذج تصميم سابق (design_samples). للتمييز: ارفع الشعار أول شي.
 
-بعد كل خطوة يجيب فيها المستخدم، احفظ المعلومة في نهاية ردك بدون أي نص حولها بهذا الشكل:
+بعد كل خطوة يجاوب فيها المستخدم، احفظ المعلومة في آخر ردك بدون أي نص حولها بهالشكل:
 %%PARTIAL_SAVE%%{"field_name": "field_value"}%%END%%
 
 أسماء الحقول: business_name, business_type, address, phone, primary_colors, preferred_style
 
-بعد اكتمال كل الخطوات الإلزامية (1-6)، لخّص ما جمعته وقل للمستخدم أن إعداد هوية نشاطه اكتمل، ثم أضف في نهاية ردك:
+بعد اكتمال كل الخطوات الإلزامية (1-6)، لخّص اللي جمعته وقل للمستخدم إن إعداد هوية نشاطه اكتمل، ثم أضف في آخر ردك:
 %%ONBOARDING_COMPLETE%%
 
-إذا قال المستخدم "تخطّ" أو "بعدين"، انتقل للخطوة التالية وأضف:
-%%PARTIAL_SAVE%%{"skipped": "true"}%%END%%`;
+لو قال المستخدم "تخطّ" أو "بعدين" (من غير إنهاء كامل)، انتقل للخطوة اللي بعدها وأضف:
+%%PARTIAL_SAVE%%{"skipped": "true"}%%END%%
+
+إنهاء الإعداد صراحةً:
+لو المستخدم بيبيّن بوضوح إنه يبي يتخطّى أو يخلّص الإعداد تماماً (مثلاً: "تخطّ الكل"، "بعدين عن كل شي"، "خلاص أنهينا الإعداد"، "إنهاء الإعداد"، "ما أبي أكمل")، أصدر في آخر ردك:
+%%ONBOARDING_COMPLETE%%
+ورجّع للمحادثة الطبيعية. لكن "خلاص" لوحدها مع طلب (مثلاً "خلاص صمملي البوست") تعني نفّذ الطلب — ما تكمّلش الإعداد في هالحالة.`;
 }
 
 /**
@@ -163,7 +157,7 @@ function getDesignGenerationInstruction(level: number): string {
  *   2. Identity header (current user/company)
  *   3. Plan/capability context (per-user level)
  *   4. Company/Brand Memory block + asset inventory (authorized customer context)
- *   5. Runtime/context-specific instructions (pricing line, funnel, onboarding,
+ *   5. Runtime/context-specific instructions (pricing line, onboarding,
  *      design generation, permissions)
  */
 export function composeSystemPrompt(
@@ -201,7 +195,6 @@ ${renderProductRules()}`;
     ? `- كلما كان طلب المستخدم قابلاً للاستفادة من أحد الأصول المذكورة أعلاه (الشعار، صور المنتجات، نماذج التصميم...)، استخدم الأصل الفعلي عند توفره، وأشر صراحةً إلى أي أصل ستستخدمه عند الحاجة — مثال: "سأستخدم الشعار الذي رفعته". لا تكتفِ بوصف الأصل نصيًا عندما يكون الملف الأصلي متاحًا.`
     : "";
 
-  const funnelInstruction = isOnboarding ? "" : getFunnelInstruction(level);
   const onboardingInstruction = isOnboarding ? getOnboardingInstruction() : "";
   const designGenInstruction = getDesignGenerationInstruction(level);
 
@@ -225,7 +218,6 @@ ${memoryBlock}${assetsBlock}
 تعليمات:
 - خطط الترقية المتاحة: مجاني (FREE)، ${pricingLine}
 ${assetUsageInstruction}
-${funnelInstruction}
 ${onboardingInstruction}
 ${designGenInstruction}
 ${permissionsInstruction}`;

@@ -45,7 +45,7 @@ function detectImageIntent(message: string): boolean {
     // nouns in definite form ("التصميم") are excluded so conversational
     // questions that merely mention a design ("شو رأيك بالتصميم؟") do NOT get
     // routed to the vision model or treated as generation requests.
-    /(صمم|صمّم|اصمم|(?<!ال)تصميم|(?<!ال)تصاميم)(?=\s|$|[،,؟?!.])/i,
+    /(صمم|صمّم|اصمم|(?<!ال)تصميم|(?<!ال)تصاميم)(?:ه|ها|هم|هما|ي|لي|ل)?(?=\s|$|[،,؟?!.])/i,
     /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|إعلان مرئي)/i,
     /شعار|لوجو|logo/i,
     /هوية (بصرية|النشاط|نشاطي)/i,
@@ -95,7 +95,7 @@ const GENERATE_IMAGE_PATTERNS = [
   //
   // "بقدر أحكي مع المصمم؟" → no match (مصمم is a noun, صمم is not at word-start).
   // "صممها" → match.   "كيف نصممها؟" → no match.
-  /((?<!\p{L})(?:صمم|صمّم|اصمم))(?:ه|ها|هم|هما|ي)?(?=[\s،,؟?!.]|$)/iu,
+  /((?<!\p{L})(?:صمم|صمّم|اصمم))(?:ه|ها|هم|هما|ي|لي|ل)?(?=[\s،,؟?!.]|$)/iu,
   /((?<!ال)(?:تصميم|تصاميم))(?=[\s،,؟?!.]|$)/iu,
   // Arabic action verbs + visual nouns
   /(اعمل|أنشئ|أعمل|انشئ|أُنشئ|اجعل|اريد|أريد|عايز|احتاج|ابتكر|ابدع|خلّق|خلق|صور).*(منشور|بوست|ستوري|قصة|بانر|فلاير|ملصق|بوستر|صورة|إعلان|تصميم|هوية)/i,
@@ -109,7 +109,7 @@ const GENERATE_IMAGE_PATTERNS = [
   // in advisory questions like "كيف أعدل التصميم السابق؟" never match.
   // "عدل التصميم السابق" → generate_image (standalone imperative, no letter before).
   // "كيف تعدل التصميم السابق؟" → general_chat (letter 'ت' directly before 'عدل').
-  /((?<!\p{L})(?:عدّل|عدل|غيّر|غير|بدّل|بدل|حدّث|حدث|نقّح)).*(تصميم|منشور|بوست|ستوري|الصورة|الصورة السابقة|السابق|القديم)/iu,
+  /((?<!\p{L})(?:عدّل|عدل|غيّر|غير|بدّل|بدل|حدّث|حدث|نقّح)).*(تصميم|منشور|بوست|ستوري|الصورة|الصورة السابقة|السابق|القديم|الخلفية|الستايل|الخط|اللون|الحجم|الشكل|الفونت|العناصر)/iu,
   // Arabic execution/implementation verbs in a design context.
   // Same word-boundary guard prevents prefix forms from matching.
   /((?<!\p{L})(?:نفّذ|نفذ|طبّق|طبق|شغّل|شغل)).*(التصميم|الخيار|البوست|المنشور|الستوري|البانر|الفلاير|هذا|الثاني|الثالث|الأول)/iu,
@@ -135,7 +135,8 @@ const GENERATE_IMAGE_PATTERNS = [
 ];
 
 const GENERATE_TEXT_PATTERNS = [
-  /اكتب\s*(لي\s*)?(نص|إعلان|بوست|منشور|تصميم)/i,
+  /اكتب\s*(لي\s*)?(نص|إعلان|بوست|منشور|تصميم|كابشن)/i,
+  /(أكتب|اكتبلي|اكتب لي|حرّر|حسّن|عدّل).*(كابشن|caption)/i,
   /(نص|إعلان) (إعلاني|دعائي|مكتوب)/i,
   /كتابة (نص|إعلان|بوست)/i,
   /write (an? )?(ad|copy|post)/i,
@@ -207,12 +208,46 @@ ${toolsSummary}
 }
 
 /**
+ * Resolve a design/text edit intent from a short, context-dependent message.
+ * Only fires when the previous assistant turn produced a design, so a bare
+ * "عدّل" / "حسّنه" after a generated image is treated as an image edit, while
+ * "عدّل الكابشن" is treated as a text edit. Returns null when there is no signal.
+ */
+function contextualEditIntent(m: string, prev: string): HamzawiIntent | null {
+  const prevHasDesign = /%%GENERATED_IMAGE%%|%%GENERATE_POST%%/.test(prev);
+  if (!prevHasDesign) return null;
+
+  // Text edit cue (caption is the customer-facing wording).
+  if (/(كابشن|caption)/i.test(m)) return "generate_text";
+
+  // Image edit cue: bare/pronominal edit verb, or a reference to the design/image.
+  if (
+    /(عدّل|عدل|غيّر|غير|بدّل|بدل|حسّن|حسن|خليه|خلّيه|ابسط|أبسط|كبّر|صغّر|نقّح|ظبّط|ظبط|عدّله|عدّلها|عدله|عدلها|غيّره|غيّرها|غيره|غيرها|بدّله|بدّلها|بدله|بدلها)/i.test(m) ||
+    /(التصميم|الصورة|المنشور|البوست|الستوري|الخلفية|الستايل|اللون)/i.test(m)
+  ) {
+    return "generate_image";
+  }
+  return null;
+}
+
+export interface ClassifyOptions {
+  /** Content of the previous assistant message, used for context-aware edit intent. */
+  prevAssistantContent?: string;
+}
+
+/**
  * Entry point: classify the user's message into one intent.
  *
  * Rule-first (no per-message LLM cost); only ambiguous/compound matches reach
- * the model. needsVision reuses the original vision-routing logic unchanged.
+ * the model. A short, context-dependent edit reference (e.g. "عدّل" after a
+ * generated design) is resolved against the previous assistant turn so it is
+ * not silently dropped as general_chat. needsVision reuses the original
+ * vision-routing logic unchanged.
  */
-export async function classifyIntent(message: string): Promise<IntentDecision> {
+export async function classifyIntent(
+  message: string,
+  opts: ClassifyOptions = {},
+): Promise<IntentDecision> {
   const m = message?.trim() ?? "";
   const needsVision = detectImageIntent(m);
 
@@ -222,6 +257,10 @@ export async function classifyIntent(message: string): Promise<IntentDecision> {
 
   const matched = ruleIntent(m);
   if (matched.length === 0) {
+    const ctx = contextualEditIntent(m, opts.prevAssistantContent ?? "");
+    if (ctx) {
+      return { intent: ctx, source: "rule", needsVision };
+    }
     return { intent: "general_chat", source: "rule", needsVision };
   }
   if (matched.length === 1) {
